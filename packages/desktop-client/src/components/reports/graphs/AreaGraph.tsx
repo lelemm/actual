@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { css } from 'glamor';
+import { css } from '@emotion/css';
 import {
   AreaChart,
   Area,
@@ -22,9 +23,7 @@ import {
 } from 'loot-core/src/types/models/reports';
 
 import { usePrivacyMode } from '../../../hooks/usePrivacyMode';
-import { useResponsive } from '../../../ResponsiveProvider';
 import { theme } from '../../../style';
-import { type CSSProperties } from '../../../style';
 import { AlignedText } from '../../common/AlignedText';
 import { Container } from '../Container';
 
@@ -53,10 +52,12 @@ const CustomTooltip = ({
   payload,
   balanceTypeOp,
 }: CustomTooltipProps) => {
+  const { t } = useTranslation();
+
   if (active && payload && payload.length) {
     return (
       <div
-        className={`${css({
+        className={css({
           zIndex: 1000,
           pointerEvents: 'none',
           borderRadius: 2,
@@ -64,7 +65,7 @@ const CustomTooltip = ({
           backgroundColor: theme.menuBackground,
           color: theme.menuItemText,
           padding: 10,
-        })}`}
+        })}
       >
         <div>
           <div style={{ marginBottom: 10 }}>
@@ -73,31 +74,31 @@ const CustomTooltip = ({
           <div style={{ lineHeight: 1.5 }}>
             {['totalAssets', 'totalTotals'].includes(balanceTypeOp) && (
               <AlignedText
-                left="Assets:"
+                left={t('Assets:')}
                 right={amountToCurrency(payload[0].payload.totalAssets)}
               />
             )}
             {['totalDebts', 'totalTotals'].includes(balanceTypeOp) && (
               <AlignedText
-                left="Debts:"
+                left={t('Debts:')}
                 right={amountToCurrency(payload[0].payload.totalDebts)}
               />
             )}
             {['netAssets'].includes(balanceTypeOp) && (
               <AlignedText
-                left="Net Assets:"
+                left={t('Net Assets:')}
                 right={amountToCurrency(payload[0].payload.netAssets)}
               />
             )}
             {['netDebts'].includes(balanceTypeOp) && (
               <AlignedText
-                left="Net Debts:"
+                left={t('Net Debts:')}
                 right={amountToCurrency(payload[0].payload.netDebts)}
               />
             )}
             {['totalTotals'].includes(balanceTypeOp) && (
               <AlignedText
-                left="Net:"
+                left={t('Net:')}
                 right={
                   <strong>
                     {amountToCurrency(payload[0].payload.totalTotals)}
@@ -152,6 +153,7 @@ type AreaGraphProps = {
   balanceTypeOp: balanceTypeOpType;
   compact?: boolean;
   viewLabels: boolean;
+  showTooltip?: boolean;
 };
 
 export function AreaGraph({
@@ -160,9 +162,9 @@ export function AreaGraph({
   balanceTypeOp,
   compact,
   viewLabels,
+  showTooltip = true,
 }: AreaGraphProps) {
   const privacyMode = usePrivacyMode();
-  const { isNarrowWidth } = useResponsive();
   const dataMax = Math.max(...data.intervalData.map(i => i[balanceTypeOp]));
   const dataMin = Math.min(...data.intervalData.map(i => i[balanceTypeOp]));
 
@@ -249,7 +251,7 @@ export function AreaGraph({
                     tickSize={0}
                   />
                 )}
-                {(!isNarrowWidth || !compact) && (
+                {showTooltip && (
                   <Tooltip
                     content={<CustomTooltip balanceTypeOp={balanceTypeOp} />}
                     isAnimationActive={false}

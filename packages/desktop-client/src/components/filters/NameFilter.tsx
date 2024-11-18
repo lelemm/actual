@@ -1,7 +1,9 @@
 import React, { useRef, useEffect } from 'react';
+import { Form } from 'react-aria-components';
+import { useTranslation } from 'react-i18next';
 
 import { theme } from '../../style';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Input } from '../common/Input';
 import { Stack } from '../common/Stack';
 import { Text } from '../common/Text';
@@ -22,6 +24,7 @@ export function NameFilter({
   onAddUpdate: () => void;
   err: string | null;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,7 +36,12 @@ export function NameFilter({
   return (
     <>
       {menuItem !== 'update-filter' && (
-        <form>
+        <Form
+          onSubmit={e => {
+            e.preventDefault();
+            onAddUpdate();
+          }}
+        >
           <Stack
             direction="row"
             justify="flex-end"
@@ -42,7 +50,7 @@ export function NameFilter({
           >
             <FormField style={{ flex: 1 }}>
               <FormLabel
-                title="Filter Name"
+                title={t('Filter Name')}
                 htmlFor="name-field"
                 style={{ userSelect: 'none' }}
               />
@@ -53,18 +61,11 @@ export function NameFilter({
                 onChangeValue={setName}
               />
             </FormField>
-            <Button
-              type="primary"
-              style={{ marginTop: 18 }}
-              onClick={e => {
-                e.preventDefault();
-                onAddUpdate();
-              }}
-            >
-              {adding ? 'Add' : 'Update'}
+            <Button variant="primary" type="submit" style={{ marginTop: 18 }}>
+              {adding ? t('Add') : t('Update')}
             </Button>
           </Stack>
-        </form>
+        </Form>
       )}
       {err && (
         <Stack direction="row" align="center" style={{ padding: 10 }}>

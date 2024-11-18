@@ -2,16 +2,36 @@
 import { parse as parseDate, isValid as isDateValid } from 'date-fns';
 
 import {
+  parametrizedField,
+  type SheetFields,
+  type Binding,
+  type SheetNames,
+} from '../../../desktop-client/src/components/spreadsheet';
+import {
   dayFromDate,
   getDayMonthRegex,
   getDayMonthFormat,
   getShortYearRegex,
   getShortYearFormat,
 } from '../shared/months';
-import { q } from '../shared/query';
+import { q, type Query } from '../shared/query';
 import { currencyToAmount, amountToInteger } from '../shared/util';
+import { type CategoryEntity, type AccountEntity } from '../types/models';
+import { type SyncedPrefs } from '../types/prefs';
 
-export function getAccountFilter(accountId, field = 'account') {
+type BudgetType<SheetName extends SheetNames> = Record<
+  string,
+  SheetFields<SheetName> | ((id: string) => SheetFields<SheetName>)
+>;
+
+const accountParametrizedField = parametrizedField<'account'>();
+const envelopeParametrizedField = parametrizedField<'envelope-budget'>();
+const trackingParametrizedField = parametrizedField<'tracking-budget'>();
+
+export function accountFilter(
+  accountId?: AccountEntity['id'] | 'budgeted' | 'offbudget' | 'uncategorized',
+  field = 'account',
+) {
   if (accountId) {
     if (accountId === 'budgeted') {
       return {
@@ -47,10 +67,12 @@ export function getAccountFilter(accountId, field = 'account') {
   return null;
 }
 
-export function makeTransactionsQuery(accountId) {
+export function transactions(
+  accountId?: AccountEntity['id'] | 'budgeted' | 'offbudget' | 'uncategorized',
+) {
   let query = q('transactions').options({ splits: 'grouped' });
 
-  const filter = getAccountFilter(accountId);
+  const filter = accountFilter(accountId);
   if (filter) {
     query = query.filter(filter);
   }
@@ -58,7 +80,11 @@ export function makeTransactionsQuery(accountId) {
   return query;
 }
 
-export function makeTransactionSearchQuery(currentQuery, search, dateFormat) {
+export function transactionsSearch(
+  currentQuery: Query,
+  search: string,
+  dateFormat: SyncedPrefs['dateFormat'],
+) {
   const amount = currencyToAmount(search);
 
   // Support various date formats
@@ -94,34 +120,34 @@ export function makeTransactionSearchQuery(currentQuery, search, dateFormat) {
   });
 }
 
-export function accountBalance(acct) {
+export function accountBalance(acct: AccountEntity) {
   return {
-    name: `balance-${acct.id}`,
+    name: accountParametrizedField('balance')(acct.id),
     query: q('transactions')
       .filter({ account: acct.id })
       .options({ splits: 'none' })
       .calculate({ $sum: '$amount' }),
-  };
+  } satisfies Binding<'account', 'balance'>;
 }
 
-export function accountBalanceCleared(acct) {
+export function accountBalanceCleared(acct: AccountEntity) {
   return {
-    name: `balanceCleared-${acct.id}`,
+    name: accountParametrizedField('balanceCleared')(acct.id),
     query: q('transactions')
       .filter({ account: acct.id, cleared: true })
       .options({ splits: 'none' })
       .calculate({ $sum: '$amount' }),
-  };
+  } satisfies Binding<'account', 'balanceCleared'>;
 }
 
-export function accountBalanceUncleared(acct) {
+export function accountBalanceUncleared(acct: AccountEntity) {
   return {
-    name: `balanceUncleared-${acct.id}`,
+    name: accountParametrizedField('balanceUncleared')(acct.id),
     query: q('transactions')
       .filter({ account: acct.id, cleared: false })
       .options({ splits: 'none' })
       .calculate({ $sum: '$amount' }),
-  };
+  } satisfies Binding<'account', 'balanceUncleared'>;
 }
 
 export function allAccountBalance() {
@@ -130,7 +156,7 @@ export function allAccountBalance() {
       .filter({ 'account.closed': false })
       .calculate({ $sum: '$amount' }),
     name: 'accounts-balance',
-  };
+  } satisfies Binding<'account', 'accounts-balance'>;
 }
 
 export function budgetedAccountBalance() {
@@ -139,7 +165,7 @@ export function budgetedAccountBalance() {
     query: q('transactions')
       .filter({ 'account.offbudget': false, 'account.closed': false })
       .calculate({ $sum: '$amount' }),
-  };
+  } satisfies Binding<'account', 'budgeted-accounts-balance'>;
 }
 
 export function offbudgetAccountBalance() {
@@ -148,10 +174,10 @@ export function offbudgetAccountBalance() {
     query: q('transactions')
       .filter({ 'account.offbudget': true, 'account.closed': false })
       .calculate({ $sum: '$amount' }),
-  };
+  } satisfies Binding<'account', 'offbudget-accounts-balance'>;
 }
 
-export function categoryBalance(category, month) {
+export function categoryBalance(category: CategoryEntity, month: string) {
   return {
     name: `balance-${category.id}`,
     query: q('transactions')
@@ -164,7 +190,10 @@ export function categoryBalance(category, month) {
   };
 }
 
-export function categoryBalanceCleared(category, month) {
+export function categoryBalanceCleared(
+  category: CategoryEntity,
+  month: string,
+) {
   return {
     name: `balanceCleared-${category.id}`,
     query: q('transactions')
@@ -178,7 +207,10 @@ export function categoryBalanceCleared(category, month) {
   };
 }
 
-export function categoryBalanceUncleared(category, month) {
+export function categoryBalanceUncleared(
+  category: CategoryEntity,
+  month: string,
+) {
   return {
     name: `balanceUncleared-${category.id}`,
     query: q('transactions')
@@ -210,14 +242,14 @@ export function uncategorizedBalance() {
   };
 }
 
-export function uncategorizedCount() {
+export function uncategorizedCount<SheetName extends SheetNames>() {
   return {
     name: 'uncategorized-amount',
     query: uncategorizedQuery.calculate({ $count: '$id' }),
-  };
+  } satisfies Binding<SheetName, 'uncategorized-amount'>;
 }
 
-export const rolloverBudget = {
+export const envelopeBudget = {
   incomeAvailable: 'available-funds',
   lastMonthOverspent: 'last-month-overspent',
   forNextMonth: 'buffered',
@@ -229,21 +261,21 @@ export const rolloverBudget = {
   totalSpent: 'total-spent',
   totalBalance: 'total-leftover',
 
-  groupSumAmount: id => `group-sum-amount-${id}`,
+  groupSumAmount: envelopeParametrizedField('group-sum-amount'),
   groupIncomeReceived: 'total-income',
 
-  groupBudgeted: id => `group-budget-${id}`,
-  groupBalance: id => `group-leftover-${id}`,
+  groupBudgeted: envelopeParametrizedField('group-budget'),
+  groupBalance: envelopeParametrizedField('group-leftover'),
 
-  catBudgeted: id => `budget-${id}`,
-  catSumAmount: id => `sum-amount-${id}`,
-  catBalance: id => `leftover-${id}`,
-  catCarryover: id => `carryover-${id}`,
-  catGoal: id => `goal-${id}`,
-  catLongGoal: id => `long-goal-${id}`,
-};
+  catBudgeted: envelopeParametrizedField('budget'),
+  catSumAmount: envelopeParametrizedField('sum-amount'),
+  catBalance: envelopeParametrizedField('leftover'),
+  catCarryover: envelopeParametrizedField('carryover'),
+  catGoal: envelopeParametrizedField('goal'),
+  catLongGoal: envelopeParametrizedField('long-goal'),
+} satisfies BudgetType<'envelope-budget'>;
 
-export const reportBudget = {
+export const trackingBudget = {
   totalBudgetedExpense: 'total-budgeted',
   totalBudgetedIncome: 'total-budget-income',
   totalBudgetedSaved: 'total-saved',
@@ -253,16 +285,16 @@ export const reportBudget = {
   totalSaved: 'real-saved',
 
   totalLeftover: 'total-leftover',
-  groupSumAmount: id => `group-sum-amount-${id}`,
+  groupSumAmount: trackingParametrizedField('group-sum-amount'),
   groupIncomeReceived: 'total-income',
 
-  groupBudgeted: id => `group-budget-${id}`,
-  groupBalance: id => `group-leftover-${id}`,
+  groupBudgeted: trackingParametrizedField('group-budget'),
+  groupBalance: trackingParametrizedField('group-leftover'),
 
-  catBudgeted: id => `budget-${id}`,
-  catSumAmount: id => `sum-amount-${id}`,
-  catBalance: id => `leftover-${id}`,
-  catCarryover: id => `carryover-${id}`,
-  catGoal: id => `goal-${id}`,
-  catLongGoal: id => `long-goal-${id}`,
-};
+  catBudgeted: trackingParametrizedField('budget'),
+  catSumAmount: trackingParametrizedField('sum-amount'),
+  catBalance: trackingParametrizedField('leftover'),
+  catCarryover: trackingParametrizedField('carryover'),
+  catGoal: trackingParametrizedField('goal'),
+  catLongGoal: trackingParametrizedField('long-goal'),
+} satisfies BudgetType<'tracking-budget'>;

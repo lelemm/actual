@@ -3,15 +3,14 @@ import React, {
   type Ref,
   type ReactNode,
   forwardRef,
+  type CSSProperties,
   useEffect,
   useState,
   useRef,
   Children,
 } from 'react';
 
-import { css } from 'glamor';
-
-import { theme, type CSSProperties } from '../../style';
+import { theme } from '../../style';
 import { TAGREGEX } from 'loot-core/shared/tag';
 import { useTags } from '../../hooks/useTags';
 import { TagEntity } from 'loot-core/types/models/tag';
@@ -117,7 +116,7 @@ export const Text = forwardRef<HTMLSpanElement, TextProps>((props, ref) => {
       {...restProps}
       style={{ textOverflow: (children?.toString().includes("#") ?? 'ellipsis') ? 'unset' : 'unset' }}
       ref={innerRef ?? ref}
-      className={`${className} ${css(style)}`}
+      className={cx(className, css(style))}
     >
       {children}
     </span>

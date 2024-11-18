@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { type CSSProperties } from 'react';
+
+import { t } from 'i18next';
 
 import {
   mapField,
@@ -10,9 +12,11 @@ import {
   type LinkScheduleRuleActionEntity,
   type RuleActionEntity,
   type SetRuleActionEntity,
+  type AppendNoteRuleActionEntity,
+  type PrependNoteRuleActionEntity,
 } from 'loot-core/src/types/models';
 
-import { type CSSProperties, theme } from '../../style';
+import { theme } from '../../style';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
 
@@ -49,6 +53,10 @@ export function ActionExpression({ style, ...props }: ActionExpressionProps) {
         <SetSplitAmountActionExpression {...props} />
       ) : props.op === 'link-schedule' ? (
         <LinkScheduleActionExpression {...props} />
+      ) : props.op === 'prepend-notes' ? (
+        <PrependNoteActionExpression {...props} />
+      ) : props.op === 'append-notes' ? (
+        <AppendNoteActionExpression {...props} />
       ) : null}
     </View>
   );
@@ -64,8 +72,15 @@ function SetActionExpression({
     <>
       <Text>{friendlyOp(op)}</Text>{' '}
       <Text style={valueStyle}>{mapField(field, options)}</Text>{' '}
-      <Text>to </Text>
-      <Value style={valueStyle} value={value} field={field} />
+      <Text>{t('to ')}</Text>
+      {options?.template ? (
+        <>
+          <Text>{t('template ')}</Text>
+          <Text style={valueStyle}>{options.template}</Text>
+        </>
+      ) : (
+        <Value style={valueStyle} value={value} field={field} />
+      )}
     </>
   );
 }
@@ -100,6 +115,27 @@ function LinkScheduleActionExpression({
   return (
     <>
       <Text>{friendlyOp(op)}</Text> <ScheduleValue value={value} />
+    </>
+  );
+}
+
+function PrependNoteActionExpression({
+  op,
+  value,
+}: PrependNoteRuleActionEntity) {
+  return (
+    <>
+      <Text>{friendlyOp(op)}</Text>{' '}
+      <Value style={valueStyle} value={value} field="notes" />
+    </>
+  );
+}
+
+function AppendNoteActionExpression({ op, value }: AppendNoteRuleActionEntity) {
+  return (
+    <>
+      <Text>{friendlyOp(op)}</Text>{' '}
+      <Value style={valueStyle} value={value} field="notes" />
     </>
   );
 }

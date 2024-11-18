@@ -1,5 +1,4 @@
 // @ts-strict-ignore
-import { FIELD_TYPES as ruleFieldTypes } from '../../shared/rules';
 import { type RuleEntity } from '../../types/models';
 import { Condition, Action, rankRules } from '../accounts/rules';
 import * as rules from '../accounts/transaction-rules';
@@ -35,34 +34,17 @@ function validateRule(rule: Partial<RuleEntity>) {
 
   const conditionErrors = runValidation(
     rule.conditions,
-    cond =>
-      new Condition(
-        cond.op,
-        cond.field,
-        cond.value,
-        cond.options,
-        ruleFieldTypes,
-      ),
+    cond => new Condition(cond.op, cond.field, cond.value, cond.options),
   );
 
   const actionErrors = runValidation(rule.actions, action =>
     action.op === 'set-split-amount'
-      ? new Action(
-          action.op,
-          null,
-          action.value,
-          action.options,
-          ruleFieldTypes,
-        )
+      ? new Action(action.op, null, action.value, action.options)
       : action.op === 'link-schedule'
-        ? new Action(action.op, null, action.value, null, ruleFieldTypes)
-        : new Action(
-            action.op,
-            action.field,
-            action.value,
-            action.options,
-            ruleFieldTypes,
-          ),
+        ? new Action(action.op, null, action.value, null)
+        : action.op === 'prepend-notes' || action.op === 'append-notes'
+          ? new Action(action.op, null, action.value, null)
+          : new Action(action.op, action.field, action.value, action.options),
   );
 
   if (conditionErrors || actionErrors) {
@@ -111,8 +93,8 @@ app.method(
 
 app.method(
   'rule-delete',
-  mutator(async function (rule) {
-    return rules.deleteRule(rule);
+  mutator(async function (id) {
+    return rules.deleteRule(id);
   }),
 );
 
@@ -123,7 +105,7 @@ app.method(
 
     await batchMessages(async () => {
       for (const id of ids) {
-        const res = await rules.deleteRule({ id });
+        const res = await rules.deleteRule(id);
         if (res === false) {
           someDeletionsFailed = true;
         }

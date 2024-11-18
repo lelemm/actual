@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { css } from '@emotion/css';
 import * as d from 'date-fns';
-import { css } from 'glamor';
 import {
   Bar,
   CartesianGrid,
@@ -21,7 +22,7 @@ import {
 } from 'loot-core/src/shared/util';
 
 import { usePrivacyMode } from '../../../hooks/usePrivacyMode';
-import { type CSSProperties, theme } from '../../../style';
+import { theme } from '../../../style';
 import { AlignedText } from '../../common/AlignedText';
 import { chartTheme } from '../chart-theme';
 import { Container } from '../Container';
@@ -34,7 +35,9 @@ type CustomTooltipProps = TooltipProps<number, 'date'> & {
 };
 
 function CustomTooltip({ active, payload, isConcise }: CustomTooltipProps) {
-  if (!active || !payload) {
+  const { t } = useTranslation();
+
+  if (!active || !payload || !Array.isArray(payload) || !payload[0]) {
     return null;
   }
 
@@ -42,14 +45,14 @@ function CustomTooltip({ active, payload, isConcise }: CustomTooltipProps) {
 
   return (
     <div
-      className={`${css({
+      className={css({
         pointerEvents: 'none',
         borderRadius: 2,
         boxShadow: '0 1px 6px rgba(0, 0, 0, .20)',
         backgroundColor: theme.menuBackground,
         color: theme.menuItemText,
         padding: 10,
-      })}`}
+      })}
     >
       <div>
         <div style={{ marginBottom: 10 }}>
@@ -58,24 +61,30 @@ function CustomTooltip({ active, payload, isConcise }: CustomTooltipProps) {
           </strong>
         </div>
         <div style={{ lineHeight: 1.5 }}>
-          <AlignedText left="Income:" right={amountToCurrency(data.income)} />
           <AlignedText
-            left="Expenses:"
+            left={t('Income:')}
+            right={amountToCurrency(data.income)}
+          />
+          <AlignedText
+            left={t('Expenses:')}
             right={amountToCurrency(data.expenses)}
           />
           <AlignedText
-            left="Change:"
+            left={t('Change:')}
             right={
               <strong>{amountToCurrency(data.income + data.expenses)}</strong>
             }
           />
           {data.transfers !== 0 && (
             <AlignedText
-              left="Transfers:"
+              left={t('Transfers:')}
               right={amountToCurrency(data.transfers)}
             />
           )}
-          <AlignedText left="Balance:" right={amountToCurrency(data.balance)} />
+          <AlignedText
+            left={t('Balance:')}
+            right={amountToCurrency(data.balance)}
+          />
         </div>
       </div>
     </div>

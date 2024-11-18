@@ -2,13 +2,16 @@ import { makeValue, FIELD_TYPES } from 'loot-core/src/shared/rules';
 import { type RuleConditionEntity } from 'loot-core/src/types/models';
 
 export function updateFilterReducer(
-  state: { field: string; value: string | string[] | number | boolean | null },
-  action: RuleConditionEntity,
+  state: Pick<RuleConditionEntity, 'op' | 'field' | 'value'>,
+  action: { type: 'set-op' | 'set-value' } & Pick<
+    RuleConditionEntity,
+    'op' | 'value'
+  >,
 ) {
   switch (action.type) {
     case 'set-op': {
       const type = FIELD_TYPES.get(state.field);
-      let value = state.value;
+      let value: RuleConditionEntity['value'] | null = state.value;
       if (
         (type === 'id' || type === 'string') &&
         (action.op === 'contains' ||
@@ -16,7 +19,7 @@ export function updateFilterReducer(
           action.op === 'is' ||
           action.op === 'doesNotContain' ||
           action.op === 'isNot' ||
-          action.op === 'tags')
+          action.op === 'hasTags')
       ) {
         // Clear out the value if switching between contains or
         // is/oneof for the id or string type

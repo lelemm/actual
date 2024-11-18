@@ -1,9 +1,12 @@
 import React, { type RefObject, useEffect } from 'react';
+import { Form } from 'react-aria-components';
+
+import { t } from 'i18next';
 
 import { type CustomReportEntity } from 'loot-core/types/models/reports';
 
 import { theme } from '../../style';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Input } from '../common/Input';
 import { Stack } from '../common/Stack';
 import { Text } from '../common/Text';
@@ -44,7 +47,15 @@ export function SaveReportName({
   return (
     <>
       {menuItem !== 'update-report' && (
-        <form>
+        <Form
+          onSubmit={e => {
+            e.preventDefault();
+            onAddUpdate({
+              menuChoice: menuItem ?? undefined,
+              reportData: report ?? undefined,
+            });
+          }}
+        >
           <Stack
             direction="row"
             justify="flex-end"
@@ -53,7 +64,7 @@ export function SaveReportName({
           >
             <FormField style={{ flex: 1 }}>
               <FormLabel
-                title="Report Name"
+                title={t('Report Name')}
                 htmlFor="name-field"
                 style={{ userSelect: 'none' }}
               />
@@ -65,21 +76,11 @@ export function SaveReportName({
                 style={{ marginTop: 10 }}
               />
             </FormField>
-            <Button
-              type="primary"
-              style={{ marginTop: 30 }}
-              onClick={e => {
-                e.preventDefault();
-                onAddUpdate({
-                  menuChoice: menuItem ?? undefined,
-                  reportData: report ?? undefined,
-                });
-              }}
-            >
+            <Button variant="primary" type="submit" style={{ marginTop: 30 }}>
               {menuItem === 'save-report' ? 'Add' : 'Update'}
             </Button>
           </Stack>
-        </form>
+        </Form>
       )}
       {err !== '' ? (
         <Stack direction="row" align="center" style={{ padding: 10 }}>

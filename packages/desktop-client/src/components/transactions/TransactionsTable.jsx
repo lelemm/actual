@@ -11,8 +11,10 @@ import React, {
   useEffect,
 } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
+import { css } from '@emotion/css';
 import {
   format as formatDate,
   parseISO,
@@ -46,8 +48,10 @@ import {
   titleFirst,
 } from 'loot-core/src/shared/util';
 
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { usePrevious } from '../../hooks/usePrevious';
+import { useProperFocus } from '../../hooks/useProperFocus';
 import { useSelectedDispatch, useSelectedItems } from '../../hooks/useSelected';
 import { useSplitsExpanded } from '../../hooks/useSplitsExpanded';
 import { SvgLeftArrow2, SvgRightArrow2, SvgSplit } from '../../icons/v0';
@@ -61,9 +65,10 @@ import { styles, theme, useTheme } from '../../style';
 import { AccountAutocomplete } from '../autocomplete/AccountAutocomplete';
 import { CategoryAutocomplete } from '../autocomplete/CategoryAutocomplete';
 import { PayeeAutocomplete } from '../autocomplete/PayeeAutocomplete';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Popover } from '../common/Popover';
 import { Text } from '../common/Text';
+import { Tooltip } from '../common/Tooltip';
 import { View } from '../common/View';
 import { getStatusProps } from '../schedules/StatusBadge';
 import { DateSelect } from '../select/DateSelect';
@@ -82,6 +87,8 @@ import {
   UnexposedCellContent,
   InputCellWithTags,
 } from '../table';
+
+import { TransactionMenu } from './TransactionMenu';
 import { getColorsByTheme, TAGCOLORS, TAGREGEX } from 'loot-core/shared/tag';
 import { useTags } from '../../hooks/useTags';
 import { TwitterPicker } from 'react-color';
@@ -179,6 +186,7 @@ const TransactionHeader = memo(
     field,
   }) => {
     const dispatchSelected = useSelectedDispatch();
+    const { t } = useTranslation();
 
     useHotkeys(
       'ctrl+a, cmd+a, meta+a',
@@ -212,10 +220,12 @@ const TransactionHeader = memo(
             borderTopWidth: 0,
             borderBottomWidth: 0,
           }}
-          onSelect={e => dispatchSelected({ type: 'select-all', event: e })}
+          onSelect={e =>
+            dispatchSelected({ type: 'select-all', isRangeSelect: e.shiftKey })
+          }
         />
         <HeaderCell
-          value="Date"
+          value={t('Date')}
           width={110}
           alignItems="flex"
           marginLeft={-5}
@@ -227,7 +237,7 @@ const TransactionHeader = memo(
         />
         {showAccount && (
           <HeaderCell
-            value="Account"
+            value={t('Account')}
             width="flex"
             alignItems="flex"
             marginLeft={-5}
@@ -239,7 +249,7 @@ const TransactionHeader = memo(
           />
         )}
         <HeaderCell
-          value="Payee"
+          value={t('Payee')}
           width="flex"
           alignItems="flex"
           marginLeft={-5}
@@ -250,7 +260,7 @@ const TransactionHeader = memo(
           }
         />
         <HeaderCell
-          value="Notes"
+          value={t('Notes')}
           width="flex"
           alignItems="flex"
           marginLeft={-5}
@@ -262,7 +272,7 @@ const TransactionHeader = memo(
         />
         {showCategory && (
           <HeaderCell
-            value="Category"
+            value={t('Category')}
             width="flex"
             alignItems="flex"
             marginLeft={-5}
@@ -277,7 +287,7 @@ const TransactionHeader = memo(
           />
         )}
         <HeaderCell
-          value="Payment"
+          value={t('Payment')}
           width={100}
           alignItems="flex-end"
           marginRight={-5}
@@ -288,7 +298,7 @@ const TransactionHeader = memo(
           }
         />
         <HeaderCell
-          value="Deposit"
+          value={t('Deposit')}
           width={100}
           alignItems="flex-end"
           marginRight={-5}
@@ -300,7 +310,7 @@ const TransactionHeader = memo(
         />
         {showBalance && (
           <HeaderCell
-            value="Balance"
+            value={t('Balance')}
             width={103}
             alignItems="flex-end"
             marginRight={-5}
@@ -472,7 +482,7 @@ function HeaderCell({
       }}
       unexposedContent={({ value: cellValue }) =>
         onClick ? (
-          <Button type="bare" onClick={onClick} style={style}>
+          <Button variant="bare" onPress={onClick} style={style}>
             <UnexposedCellContent value={cellValue} />
             {icon === 'asc' && (
               <SvgArrowDown width={10} height={10} style={{ marginLeft: 5 }} />
@@ -542,6 +552,7 @@ function PayeeCell({
   valueStyle,
   transaction,
   subtransactions,
+  importedPayee,
   isPreview,
   onEdit,
   onUpdate,
@@ -576,9 +587,11 @@ function PayeeCell({
           alignSelf: 'flex-start',
           borderRadius: 4,
           border: '1px solid transparent', // so it doesn't shift on hover
-          ':hover': {
-            border: '1px solid ' + theme.buttonNormalBorder,
-          },
+          ':hover': isPreview
+            ? {}
+            : {
+                border: '1px solid ' + theme.buttonNormalBorder,
+              },
         }}
         disabled={isPreview}
         onSelect={() =>
@@ -602,6 +615,12 @@ function PayeeCell({
             color: theme.pageTextSubdued,
           }}
         >
+          <PayeeIcons
+            transaction={transaction}
+            transferAccount={transferAccount}
+            onNavigateToTransferAccount={onNavigateToTransferAccount}
+            onNavigateToSchedule={onNavigateToSchedule}
+          />
           <SvgSplit
             style={{
               color: 'inherit',
@@ -615,9 +634,30 @@ function PayeeCell({
               fontStyle: 'italic',
               fontWeight: 300,
               userSelect: 'none',
+              borderBottom: importedPayee
+                ? `1px dashed ${theme.pageTextSubdued}`
+                : 'none',
             }}
           >
-            {parentPayee}
+            {importedPayee ? (
+              <Tooltip
+                content={
+                  <View style={{ padding: 10 }}>
+                    <Text style={{ fontWeight: 'bold' }}>Imported Payee</Text>
+                    <Text style={{ fontWeight: 'normal' }}>
+                      {importedPayee}
+                    </Text>
+                  </View>
+                }
+                style={{ ...styles.tooltip, borderRadius: '0px 5px 5px 0px' }}
+                placement="bottom"
+                triggerProps={{ delay: 750 }}
+              >
+                {parentPayee}
+              </Tooltip>
+            ) : (
+              parentPayee
+            )}
           </Text>
         </View>
       </CellButton>
@@ -642,17 +682,48 @@ function PayeeCell({
         }
       }}
       formatter={() => getPayeePretty(transaction, payee, transferAccount)}
-      unexposedContent={props => (
-        <>
-          <PayeeIcons
-            transaction={transaction}
-            transferAccount={transferAccount}
-            onNavigateToTransferAccount={onNavigateToTransferAccount}
-            onNavigateToSchedule={onNavigateToSchedule}
+      unexposedContent={props => {
+        const payeeName = (
+          <UnexposedCellContent
+            {...props}
+            style={
+              importedPayee
+                ? { borderBottom: `1px dashed ${theme.pageTextSubdued}` }
+                : {}
+            }
           />
-          <UnexposedCellContent {...props} />
-        </>
-      )}
+        );
+
+        return (
+          <>
+            <PayeeIcons
+              transaction={transaction}
+              transferAccount={transferAccount}
+              onNavigateToTransferAccount={onNavigateToTransferAccount}
+              onNavigateToSchedule={onNavigateToSchedule}
+            />
+            {importedPayee ? (
+              <Tooltip
+                content={
+                  <View style={{ padding: 10 }}>
+                    <Text style={{ fontWeight: 'bold' }}>Imported Payee</Text>
+                    <Text style={{ fontWeight: 'normal' }}>
+                      {importedPayee}
+                    </Text>
+                  </View>
+                }
+                style={{ ...styles.tooltip, borderRadius: '0px 5px 5px 0px' }}
+                placement="bottom"
+                triggerProps={{ delay: 750 }}
+              >
+                {payeeName}
+              </Tooltip>
+            ) : (
+              payeeName
+            )}
+          </>
+        );
+      }}
     >
       {({
         onBlur,
@@ -661,28 +732,25 @@ function PayeeCell({
         onSave,
         shouldSaveFromKey,
         inputStyle,
-      }) => {
-        return (
-          <PayeeAutocomplete
-            payees={payees}
-            accounts={accounts}
-            value={payee?.id}
-            shouldSaveFromKey={shouldSaveFromKey}
-            inputProps={{
-              onBlur,
-              onKeyDown,
-              style: inputStyle,
-            }}
-            showManagePayees={true}
-            clearOnBlur={false}
-            focused={true}
-            onUpdate={(id, value) => onUpdate?.(value)}
-            onSelect={onSave}
-            onManagePayees={() => onManagePayees(payee?.id)}
-            menuPortalTarget={undefined}
-          />
-        );
-      }}
+      }) => (
+        <PayeeAutocomplete
+          payees={payees}
+          accounts={accounts}
+          value={payee?.id}
+          shouldSaveFromKey={shouldSaveFromKey}
+          inputProps={{
+            onBlur,
+            onKeyDown,
+            style: inputStyle,
+          }}
+          showManagePayees={true}
+          clearOnBlur={false}
+          focused={true}
+          onUpdate={(id, value) => onUpdate?.(value)}
+          onSelect={onSave}
+          onManagePayees={() => onManagePayees(payee?.id)}
+        />
+      )}
     </CustomCell>
   );
 }
@@ -694,28 +762,34 @@ function PayeeIcons({
   onNavigateToSchedule,
 }) {
   const scheduleId = transaction.schedule;
-  const scheduleData = useCachedSchedules();
-  const schedule =
-    scheduleId && scheduleData
-      ? scheduleData.schedules.find(s => s.id === scheduleId)
-      : null;
+
+  const buttonStyle = useMemo(
+    () => ({
+      marginLeft: -5,
+      marginRight: 2,
+      width: 23,
+      height: 23,
+      color: 'inherit',
+    }),
+    [],
+  );
+
+  const scheduleIconStyle = useMemo(() => ({ width: 13, height: 13 }), []);
+
+  const transferIconStyle = useMemo(() => ({ width: 10, height: 10 }), []);
+
+  const { isLoading, schedules = [] } = useCachedSchedules();
+
+  if (isLoading) {
+    return null;
+  }
+
+  const schedule = scheduleId ? schedules.find(s => s.id === scheduleId) : null;
 
   if (schedule == null && transferAccount == null) {
     // Neither a valid scheduled transaction nor a transfer.
     return null;
   }
-
-  const buttonStyle = {
-    marginLeft: -5,
-    marginRight: 2,
-    width: 23,
-    height: 23,
-    color: 'inherit',
-  };
-
-  const scheduleIconStyle = { width: 13, height: 13 };
-
-  const transferIconStyle = { width: 10, height: 10 };
 
   const recurring = schedule && schedule._date && !!schedule._date.frequency;
 
@@ -723,10 +797,10 @@ function PayeeIcons({
     <>
       {schedule && (
         <Button
-          type="bare"
+          variant="bare"
+          aria-label="See schedule details"
           style={buttonStyle}
-          onClick={e => {
-            e.stopPropagation();
+          onPress={() => {
             onNavigateToSchedule(scheduleId);
           }}
         >
@@ -739,11 +813,10 @@ function PayeeIcons({
       )}
       {transferAccount && (
         <Button
-          type="bare"
-          aria-label="Transfer"
+          variant="bare"
+          aria-label="See transfer account"
           style={buttonStyle}
-          onClick={e => {
-            e.stopPropagation();
+          onPress={() => {
             if (!isTemporaryId(transaction.id)) {
               onNavigateToTransferAccount(transferAccount.id);
             }
@@ -786,6 +859,12 @@ const Transaction = memo(function Transaction({
   onSave,
   onEdit,
   onDelete,
+  onDuplicate,
+  onLinkSchedule,
+  onUnlinkSchedule,
+  onCreateRule,
+  onScheduleAction,
+  onMakeAsNonSplitTransactions,
   onSplit,
   onManagePayees,
   onCreatePayee,
@@ -944,7 +1023,9 @@ const Transaction = memo(function Transaction({
   const account = accounts && accountId && getAccountsById(accounts)[accountId];
 
   const isChild = transaction.is_child;
-  const transferAcct = transferAccountsByTransaction[id];
+  const transferAcct = isTemporaryId(id)
+    ? getAccountsById(accounts)[payee?.transfer_acct]
+    : transferAccountsByTransaction[id];
   const isBudgetTransfer = transferAcct && transferAcct.offbudget === 0;
   const isOffBudget = account && account.offbudget === 1;
 
@@ -978,6 +1059,11 @@ const Transaction = memo(function Transaction({
     }, 1);
   }, [splitError, allTransactions]);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [crossOffset, setCrossOffset] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const contextMenusEnabled = useFeatureFlag('contextMenus');
+
   return (
     <Row
       ref={triggerRef}
@@ -1006,7 +1092,43 @@ const Transaction = memo(function Transaction({
         }),
         ...(_unmatched && { opacity: 0.5 }),
       }}
+      onContextMenu={e => {
+        if (!contextMenusEnabled) return;
+        if (transaction.id === 'temp') return;
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setCrossOffset(e.clientX - rect.left);
+        setOffset(e.clientY - rect.bottom);
+        setMenuOpen(true);
+      }}
     >
+      <Popover
+        triggerRef={triggerRef}
+        placement="bottom start"
+        isOpen={menuOpen}
+        onOpenChange={() => setMenuOpen(false)}
+        crossOffset={crossOffset}
+        offset={offset}
+        style={{ width: 200, margin: 1 }}
+        isNonModal
+      >
+        <TransactionMenu
+          transaction={transaction}
+          onDelete={() => onDelete?.(transaction.id)}
+          onDuplicate={() => onDuplicate?.(transaction.id)}
+          onLinkSchedule={() => onLinkSchedule?.(transaction.id)}
+          onUnlinkSchedule={() => onUnlinkSchedule?.(transaction.id)}
+          onCreateRule={() => onCreateRule?.(transaction.id)}
+          onScheduleAction={action =>
+            onScheduleAction?.(action, transaction.id)
+          }
+          onMakeAsNonSplitTransactions={() =>
+            onMakeAsNonSplitTransactions?.(transaction.id)
+          }
+          closeMenu={() => setMenuOpen(false)}
+        />
+      </Popover>
+
       {splitError && listContainerRef.current && (
         <Popover
           arrowSize={updateId}
@@ -1057,6 +1179,8 @@ const Transaction = memo(function Transaction({
         ) : (
           <Cell width={20} />
         )
+      ) : isPreview && isChild ? (
+        <Cell width={20} />
       ) : (
         <SelectCell
           /* Checkmark field for non-child transaction */
@@ -1066,7 +1190,11 @@ const Transaction = memo(function Transaction({
           }}
           focused={focusedField === 'select'}
           onSelect={e => {
-            dispatchSelected({ type: 'select', id: transaction.id, event: e });
+            dispatchSelected({
+              type: 'select',
+              id: transaction.id,
+              isRangeSelect: e.shiftKey,
+            });
           }}
           onEdit={() => onEdit(id, 'select')}
           selected={selected}
@@ -1173,7 +1301,9 @@ const Transaction = memo(function Transaction({
           focused={focusedField === 'payee'}
           /* Filter out the account we're currently in as it is not a valid transfer */
           accounts={accounts.filter(account => account.id !== accountId)}
-          payees={payees.filter(payee => payee.transfer_acct !== accountId)}
+          payees={payees.filter(
+            payee => !payee.transfer_acct || payee.transfer_acct !== accountId,
+          )}
           valueStyle={valueStyle}
           transaction={transaction}
           subtransactions={subtransactions}
@@ -1217,17 +1347,17 @@ const Transaction = memo(function Transaction({
             <View
               style={{
                 color:
-                  notes === 'missed'
+                  categoryId === 'missed'
                     ? theme.errorText
-                    : notes === 'due'
+                    : categoryId === 'due'
                       ? theme.warningText
                       : selected
                         ? theme.formLabelText
                         : theme.upcomingText,
                 backgroundColor:
-                  notes === 'missed'
+                  categoryId === 'missed'
                     ? theme.errorBackground
-                    : notes === 'due'
+                    : categoryId === 'due'
                       ? theme.warningBackground
                       : selected
                         ? theme.formLabelBackground
@@ -1237,23 +1367,12 @@ const Transaction = memo(function Transaction({
                 borderRadius: 4,
               }}
             >
-              {titleFirst(notes)}
+              {titleFirst(categoryId)}
             </View>
           )}
-        </Cell>
-      ) : isParent ? (
-        <Cell
-          /* Category field (Split button) for parent transactions */
-          name="category"
-          width="flex"
-          focused={focusedField === 'category'}
-          style={{ padding: 0 }}
-          plain
-        >
           <CellButton
             bare
             style={{
-              alignSelf: 'flex-start',
               borderRadius: 4,
               border: '1px solid transparent', // so it doesn't shift on hover
               ':hover': {
@@ -1261,7 +1380,7 @@ const Transaction = memo(function Transaction({
               },
             }}
             disabled={isTemporaryId(transaction.id)}
-            onEdit={() => onEdit(id, 'category')}
+            onEdit={() => !isPreview && onEdit(id, 'category')}
             onSelect={() => onToggleSplit(id)}
           >
             <View
@@ -1286,19 +1405,21 @@ const Transaction = memo(function Transaction({
                   }}
                 />
               )}
-              <Text
-                style={{
-                  fontStyle: 'italic',
-                  fontWeight: 300,
-                  userSelect: 'none',
-                }}
-              >
-                Split
-              </Text>
+              {!isPreview && (
+                <Text
+                  style={{
+                    fontStyle: 'italic',
+                    fontWeight: 300,
+                    userSelect: 'none',
+                  }}
+                >
+                  Split
+                </Text>
+              )}
             </View>
           </CellButton>
         </Cell>
-      ) : isBudgetTransfer || isOffBudget || isPreview ? (
+      ) : isBudgetTransfer || isOffBudget ? (
         <InputCell
           /* Category field for transfer and off-budget transactions
      (NOT preview, it is covered first) */
@@ -1306,7 +1427,7 @@ const Transaction = memo(function Transaction({
           width="flex"
           exposed={focusedField === 'category'}
           focused={focusedField === 'category'}
-          onExpose={name => !isPreview && onEdit(id, name)}
+          onExpose={name => onEdit(id, name)}
           value={
             isParent
               ? 'Split'
@@ -1345,7 +1466,7 @@ const Transaction = memo(function Transaction({
                 : ''
           }
           exposed={focusedField === 'category'}
-          onExpose={name => onEdit(id, name)}
+          onExpose={name => !isPreview && onEdit(id, name)}
           valueStyle={
             !categoryId
               ? {
@@ -1475,7 +1596,7 @@ const Transaction = memo(function Transaction({
           isPreview={isPreview}
           status={
             isPreview
-              ? notes
+              ? categoryId
               : reconciled
                 ? 'reconciled'
                 : cleared
@@ -1524,18 +1645,18 @@ function TransactionError({
             </Text>
             <View style={{ flex: 1 }} />
             <Button
-              type="normal"
+              variant="normal"
               style={{ marginLeft: 15 }}
-              onClick={onDistributeRemainder}
+              onPress={onDistributeRemainder}
               data-testid="distribute-split-button"
-              disabled={!canDistributeRemainder}
+              isDisabled={!canDistributeRemainder}
             >
               Distribute
             </Button>
             <Button
-              type="primary"
+              variant="primary"
               style={{ marginLeft: 10, padding: '4px 10px' }}
-              onClick={onAddSplit}
+              onPress={onAddSplit}
               data-testid="add-split-button"
             >
               Add Split
@@ -1603,6 +1724,11 @@ function NewTransaction({
   );
   const emptyChildTransactions = childTransactions.filter(t => t.amount === 0);
 
+  const addButtonRef = useRef(null);
+  useProperFocus(addButtonRef, focusedField === 'add');
+  const cancelButtonRef = useRef(null);
+  useProperFocus(cancelButtonRef, focusedField === 'cancel');
+
   return (
     <View
       style={{
@@ -1662,8 +1788,9 @@ function NewTransaction({
       >
         <Button
           style={{ marginRight: 10, padding: '4px 10px' }}
-          onClick={() => onClose()}
+          onPress={() => onClose()}
           data-testid="cancel-button"
+          ref={cancelButtonRef}
         >
           Cancel
         </Button>
@@ -1679,10 +1806,11 @@ function NewTransaction({
           />
         ) : (
           <Button
-            type="primary"
+            variant="primary"
             style={{ padding: '4px 10px' }}
-            onClick={onAdd}
+            onPress={onAdd}
             data-testid="add-button"
+            ref={addButtonRef}
           >
             Add
           </Button>
@@ -1741,6 +1869,15 @@ function TransactionTableInner({
       newNavigator.onEdit('temp', 'date');
     }
   }, [isAddingPrev, props.isAdding, newNavigator]);
+
+  // Don't render reconciled transactions if we're hiding them.
+  const transactionsToRender = useMemo(
+    () =>
+      props.showReconciled
+        ? props.transactions
+        : props.transactions.filter(t => !t.reconciled),
+    [props.transactions, props.showReconciled],
+  );
 
   const renderRow = ({ item, index, editing }) => {
     const {
@@ -1813,6 +1950,12 @@ function TransactionTableInner({
         onEdit={tableNavigator.onEdit}
         onSave={props.onSave}
         onDelete={props.onDelete}
+        onDuplicate={props.onDuplicate}
+        onLinkSchedule={props.onLinkSchedule}
+        onUnlinkSchedule={props.onUnlinkSchedule}
+        onCreateRule={props.onCreateRule}
+        onScheduleAction={props.onScheduleAction}
+        onMakeAsNonSplitTransactions={props.onMakeAsNonSplitTransactions}
         onSplit={props.onSplit}
         onManagePayees={props.onManagePayees}
         onCreatePayee={props.onCreatePayee}
@@ -1915,7 +2058,7 @@ function TransactionTableInner({
           navigator={tableNavigator}
           ref={tableRef}
           listContainerRef={listContainerRef}
-          items={props.transactions}
+          items={transactionsToRender}
           renderItem={renderRow}
           renderEmpty={renderEmpty}
           loadMore={props.loadMoreTransactions}
@@ -2041,10 +2184,14 @@ export const TransactionTable = forwardRef((props, ref) => {
     }
   }, [prevSplitsExpanded.current]);
 
-  const newNavigator = useTableNavigator(newTransactions, getFields);
+  const newNavigator = useTableNavigator(
+    newTransactions,
+    getFieldsNewTransaction,
+  );
+
   const tableNavigator = useTableNavigator(
     transactionsWithExpandedSplits,
-    getFields,
+    getFieldsTableTransaction,
   );
   const shouldAdd = useRef(false);
   const latestState = useRef({ newTransactions, newNavigator, tableNavigator });
@@ -2109,8 +2256,26 @@ export const TransactionTable = forwardRef((props, ref) => {
     savePending.current = false;
   }, [newTransactions, props.transactions]);
 
-  function getFields(item) {
-    let fields = [
+  function getFieldsNewTransaction(item) {
+    const fields = [
+      'select',
+      'date',
+      'account',
+      'payee',
+      'notes',
+      'category',
+      'debit',
+      'credit',
+      'cleared',
+      'cancel',
+      'add',
+    ];
+
+    return getFields(item, fields);
+  }
+
+  function getFieldsTableTransaction(item) {
+    const fields = [
       'select',
       'date',
       'account',
@@ -2122,6 +2287,10 @@ export const TransactionTable = forwardRef((props, ref) => {
       'cleared',
     ];
 
+    return getFields(item, fields);
+  }
+
+  function getFields(item, fields) {
     fields = item.is_child
       ? ['select', 'payee', 'notes', 'category', 'debit', 'credit']
       : fields.filter(
@@ -2267,7 +2436,29 @@ export const TransactionTable = forwardRef((props, ref) => {
       }
 
       setNewTransactions(deleteTransaction(newTrans, id).data);
+    } else {
+      props.onBatchDelete([id]);
     }
+  }, []);
+
+  const onDuplicate = useCallback(id => {
+    props.onBatchDuplicate([id]);
+  }, []);
+
+  const onLinkSchedule = useCallback(id => {
+    props.onBatchLinkSchedule([id]);
+  }, []);
+  const onUnlinkSchedule = useCallback(id => {
+    props.onBatchUnlinkSchedule([id]);
+  }, []);
+  const onCreateRule = useCallback(id => {
+    props.onCreateRule([id]);
+  }, []);
+  const onScheduleAction = useCallback((action, id) => {
+    props.onScheduleAction(action, [id]);
+  }, []);
+  const onMakeAsNonSplitTransactions = useCallback(id => {
+    props.onMakeAsNonSplitTransactions([id]);
   }, []);
 
   const onSplit = useMemo(() => {
@@ -2413,6 +2604,12 @@ export const TransactionTable = forwardRef((props, ref) => {
       isExpanded={splitsExpanded.expanded}
       onSave={onSave}
       onDelete={onDelete}
+      onDuplicate={onDuplicate}
+      onLinkSchedule={onLinkSchedule}
+      onUnlinkSchedule={onUnlinkSchedule}
+      onCreateRule={onCreateRule}
+      onScheduleAction={onScheduleAction}
+      onMakeAsNonSplitTransactions={onMakeAsNonSplitTransactions}
       onSplit={onSplit}
       onCheckNewEnter={onCheckNewEnter}
       onCheckEnter={onCheckEnter}
@@ -2527,13 +2724,14 @@ function notesTagFormatter(notes, onNotesTagClick, onContextMenu) {
           map.set(part, {
             color: filteredTags[0].color ?? theme.noteTagBackground,
             textColor: filteredTags[0].textColor ?? theme.noteTagText,
-            hoverColor: filteredTags[0].hoverColor ?? theme.noteTagBackgroundHover
+            hoverColor:
+              filteredTags[0].hoverColor ?? theme.noteTagBackgroundHover,
           });
         } else {
-          map.set(part, { 
+          map.set(part, {
             color: theme.noteTagBackground,
             textColor: theme.noteTagText,
-            hoverColor: theme.noteTagBackgroundHover
+            hoverColor: theme.noteTagBackgroundHover,
           });
         }
       }
@@ -2547,6 +2745,7 @@ function notesTagFormatter(notes, onNotesTagClick, onContextMenu) {
       {words.map((word, i, arr) => {
         const separator = arr.length - 1 === i ? '' : ' ';
         if (word.includes('#') && word.length > 1) {
+          let lastEmptyTag = -1;
           // Treat tags in a single word as separate tags.
           // #tag1#tag2 => (#tag1)(#tag2)
           // not-a-tag#tag2#tag3 => not-a-tag(#tag2)(#tag3)
@@ -2556,8 +2755,14 @@ function notesTagFormatter(notes, onNotesTagClick, onContextMenu) {
             }
 
             if (!tag) {
+              lastEmptyTag = ti;
               return '#';
             }
+
+            if (lastEmptyTag === ti - 1) {
+              return `${tag} `;
+            }
+            lastEmptyTag = -1;
 
             const validTag = `#${tag}`;
             const filteredTags = tags.filter(t => t.tag === validTag);
@@ -2573,10 +2778,10 @@ function notesTagFormatter(notes, onNotesTagClick, onContextMenu) {
               >
                 <Button
                   data-is-tag={true}
-                  type="bare"
+                  variant="bare"
                   key={i}
                   title={validTag}
-                  style={{
+                  className={css({
                     display: 'inline-block',
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
@@ -2587,15 +2792,18 @@ function notesTagFormatter(notes, onNotesTagClick, onContextMenu) {
                     maxWidth: '150px',
                     backgroundColor:
                       tagColors.get(validTag)?.color ?? theme.noteTagBackground,
-                    color: tagColors.get(validTag)?.textColor ?? theme.noteTagText,
+                    color:
+                      tagColors.get(validTag)?.textColor ?? theme.noteTagText,
                     cursor: 'pointer',
-                  }}
-                  hoveredStyle={{
-                    backgroundColor: tagColors.get(validTag)?.hoverColor ?? theme.noteTagBackgroundHover,
-                    color: tagColors.get(validTag)?.textColor ?? theme.noteTagText,
-                  }}
-                  onClick={e => {
-                    e.stopPropagation();
+                    '&[data-hovered]': {
+                      backgroundColor:
+                        tagColors.get(validTag)?.hoverColor ??
+                        theme.noteTagBackgroundHover,
+                      color:
+                        tagColors.get(validTag)?.textColor ?? theme.noteTagText,
+                    },
+                  })}
+                  onPress={() => {
                     onNotesTagClick?.(validTag);
                   }}
                 >

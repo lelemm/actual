@@ -205,6 +205,14 @@ export function updateRule(rule) {
   return send('api/rule-update', { rule });
 }
 
-export function deleteRule(id) {
-  return send('api/rule-delete', { id });
+export function deleteRule(id: string) {
+  return send('api/rule-delete', id);
+}
+
+export function holdBudgetForNextMonth(month, amount) {
+  return send('api/budget-hold-for-next-month', { month, amount });
+}
+
+export function resetBudgetHold(month) {
+  return send('api/budget-reset-hold', { month });
 }

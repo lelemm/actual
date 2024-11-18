@@ -1,9 +1,14 @@
-import React, { forwardRef, type ElementType, type HTMLProps } from 'react';
+import React, {
+  forwardRef,
+  type ElementType,
+  type HTMLProps,
+  type CSSProperties,
+} from 'react';
 
-import { css } from 'glamor';
+import { css } from '@emotion/css';
 
 import { AnimatedLoading } from '../../icons/AnimatedLoading';
-import { type CSSProperties, styles, theme } from '../../style';
+import { styles, theme } from '../../style';
 
 import { View } from './View';
 
@@ -153,7 +158,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const Component = as;
-    const buttonStyle = {
+    const buttonStyle: CSSProperties = {
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
@@ -168,8 +173,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       transition: 'box-shadow .25s',
       WebkitAppRegion: 'no-drag',
       ...styles.smallText,
-      ':hover': !disabled && hoveredStyle,
-      ':active': !disabled && activeStyle,
+      ':hover': !disabled ? hoveredStyle : {},
+      ':active': !disabled ? activeStyle : {},
       ...(hover && hoveredStyle),
       ...(pressed && activeStyle),
       ...style,
@@ -179,8 +184,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Component
         ref={ref}
         {...(typeof as === 'string'
-          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (css(buttonStyle) as any)
+          ? { className: css(buttonStyle) }
           : { style: buttonStyle })}
         disabled={disabled}
         type={isSubmit ? 'submit' : 'button'}
@@ -198,43 +202,42 @@ type ButtonWithLoadingProps = ButtonProps & {
   loading?: boolean;
 };
 
-export const ButtonWithLoading = forwardRef<
-  HTMLButtonElement,
-  ButtonWithLoadingProps
->((props, ref) => {
-  const { loading, children, ...buttonProps } = props;
-  return (
-    <Button
-      {...buttonProps}
-      ref={ref}
-      style={{ position: 'relative', ...buttonProps.style }}
-    >
-      {loading && (
+const ButtonWithLoading = forwardRef<HTMLButtonElement, ButtonWithLoadingProps>(
+  (props, ref) => {
+    const { loading, children, ...buttonProps } = props;
+    return (
+      <Button
+        {...buttonProps}
+        ref={ref}
+        style={{ position: 'relative', ...buttonProps.style }}
+      >
+        {loading && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <AnimatedLoading style={{ width: 20, height: 20 }} />
+          </View>
+        )}
         <View
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            opacity: loading ? 0 : 1,
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
-          <AnimatedLoading style={{ width: 20, height: 20 }} />
+          {children}
         </View>
-      )}
-      <View
-        style={{
-          opacity: loading ? 0 : 1,
-          flexDirection: 'row',
-          alignItems: 'center',
-        }}
-      >
-        {children}
-      </View>
-    </Button>
-  );
-});
+      </Button>
+    );
+  },
+);
 
 ButtonWithLoading.displayName = 'ButtonWithLoading';

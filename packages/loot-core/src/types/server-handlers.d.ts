@@ -18,7 +18,8 @@ import {
   PayeeEntity,
 } from './models';
 import { TagEntity } from './models/tag';
-import { GlobalPrefs, LocalPrefs } from './prefs';
+import { GlobalPrefs, MetadataPrefs } from './prefs';
+import { Query } from './query';
 import { EmptyObject } from './util';
 
 export interface ServerHandlers {
@@ -29,11 +30,8 @@ export interface ServerHandlers {
   redo: () => Promise<void>;
 
   'transactions-batch-update': (
-    arg: Omit<
-      Parameters<typeof batchUpdateTransactions>[0],
-      'detectOrphanPayees'
-    >,
-  ) => Promise<Awaited<ReturnType<typeof batchUpdateTransactions>>>;
+    ...arg: Parameters<typeof batchUpdateTransactions>
+  ) => ReturnType<typeof batchUpdateTransactions>;
 
   'transaction-add': (transaction) => Promise<EmptyObject>;
 
@@ -62,21 +60,19 @@ export interface ServerHandlers {
 
   'get-budget-bounds': () => Promise<{ start: string; end: string }>;
 
-  'rollover-budget-month': (arg: { month }) => Promise<
+  'envelope-budget-month': (arg: { month }) => Promise<
     {
       value: string | number | boolean;
       name: string;
     }[]
   >;
 
-  'report-budget-month': (arg: { month }) => Promise<
+  'tracking-budget-month': (arg: { month }) => Promise<
     {
       value: string | number | boolean;
       name: string;
     }[]
   >;
-
-  'budget-set-type': (arg: { type }) => Promise<unknown>;
 
   'category-create': (arg: {
     name;
@@ -112,7 +108,7 @@ export interface ServerHandlers {
 
   'payees-get-rule-counts': () => Promise<unknown>;
 
-  'payees-merge': (arg: { targetId; mergeIds }) => Promise<unknown>;
+  'payees-merge': (arg: { targetId; mergeIds }) => Promise<void>;
 
   'payees-batch-change': (arg: {
     added?;
@@ -145,7 +141,7 @@ export interface ServerHandlers {
 
   'create-query': (arg: { sheetName; name; query }) => Promise<unknown>;
 
-  query: (query) => Promise<{ data; dependencies }>;
+  query: (query: Query) => Promise<{ data: unknown; dependencies }>;
 
   'account-update': (arg: { id; name }) => Promise<unknown>;
 
@@ -202,6 +198,16 @@ export interface ServerHandlers {
 
   'simplefin-accounts': () => Promise<{ accounts: SimpleFinAccount[] }>;
 
+  'simplefin-batch-sync': ({ ids }: { ids: string[] }) => Promise<
+    {
+      accountId: string;
+      errors;
+      newTransactions;
+      matchedTransactions;
+      updatedAccounts;
+    }[]
+  >;
+
   'gocardless-get-banks': (country: string) => Promise<{
     data: GoCardlessInstitution[];
     error?: { reason: string };
@@ -248,7 +254,7 @@ export interface ServerHandlers {
 
   'save-prefs': (prefsToSet) => Promise<'ok'>;
 
-  'load-prefs': () => Promise<LocalPrefs | null>;
+  'load-prefs': () => Promise<MetadataPrefs | null>;
 
   'sync-reset': () => Promise<{ error?: { reason: string; meta?: unknown } }>;
 

@@ -1,4 +1,3 @@
-// @ts-strict-ignore
 import React from 'react';
 
 import * as d from 'date-fns';
@@ -13,12 +12,37 @@ import { type RuleConditionEntity } from 'loot-core/types/models';
 import { AlignedText } from '../../common/AlignedText';
 import { runAll, indexCashFlow } from '../util';
 
-export function simpleCashFlow(start, end) {
-  return async (spreadsheet, setData) => {
+export function simpleCashFlow(
+  startMonth: string,
+  endMonth: string,
+  conditions: RuleConditionEntity[] = [],
+  conditionsOp: 'and' | 'or' = 'and',
+) {
+  const start = monthUtils.firstDayOfMonth(startMonth);
+  const end = monthUtils.lastDayOfMonth(endMonth);
+
+  return async (
+    spreadsheet: ReturnType<typeof useSpreadsheet>,
+    setData: (data: { graphData: { income: number; expense: number } }) => void,
+  ) => {
+    const { filters } = await send('make-filters-from-conditions', {
+      conditions: conditions.filter(cond => !cond.customName),
+    });
+    const conditionsOpKey = conditionsOp === 'or' ? '$or' : '$and';
+
     function makeQuery() {
       return q('transactions')
         .filter({
-          $and: [{ date: { $gte: start } }, { date: { $lte: end } }],
+          [conditionsOpKey]: filters,
+          $and: [
+            { date: { $gte: start } },
+            {
+              date: {
+                $lte:
+                  end > monthUtils.currentDay() ? monthUtils.currentDay() : end,
+              },
+            },
+          ],
           'account.offbudget': false,
           'payee.transfer_acct': null,
         })
@@ -43,12 +67,17 @@ export function simpleCashFlow(start, end) {
 }
 
 export function cashFlowByDate(
-  start: string,
-  end: string,
+  startMonth: string,
+  endMonth: string,
   isConcise: boolean,
   conditions: RuleConditionEntity[] = [],
   conditionsOp: 'and' | 'or',
 ) {
+  const start = monthUtils.firstDayOfMonth(startMonth);
+  const end = monthUtils.lastDayOfMonth(endMonth);
+  const fixedEnd =
+    end > monthUtils.currentDay() ? monthUtils.currentDay() : end;
+
   return async (
     spreadsheet: ReturnType<typeof useSpreadsheet>,
     setData: (data: ReturnType<typeof recalculate>) => void,
@@ -66,7 +95,7 @@ export function cashFlowByDate(
         .filter({
           $and: [
             { date: { $transform: '$month', $gte: start } },
-            { date: { $transform: '$month', $lte: end } },
+            { date: { $transform: '$month', $lte: fixedEnd } },
           ],
           'account.offbudget': false,
         });
@@ -103,13 +132,22 @@ export function cashFlowByDate(
         makeQuery().filter({ amount: { $lt: 0 } }),
       ],
       data => {
-        setData(recalculate(data, start, end, isConcise));
+        setData(recalculate(data, start, fixedEnd, isConcise));
       },
     );
   };
 }
 
-function recalculate(data, start, end, isConcise) {
+function recalculate(
+  data: [
+    number,
+    Array<{ date: string; isTransfer: string | null; amount: number }>,
+    Array<{ date: string; isTransfer: string | null; amount: number }>,
+  ],
+  start: string,
+  end: string,
+  isConcise: boolean,
+) {
   const [startingBalance, income, expense] = data;
   const convIncome = income.map(t => {
     return { ...t, isTransfer: t.isTransfer !== null };
@@ -123,15 +161,25 @@ function recalculate(data, start, end, isConcise) {
         monthUtils.getMonth(end),
       )
     : monthUtils.dayRangeInclusive(start, end);
-  const incomes = indexCashFlow(convIncome, 'date', 'isTransfer');
-  const expenses = indexCashFlow(convExpense, 'date', 'isTransfer');
+  const incomes = indexCashFlow(convIncome);
+  const expenses = indexCashFlow(convExpense);
 
   let balance = startingBalance;
   let totalExpenses = 0;
   let totalIncome = 0;
   let totalTransfers = 0;
 
-  const graphData = dates.reduce(
+  const graphData = dates.reduce<{
+    expenses: Array<{ x: Date; y: number }>;
+    income: Array<{ x: Date; y: number }>;
+    transfers: Array<{ x: Date; y: number }>;
+    balances: Array<{
+      x: Date;
+      y: number;
+      premadeLabel: JSX.Element;
+      amount: number;
+    }>;
+  }>(
     (res, date) => {
       let income = 0;
       let expense = 0;

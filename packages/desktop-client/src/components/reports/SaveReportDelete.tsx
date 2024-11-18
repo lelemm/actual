@@ -1,7 +1,8 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { theme } from '../../style/theme';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Stack } from '../common/Stack';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
@@ -17,11 +18,12 @@ export function SaveReportDelete({
   onClose,
   name,
 }: SaveReportDeleteProps) {
+  const { t } = useTranslation();
   return (
     <>
       <View style={{ align: 'center' }}>
         <Text style={{ color: theme.errorText, marginBottom: 5 }}>
-          Do you want to delete report:
+          {t('Are you sure you want to delete report:')}
         </Text>
         <View>{name}</View>
       </View>
@@ -33,11 +35,11 @@ export function SaveReportDelete({
         style={{ marginTop: 15 }}
       >
         <View style={{ flex: 1 }} />
-        <Button type="primary" onClick={onDelete}>
-          Yes
+        <Button variant="primary" autoFocus onPress={onDelete}>
+          {t('Yes')}
         </Button>
-        <Button type="primary" onClick={onClose}>
-          No
+        <Button variant="primary" onPress={onClose}>
+          {t('No')}
         </Button>
       </Stack>
     </>

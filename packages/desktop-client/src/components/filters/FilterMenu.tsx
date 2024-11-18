@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Menu } from '../common/Menu';
 
@@ -8,40 +9,42 @@ export function FilterMenu({
   filterId,
   onFilterMenuSelect,
 }: {
-  filterId: SavedFilter;
+  filterId?: SavedFilter;
   onFilterMenuSelect: (item: string) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Menu
       onMenuSelect={item => {
         onFilterMenuSelect(item);
       }}
       items={
-        !filterId.id
+        !filterId?.id
           ? [
-              { name: 'save-filter', text: 'Save new filter' },
-              { name: 'clear-filter', text: 'Clear all conditions' },
+              { name: 'save-filter', text: t('Save new filter') },
+              { name: 'clear-filter', text: t('Clear all conditions') },
             ]
-          : filterId.id !== null && filterId.status === 'saved'
+          : filterId?.id !== null && filterId?.status === 'saved'
             ? [
-                { name: 'rename-filter', text: 'Rename' },
-                { name: 'delete-filter', text: 'Delete' },
+                { name: 'rename-filter', text: t('Rename') },
+                { name: 'delete-filter', text: t('Delete') },
                 Menu.line,
                 {
                   name: 'save-filter',
-                  text: 'Save new filter',
+                  text: t('Save new filter'),
                   disabled: true,
                 },
-                { name: 'clear-filter', text: 'Clear all conditions' },
+                { name: 'clear-filter', text: t('Clear all conditions') },
               ]
             : [
-                { name: 'rename-filter', text: 'Rename' },
-                { name: 'update-filter', text: 'Update condtions' },
-                { name: 'reload-filter', text: 'Revert changes' },
-                { name: 'delete-filter', text: 'Delete' },
+                { name: 'rename-filter', text: t('Rename') },
+                { name: 'update-filter', text: t('Update condtions') },
+                { name: 'reload-filter', text: t('Revert changes') },
+                { name: 'delete-filter', text: t('Delete') },
                 Menu.line,
-                { name: 'save-filter', text: 'Save new filter' },
-                { name: 'clear-filter', text: 'Clear all conditions' },
+                { name: 'save-filter', text: t('Save new filter') },
+                { name: 'clear-filter', text: t('Clear all conditions') },
               ]
       }
     />

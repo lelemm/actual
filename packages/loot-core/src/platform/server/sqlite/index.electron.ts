@@ -99,7 +99,7 @@ export async function asyncTransaction(
 }
 
 function regexp(regex: string, text: string | null) {
-  return new RegExp(regex).test(text) ? 1 : 0;
+  return new RegExp(regex).test(text || '') ? 1 : 0;
 }
 
 export function openDatabase(pathOrBuffer: string | Buffer) {
@@ -130,7 +130,7 @@ export function closeDatabase(db: SQL.Database) {
 export async function exportDatabase(db: SQL.Database) {
   // electron does not support better-sqlite serialize since v21
   // save to file and read in the raw data.
-  const name = `backup-for-export-${uuidv4()}.db`;
+  const name = `${process.env.ACTUAL_DATA_DIR}/backup-for-export-${uuidv4()}.db`;
 
   await db.backup(name);
 

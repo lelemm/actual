@@ -5,7 +5,7 @@ import {
   type CustomReportData,
   type CustomReportEntity,
 } from '../../types/models';
-import { useLiveQuery } from '../query-hooks';
+import { useQuery } from '../query-hooks';
 
 function toJS(rows: CustomReportData[]) {
   const reports: CustomReportEntity[] = rows.map(row => {
@@ -25,7 +25,6 @@ function toJS(rows: CustomReportData[]) {
       showHiddenCategories: row.show_hidden === 1,
       includeCurrentInterval: row.include_current === 1,
       showUncategorized: row.show_uncategorized === 1,
-      selectedCategories: row.selected_categories,
       graphType: row.graph_type,
       conditions: row.conditions,
       conditionsOp: row.conditions_op ?? 'and',
@@ -36,9 +35,10 @@ function toJS(rows: CustomReportData[]) {
   return reports;
 }
 
-export function useReports(): CustomReportEntity[] {
-  const reports: CustomReportEntity[] = toJS(
-    useLiveQuery(() => q('custom_reports').select('*'), []) || [],
+export function useReports() {
+  const { data: queryData, isLoading } = useQuery<CustomReportData>(
+    () => q('custom_reports').select('*'),
+    [],
   );
 
   // Sort reports by alphabetical order
@@ -52,5 +52,20 @@ export function useReports(): CustomReportEntity[] {
     );
   }
 
-  return useMemo(() => sort(reports), [reports]);
+  return useMemo(
+    () => ({
+      isLoading,
+      data: sort(toJS(queryData ? [...queryData] : [])),
+    }),
+    [isLoading, queryData],
+  );
+}
+
+export function useReport(id: string) {
+  const { data, isLoading } = useReports();
+
+  return {
+    data: data.find(report => report.id === id),
+    isLoading,
+  };
 }

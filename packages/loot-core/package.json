@@ -9,6 +9,7 @@
     "build:api": "cross-env NODE_ENV=development ./bin/build-api",
     "build:browser": "cross-env NODE_ENV=production ./bin/build-browser",
     "watch:browser": "cross-env NODE_ENV=development ./bin/build-browser",
+    "generate:i18n": "i18next",
     "test": "npm-run-all -cp 'test:*'",
     "test:node": "jest -c jest.config.js",
     "test:web": "jest -c jest.web.config.js"
@@ -29,11 +30,11 @@
     "csv-stringify": "^5.6.5",
     "date-fns": "^2.30.0",
     "deep-equal": "^2.2.3",
+    "handlebars": "^4.7.8",
     "lru-cache": "^5.1.1",
     "md5": "^2.3.0",
     "memoize-one": "^6.0.0",
     "mitt": "^3.0.1",
-    "node-fetch": "^2.7.0",
     "reselect": "^4.1.8",
     "slash": "3.0.0",
     "throttleit": "^1.0.1",
@@ -60,6 +61,7 @@
     "cross-env": "^7.0.3",
     "fake-indexeddb": "^3.1.8",
     "fast-check": "3.15.0",
+    "i18next": "^23.11.5",
     "jest": "^27.5.1",
     "jsverify": "^0.8.4",
     "memfs": "3.5.3",
@@ -74,10 +76,10 @@
     "swc-loader": "^0.2.6",
     "terser-webpack-plugin": "^5.3.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.0.2",
-    "webpack": "^5.90.0",
+    "typescript": "^5.5.4",
+    "webpack": "^5.94.0",
     "webpack-bundle-analyzer": "^4.10.1",
     "webpack-cli": "^5.1.4",
-    "yargs": "^9.0.1"
+    "yargs": "^17.6.2"
   }
 }

@@ -1,9 +1,13 @@
 // @ts-strict-ignore
+import { t } from 'i18next';
+
+import { FieldValueTypes, RuleConditionOp } from '../types/models';
+
 import { integerToAmount, amountToInteger, currencyToAmount } from './util';
 
 // For now, this info is duplicated from the backend. Figure out how
 // to share it later.
-export const TYPE_INFO = {
+const TYPE_INFO = {
   date: {
     ops: ['is', 'isapprox', 'gt', 'gte', 'lt', 'lte'],
     nullable: false,
@@ -23,8 +27,7 @@ export const TYPE_INFO = {
       'doesNotContain',
      
       'notOneOf',
-      'tags',
-    ,
+      'hasTags',
     ],
     nullable: true,
   },
@@ -47,8 +50,7 @@ export const TYPE_INFO = {
       'doesNotContain',
      
       'notOneOf',
-      'tags',
-    ,
+      'hasTags',
     ],
     nullable: true,
   },
@@ -60,24 +62,58 @@ export const TYPE_INFO = {
     ops: ['is'],
     nullable: false,
   },
-};
+} as const;
 
-export const FIELD_TYPES = new Map(
-  Object.entries({
-    imported_payee: 'string',
-    payee: 'id',
-    date: 'date',
-    notes: 'string',
-    amount: 'number',
-    amountInflow: 'number',
-    amountOutfow: 'number',
-    category: 'id',
-    account: 'id',
-    cleared: 'boolean',
-    reconciled: 'boolean',
-    saved: 'saved',
-  }),
+type FieldInfoConstraint = Record<
+  keyof FieldValueTypes,
+  { type: keyof typeof TYPE_INFO; disallowedOps?: Set<RuleConditionOp> }
+>;
+
+const FIELD_INFO = {
+  imported_payee: {
+    type: 'string',
+    disallowedOps: new Set(['hasTags']),
+  },
+  payee: { type: 'id' },
+  payee_name: { type: 'string' },
+  date: { type: 'date' },
+  notes: { type: 'string' },
+  amount: { type: 'number' },
+  category: { type: 'id' },
+  account: { type: 'id' },
+  cleared: { type: 'boolean' },
+  reconciled: { type: 'boolean' },
+  saved: { type: 'saved' },
+} as const satisfies FieldInfoConstraint;
+
+const fieldInfo: FieldInfoConstraint = FIELD_INFO;
+
+export const FIELD_TYPES = new Map<keyof FieldValueTypes, string>(
+  Object.entries(FIELD_INFO).map(([field, info]) => [
+    field as unknown as keyof FieldValueTypes,
+    info.type,
+  ]),
 );
+
+export function isValidOp(field: keyof FieldValueTypes, op: RuleConditionOp) {
+  const type = FIELD_TYPES.get(field);
+  if (!type) {
+    return false;
+  }
+  return (
+    TYPE_INFO[type].ops.includes(op) && !fieldInfo[field].disallowedOps?.has(op)
+  );
+}
+
+export function getValidOps(field: keyof FieldValueTypes) {
+  const type = FIELD_TYPES.get(field);
+  if (!type) {
+    return [];
+  }
+  return TYPE_INFO[type].ops.filter(
+    op => !fieldInfo[field].disallowedOps?.has(op),
+  );
+}
 
 export const ALLOCATION_METHODS = {
   'fixed-amount': 'a fixed amount',
@@ -90,18 +126,20 @@ export function mapField(field, opts?) {
 
   switch (field) {
     case 'imported_payee':
-      return 'imported payee';
+      return t('imported payee');
+    case 'payee_name':
+      return t('payee (name)');
     case 'amount':
       if (opts.inflow) {
-        return 'amount (inflow)';
+        return t('amount (inflow)');
       } else if (opts.outflow) {
-        return 'amount (outflow)';
+        return t('amount (outflow)');
       }
-      return 'amount';
+      return t('amount');
     case 'amount-inflow':
-      return 'amount (inflow)';
+      return t('amount (inflow)');
     case 'amount-outflow':
-      return 'amount (outflow)';
+      return t('amount (outflow)');
     default:
       return field;
   }
@@ -110,57 +148,61 @@ export function mapField(field, opts?) {
 export function friendlyOp(op, type?) {
   switch (op) {
     case 'oneOf':
-      return 'one of';
+      return t('one of');
     case 'notOneOf':
-      return 'not one of';
+      return t('not one of');
     case 'is':
-      return 'is';
+      return t('is');
     case 'isNot':
-      return 'is not';
+      return t('is not');
     case 'isapprox':
-      return 'is approx';
+      return t('is approx');
     case 'isbetween':
-      return 'is between';
+      return t('is between');
     case 'contains':
-      return 'contains';
-    case 'tags':
-      return 'has tag(s)';
+      return t('contains');
+    case 'hasTags':
+      return t('has tag(s)');
     case 'matches':
-      return 'matches';
+      return t('matches');
     case 'doesNotContain':
-      return 'does not contain';
+      return t('does not contain');
     case 'gt':
       if (type === 'date') {
-        return 'is after';
+        return t('is after');
       }
-      return 'is greater than';
+      return t('is greater than');
     case 'gte':
       if (type === 'date') {
-        return 'is after or equals';
+        return t('is after or equals');
       }
-      return 'is greater than or equals';
+      return t('is greater than or equals');
     case 'lt':
       if (type === 'date') {
-        return 'is before';
+        return t('is before');
       }
-      return 'is less than';
+      return t('is less than');
     case 'lte':
       if (type === 'date') {
-        return 'is before or equals';
+        return t('is before or equals');
       }
-      return 'is less than or equals';
+      return t('is less than or equals');
     case 'true':
-      return 'is true';
+      return t('is true');
     case 'false':
-      return 'is false';
+      return t('is false');
     case 'set':
-      return 'set';
+      return t('set');
     case 'set-split-amount':
-      return 'allocate';
+      return t('allocate');
     case 'link-schedule':
-      return 'link schedule';
+      return t('link schedule');
+    case 'prepend-notes':
+      return t('prepend to notes');
+    case 'append-notes':
+      return t('append to notes');
     case 'and':
-      return 'and';
+      return t('and');
     case 'or':
       return 'or';
     default:
@@ -186,10 +228,16 @@ export function getFieldError(type) {
     case 'no-empty-array':
     case 'no-empty-string':
       return 'Value cannot be empty';
+    case 'not-string':
+      return 'Value must be a string';
+    case 'not-boolean':
+      return 'Value must be a boolean';
     case 'not-number':
       return 'Value must be a number';
     case 'invalid-field':
       return 'Please choose a valid field for this type of rule';
+    case 'invalid-template':
+      return 'Invalid handlebars template';
     default:
       return 'Internal error, sorry! Please get in touch https://actualbudget.org/contact/ for support';
   }
@@ -289,6 +337,12 @@ export function makeValue(value, cond) {
       break;
     }
     default:
+  }
+
+  const isMulti = ['oneOf', 'notOneOf'].includes(cond.op);
+
+  if (isMulti) {
+    return { ...cond, error: null, value: value || [] };
   }
 
   return { ...cond, error: null, value };

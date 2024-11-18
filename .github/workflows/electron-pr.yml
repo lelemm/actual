@@ -35,6 +35,7 @@ jobs:
           python3 -m pip install setuptools
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
+          sudo apt-get update
           sudo apt-get install flatpak -y
           sudo apt-get install flatpak-builder -y
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -52,5 +53,13 @@ jobs:
           path: |
             packages/desktop-electron/dist/*.dmg
             packages/desktop-electron/dist/*.exe
+            !packages/desktop-electron/dist/Actual-windows.exe
             packages/desktop-electron/dist/*.AppImage
             packages/desktop-electron/dist/*.flatpak
+      - name: Upload Windows Store Build
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-electron-${{ matrix.os }}-appx
+          path: |
+            packages/desktop-electron/dist/*.appx

@@ -4,6 +4,7 @@ import type {
   CategoryEntity,
   CategoryGroupEntity,
   GoCardlessToken,
+  ScheduleEntity,
   TransactionEntity,
 } from '../../types/models';
 import type { NewRuleEntity, RuleEntity } from '../../types/models/rule';
@@ -38,7 +39,7 @@ type FinanceModals = {
   };
   'select-linked-accounts': {
     accounts: unknown[];
-    requisitionId: string;
+    requisitionId?: string;
     upgradingAccountId?: string;
     syncSource?: AccountSyncSource;
   };
@@ -53,7 +54,7 @@ type FinanceModals = {
   'manage-rules': { payeeId?: string };
   'edit-rule': {
     rule: RuleEntity | NewRuleEntity;
-    onSave: (rule: RuleEntity) => void;
+    onSave?: (rule: RuleEntity) => void;
   };
   'merge-unused-payees': {
     payeeIds: string[];
@@ -85,6 +86,15 @@ type FinanceModals = {
 
   'import-actual': null;
 
+  'out-of-sync-migrations': null;
+
+  'files-settings': null;
+
+  'confirm-change-document-dir': {
+    currentBudgetDirectory: string;
+    newDirectory: string;
+  };
+
   'create-encryption-key': { recreate?: boolean };
   'fix-encryption-key': {
     hasExistingKey?: boolean;
@@ -93,14 +103,17 @@ type FinanceModals = {
   };
 
   'edit-field': {
-    name: string;
-    month: string;
-    onSubmit: (name: string, value: string) => void;
-    onClose: () => void;
+    name: keyof Pick<TransactionEntity, 'date' | 'amount' | 'notes'>;
+    onSubmit: (
+      name: keyof Pick<TransactionEntity, 'date' | 'amount' | 'notes'>,
+      value: string | number,
+      mode?: 'prepend' | 'append' | 'replace' | null,
+    ) => void;
+    onClose?: () => void;
   };
 
   'category-autocomplete': {
-    categoryGroups: CategoryGroupEntity[];
+    categoryGroups?: CategoryGroupEntity[];
     onSelect: (categoryId: string, categoryName: string) => void;
     month?: string;
     showHiddenCategories?: boolean;
@@ -124,7 +137,14 @@ type FinanceModals = {
 
   'schedule-edit': { id: string; transaction?: TransactionEntity } | null;
 
-  'schedule-link': { transactionIds: string[] } | null;
+  'schedule-link': {
+    transactionIds: string[];
+    getTransaction: (
+      transactionId: TransactionEntity['id'],
+    ) => TransactionEntity;
+    accountName?: string;
+    onScheduleLinked?: (schedule: ScheduleEntity) => void;
+  };
 
   'schedules-discover': null;
 
@@ -146,7 +166,7 @@ type FinanceModals = {
     onBudgetAction: (month: string, action: string, args?: unknown) => void;
     onClose?: () => void;
   };
-  'rollover-budget-menu': {
+  'envelope-budget-menu': {
     categoryId: string;
     month: string;
     onUpdateBudget: (amount: number) => void;
@@ -154,7 +174,7 @@ type FinanceModals = {
     onSetMonthsAverage: (numberOfMonths: number) => void;
     onApplyBudgetTemplate: () => void;
   };
-  'report-budget-menu': {
+  'tracking-budget-menu': {
     categoryId: string;
     month: string;
     onUpdateBudget: (amount: number) => void;
@@ -176,8 +196,8 @@ type FinanceModals = {
     name: string;
     onSave: (id: string, notes: string) => void;
   };
-  'report-budget-summary': { month: string };
-  'rollover-budget-summary': {
+  'tracking-budget-summary': { month: string };
+  'envelope-budget-summary': {
     month: string;
     onBudgetAction: (
       month: string,
@@ -193,27 +213,28 @@ type FinanceModals = {
     onValidate?: (value: string) => string;
     onSubmit: (value: string) => Promise<void>;
   };
-  'rollover-balance-menu': {
+  'envelope-balance-menu': {
     categoryId: string;
     month: string;
     onCarryover: (carryover: boolean) => void;
     onTransfer: () => void;
     onCover: () => void;
   };
-  'rollover-summary-to-budget-menu': {
+  'envelope-summary-to-budget-menu': {
     month: string;
     onTransfer: () => void;
     onCover: () => void;
     onHoldBuffer: () => void;
     onResetHoldBuffer: () => void;
   };
-  'report-balance-menu': {
+  'tracking-balance-menu': {
     categoryId: string;
     month: string;
     onCarryover: (carryover: boolean) => void;
   };
   transfer: {
     title: string;
+    categoryId?: CategoryEntity['id'];
     month: string;
     amount: number;
     onSubmit: (amount: number, toCategoryId: string) => void;
@@ -221,6 +242,7 @@ type FinanceModals = {
   };
   cover: {
     title: string;
+    categoryId?: CategoryEntity['id'];
     month: string;
     showToBeBudgeted?: boolean;
     onSubmit: (fromCategoryId: string) => void;
@@ -239,12 +261,12 @@ type FinanceModals = {
     onToggleHiddenCategories: () => void;
     onSwitchBudgetFile: () => void;
   };
-  'rollover-budget-month-menu': {
+  'envelope-budget-month-menu': {
     month: string;
     onBudgetAction: (month: string, action: string, arg?: unknown) => void;
     onEditNotes: (month: string) => void;
   };
-  'report-budget-month-menu': {
+  'tracking-budget-month-menu': {
     month: string;
     onBudgetAction: (month: string, action: string, arg?: unknown) => void;
     onEditNotes: (month: string) => void;
@@ -256,8 +278,15 @@ type FinanceModals = {
     confirmReason: string;
   };
   'confirm-transaction-delete': {
+    message?: string;
     onConfirm: () => void;
   };
+  'confirm-unlink-account': {
+    accountName: string;
+    onUnlink: () => void;
+  };
+  'keyboard-shortcuts': EmptyObject;
+  'goal-templates': EmptyObject;
 };
 
 export type PushModalAction = {

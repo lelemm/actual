@@ -1,13 +1,13 @@
 // @ts-strict-ignore
-import React from 'react';
+import React, { type CSSProperties } from 'react';
 
-import { css } from 'glamor';
+import { css, cx } from '@emotion/css';
 
 import * as Platform from 'loot-core/client/platform';
 import { type AccountEntity } from 'loot-core/src/types/models';
 
 import { useNotes } from '../../hooks/useNotes';
-import { styles, theme, type CSSProperties } from '../../style';
+import { styles, theme } from '../../style';
 import { AlignedText } from '../common/AlignedText';
 import { Link } from '../common/Link';
 import { Text } from '../common/Text';
@@ -21,7 +21,7 @@ import {
   type OnDragChangeCallback,
   type OnDropCallback,
 } from '../sort';
-import { type Binding } from '../spreadsheet';
+import { type SheetFields, type Binding } from '../spreadsheet';
 import { CellValue } from '../spreadsheet/CellValue';
 
 export const accountNameStyle: CSSProperties = {
@@ -37,10 +37,10 @@ export const accountNameStyle: CSSProperties = {
   ...styles.smallText,
 };
 
-type AccountProps = {
+type AccountProps<FieldName extends SheetFields<'account'>> = {
   name: string;
   to: string;
-  query: Binding;
+  query: Binding<'account', FieldName>;
   account?: AccountEntity;
   connected?: boolean;
   pending?: boolean;
@@ -52,7 +52,7 @@ type AccountProps = {
   onDrop?: OnDropCallback;
 };
 
-export function Account({
+export function Account<FieldName extends SheetFields<'account'>>({
   name,
   account,
   connected,
@@ -65,7 +65,7 @@ export function Account({
   outerStyle,
   onDragChange,
   onDrop,
-}: AccountProps) {
+}: AccountProps<FieldName>) {
   const type = account
     ? account.closed
       ? 'account-closed'
@@ -96,6 +96,7 @@ export function Account({
         <DropHighlight pos={dropPos} />
         <View innerRef={dragRef}>
           <Link
+            variant="internal"
             to={to}
             style={{
               ...accountNameStyle,
@@ -130,20 +131,23 @@ export function Account({
               }}
             >
               <div
-                className={`dot ${css({
-                  marginRight: 3,
-                  width: 5,
-                  height: 5,
-                  borderRadius: 5,
-                  backgroundColor: pending
-                    ? theme.sidebarItemBackgroundPending
-                    : failed
-                      ? theme.sidebarItemBackgroundFailed
-                      : theme.sidebarItemBackgroundPositive,
-                  marginLeft: 2,
-                  transition: 'transform .3s',
-                  opacity: connected ? 1 : 0,
-                })}`}
+                className={cx(
+                  'dot',
+                  css({
+                    marginRight: 3,
+                    width: 5,
+                    height: 5,
+                    borderRadius: 5,
+                    backgroundColor: pending
+                      ? theme.sidebarItemBackgroundPending
+                      : failed
+                        ? theme.sidebarItemBackgroundFailed
+                        : theme.sidebarItemBackgroundPositive,
+                    marginLeft: 2,
+                    transition: 'transform .3s',
+                    opacity: connected ? 1 : 0,
+                  }),
+                )}
               />
             </View>
 

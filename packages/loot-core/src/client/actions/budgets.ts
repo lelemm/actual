@@ -1,4 +1,6 @@
 // @ts-strict-ignore
+import { t } from 'i18next';
+
 import { send } from '../../platform/client/fetch';
 import { getDownloadError, getSyncError } from '../../shared/errors';
 import type { Handlers } from '../../types/handlers';
@@ -46,40 +48,42 @@ export function loadAllFiles() {
   };
 }
 
-export function loadBudget(id: string, loadingText = '', options = {}) {
+export function loadBudget(id: string, options = {}) {
   return async (dispatch: Dispatch) => {
-    dispatch(setAppState({ loadingText }));
+    dispatch(setAppState({ loadingText: t('Loading...') }));
 
     // Loading a budget may fail
     const { error } = await send('load-budget', { id, ...options });
 
     if (error) {
       const message = getSyncError(error, id);
-      if (error === 'out-of-sync-migrations' || error === 'out-of-sync-data') {
+      if (error === 'out-of-sync-migrations') {
+        dispatch(pushModal('out-of-sync-migrations'));
+      } else if (error === 'out-of-sync-data') {
         // confirm is not available on iOS
         if (typeof window.confirm !== 'undefined') {
           const showBackups = window.confirm(
             message +
-              ' Make sure the app is up-to-date. Do you want to load a backup?',
+              ' ' +
+              t(
+                'Make sure the app is up-to-date. Do you want to load a backup?',
+              ),
           );
 
           if (showBackups) {
             dispatch(pushModal('load-backup', { budgetId: id }));
           }
         } else {
-          alert(message + ' Make sure the app is up-to-date.');
+          alert(message + ' ' + t('Make sure the app is up-to-date.'));
         }
       } else {
         alert(message);
       }
+    } else {
+      dispatch(closeModal());
 
-      dispatch(setAppState({ loadingText: null }));
-      return;
+      await dispatch(loadPrefs());
     }
-
-    dispatch(closeModal());
-
-    await dispatch(loadPrefs());
 
     dispatch(setAppState({ loadingText: null }));
   };
@@ -92,7 +96,7 @@ export function closeBudget() {
       // This clears out all the app state so the user starts fresh
       dispatch({ type: constants.CLOSE_BUDGET });
 
-      dispatch(setAppState({ loadingText: 'Closing...' }));
+      dispatch(setAppState({ loadingText: t('Closing...') }));
       await send('close-budget');
       dispatch(setAppState({ loadingText: null }));
       if (localStorage.getItem('SharedArrayBufferOverride')) {
@@ -122,7 +126,8 @@ export function createBudget({ testMode = false, demoMode = false } = {}) {
   return async (dispatch: Dispatch) => {
     dispatch(
       setAppState({
-        loadingText: testMode || demoMode ? 'Making demo...' : '',
+        loadingText:
+          testMode || demoMode ? t('Making demo...') : t('Creating budget...'),
       }),
     );
 
@@ -175,7 +180,7 @@ export function uploadBudget(id: string) {
 export function closeAndLoadBudget(fileId: string) {
   return async (dispatch: Dispatch) => {
     await dispatch(closeBudget());
-    dispatch(loadBudget(fileId, 'Loading...'));
+    await dispatch(loadBudget(fileId));
   };
 }
 
@@ -188,7 +193,11 @@ export function closeAndDownloadBudget(cloudFileId: string) {
 
 export function downloadBudget(cloudFileId: string, { replace = false } = {}) {
   return async (dispatch: Dispatch) => {
-    dispatch(setAppState({ loadingText: 'Downloading...' }));
+    dispatch(
+      setAppState({
+        loadingText: t('Downloading...'),
+      }),
+    );
 
     const { id, error } = await send('download-budget', {
       fileId: cloudFileId,
@@ -209,9 +218,15 @@ export function downloadBudget(cloudFileId: string, { replace = false } = {}) {
         dispatch(setAppState({ loadingText: null }));
       } else if (error.reason === 'file-exists') {
         alert(
-          `A file with id “${error.meta.id}” already exists with the name “${error.meta.name}.” ` +
-            'This file will be replaced. This probably happened because files were manually ' +
-            'moved around outside of Actual.',
+          t(
+            'A file with id “{{id}}” already exists with the name “{{name}}”. ' +
+              'This file will be replaced. This probably happened because files were manually ' +
+              'moved around outside of Actual.',
+            {
+              id: error.meta.id,
+              name: error.meta.name,
+            },
+          ),
         );
 
         return dispatch(downloadBudget(cloudFileId, { replace: true }));

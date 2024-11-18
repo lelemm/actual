@@ -1,14 +1,18 @@
-import React, { type MouseEventHandler } from 'react';
+import React, {
+  type ComponentPropsWithoutRef,
+  type CSSProperties,
+} from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { SvgPin } from '../../icons/v1';
 import { SvgArrowButtonLeft1 } from '../../icons/v2';
-import { type CSSProperties, theme } from '../../style';
-import { Button } from '../common/Button';
+import { theme } from '../../style';
+import { Button } from '../common/Button2';
 import { View } from '../common/View';
 
 type ToggleButtonProps = {
   isFloating: boolean;
-  onFloat: MouseEventHandler<HTMLButtonElement>;
+  onFloat: ComponentPropsWithoutRef<typeof Button>['onPress'];
   style?: CSSProperties;
 };
 
@@ -17,13 +21,14 @@ export function ToggleButton({
   isFloating,
   onFloat,
 }: ToggleButtonProps) {
+  const { t } = useTranslation();
   return (
     <View className="float" style={{ ...style, flexShrink: 0 }}>
       <Button
-        type="bare"
-        aria-label={`${isFloating ? 'Pin' : 'Unpin'} sidebar`}
-        onClick={onFloat}
-        color={theme.buttonMenuBorder}
+        variant="bare"
+        aria-label={isFloating ? t('Pin sidebar') : t('Unpin sidebar')}
+        onPress={onFloat}
+        style={{ color: theme.buttonMenuBorder }}
       >
         {isFloating ? (
           <SvgPin

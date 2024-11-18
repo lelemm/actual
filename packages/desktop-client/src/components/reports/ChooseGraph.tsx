@@ -1,9 +1,8 @@
-import React, { type UIEvent, useRef } from 'react';
+import React, { type UIEvent, useRef, type CSSProperties } from 'react';
 
 import { type DataEntity } from 'loot-core/src/types/models/reports';
 import { type RuleConditionEntity } from 'loot-core/types/models/rule';
 
-import { type CSSProperties } from '../../style';
 import { styles } from '../../style/styles';
 
 import { AreaGraph } from './graphs/AreaGraph';
@@ -29,6 +28,7 @@ type ChooseGraphProps = {
   style?: CSSProperties;
   showHiddenCategories?: boolean;
   showOffBudget?: boolean;
+  showTooltip?: boolean;
   intervalsCount: number;
 };
 
@@ -46,6 +46,7 @@ export function ChooseGraph({
   style,
   showHiddenCategories = false,
   showOffBudget = false,
+  showTooltip = true,
   intervalsCount,
 }: ChooseGraphProps) {
   const graphStyle = compact
@@ -102,6 +103,7 @@ export function ChooseGraph({
         data={data}
         balanceTypeOp={balanceTypeOp}
         viewLabels={viewLabels}
+        showTooltip={showTooltip}
       />
     );
   }
@@ -117,11 +119,19 @@ export function ChooseGraph({
         viewLabels={viewLabels}
         showHiddenCategories={showHiddenCategories}
         showOffBudget={showOffBudget}
+        showTooltip={showTooltip}
       />
     );
   }
   if (graphType === 'BarLineGraph') {
-    return <BarLineGraph style={graphStyle} compact={compact} data={data} />;
+    return (
+      <BarLineGraph
+        style={graphStyle}
+        compact={compact}
+        data={data}
+        showTooltip={showTooltip}
+      />
+    );
   }
   if (graphType === 'DonutGraph') {
     return (
@@ -135,6 +145,7 @@ export function ChooseGraph({
         viewLabels={viewLabels}
         showHiddenCategories={showHiddenCategories}
         showOffBudget={showOffBudget}
+        showTooltip={showTooltip}
       />
     );
   }
@@ -149,6 +160,7 @@ export function ChooseGraph({
         balanceTypeOp={balanceTypeOp}
         showHiddenCategories={showHiddenCategories}
         showOffBudget={showOffBudget}
+        showTooltip={showTooltip}
         interval={interval}
       />
     );
@@ -165,6 +177,7 @@ export function ChooseGraph({
         groupBy={groupBy}
         showHiddenCategories={showHiddenCategories}
         showOffBudget={showOffBudget}
+        showTooltip={showTooltip}
         interval={interval}
       />
     );

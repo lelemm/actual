@@ -16,8 +16,8 @@ export class AccountPage {
     this.cancelTransactionButton = this.page.getByRole('button', {
       name: 'Cancel',
     });
-    this.menuButton = this.page.getByRole('button', {
-      name: 'Menu',
+    this.accountMenuButton = this.page.getByRole('button', {
+      name: 'Account menu',
     });
 
     this.transactionTable = this.page.getByTestId('transaction-table');
@@ -30,16 +30,32 @@ export class AccountPage {
     this.selectTooltip = this.page.getByTestId('transactions-select-tooltip');
   }
 
+  async waitFor() {
+    await this.transactionTable.waitFor();
+  }
+
+  /**
+   * Enter details of a transaction
+   */
+  async enterSingleTransaction(transaction) {
+    await this.addNewTransactionButton.click();
+    await this._fillTransactionFields(this.newTransactionRow, transaction);
+  }
+
+  /**
+   * Finish adding a transaction
+   */
+  async addEnteredTransaction() {
+    await this.addTransactionButton.click();
+    await this.cancelTransactionButton.click();
+  }
+
   /**
    * Create a single transaction
    */
   async createSingleTransaction(transaction) {
-    await this.addNewTransactionButton.click();
-
-    await this._fillTransactionFields(this.newTransactionRow, transaction);
-
-    await this.addTransactionButton.click();
-    await this.cancelTransactionButton.click();
+    await this.enterSingleTransaction(transaction);
+    await this.addEnteredTransaction();
   }
 
   /**
@@ -82,6 +98,15 @@ export class AccountPage {
    */
   getNthTransaction(index) {
     const row = this.transactionTableRow.nth(index);
+
+    return this._getTransactionDetails(row);
+  }
+
+  getEnteredTransaction() {
+    return this._getTransactionDetails(this.newTransactionRow);
+  }
+
+  _getTransactionDetails(row) {
     const account = row.getByTestId('account');
 
     return {
@@ -103,7 +128,7 @@ export class AccountPage {
    * Open the modal for closing the account.
    */
   async clickCloseAccount() {
-    await this.menuButton.click();
+    await this.accountMenuButton.click();
     await this.page.getByRole('button', { name: 'Close Account' }).click();
     return new CloseAccountModal(
       this.page.getByTestId('close-account-modal'),

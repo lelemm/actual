@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useReducer } from 'react';
+import { FocusScope } from 'react-aria';
+import { Form } from 'react-aria-components';
 import { useHotkeys } from 'react-hotkeys-hook';
+import { Trans, useTranslation } from 'react-i18next';
 
-import { FocusScope } from '@react-aria/focus';
 import {
   parse as parseDate,
   format as formatDate,
@@ -17,13 +19,13 @@ import {
   getFieldError,
   unparse,
   FIELD_TYPES,
-  TYPE_INFO,
+  getValidOps,
 } from 'loot-core/src/shared/rules';
 import { titleFirst } from 'loot-core/src/shared/util';
 
 import { useDateFormat } from '../../hooks/useDateFormat';
 import { styles, theme } from '../../style';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Menu } from '../common/Menu';
 import { Popover } from '../common/Popover';
 import { Select } from '../common/Select';
@@ -62,6 +64,7 @@ function ConfigureField({
   dispatch,
   onApply,
 }) {
+  const { t } = useTranslation();
   const [subfield, setSubfield] = useState(initialSubfield);
   const inputRef = useRef();
   const prevOp = useRef(null);
@@ -74,7 +77,7 @@ function ConfigureField({
   }, [op]);
 
   const type = FIELD_TYPES.get(field);
-  let ops = TYPE_INFO[type].ops.filter(op => op !== 'isbetween');
+  let ops = getValidOps(field).filter(op => op !== 'isbetween');
 
   // Month and year fields are quite hacky right now! Figure out how
   // to clean this up later
@@ -91,15 +94,15 @@ function ConfigureField({
               options={
                 field === 'amount'
                   ? [
-                      ['amount', 'Amount'],
-                      ['amount-inflow', 'Amount (inflow)'],
-                      ['amount-outflow', 'Amount (outflow)'],
+                      ['amount', t('Amount')],
+                      ['amount-inflow', t('Amount (inflow)')],
+                      ['amount-outflow', t('Amount (outflow)')],
                     ]
                   : field === 'date'
                     ? [
-                        ['date', 'Date'],
-                        ['month', 'Month'],
-                        ['year', 'Year'],
+                        ['date', t('Date')],
+                        ['month', t('Month')],
+                        ['year', t('Year')],
                       ]
                     : null
               }
@@ -125,7 +128,7 @@ function ConfigureField({
           marginBottom: 10,
         }}
       >
-        {field === 'saved' && 'Existing filters will be cleared'}
+        {field === 'saved' && t('Existing filters will be cleared')}
       </View>
 
       <Stack
@@ -139,8 +142,8 @@ function ConfigureField({
             <OpButton
               key="true"
               op="true"
-              selected={value === true}
-              onClick={() => {
+              isSelected={value === true}
+              onPress={() => {
                 dispatch({ type: 'set-op', op: 'is' });
                 dispatch({ type: 'set-value', value: true });
               }}
@@ -148,8 +151,8 @@ function ConfigureField({
             <OpButton
               key="false"
               op="false"
-              selected={value === false}
-              onClick={() => {
+              isSelected={value === false}
+              onPress={() => {
                 dispatch({ type: 'set-op', op: 'is' });
                 dispatch({ type: 'set-value', value: false });
               }}
@@ -167,8 +170,8 @@ function ConfigureField({
                 <OpButton
                   key={currOp}
                   op={currOp}
-                  selected={currOp === op}
-                  onClick={() => dispatch({ type: 'set-op', op: currOp })}
+                  isSelected={currOp === op}
+                  onPress={() => dispatch({ type: 'set-op', op: currOp })}
                 />
               ))}
             </Stack>
@@ -182,8 +185,8 @@ function ConfigureField({
                 <OpButton
                   key={currOp}
                   op={currOp}
-                  selected={currOp === op}
-                  onClick={() => dispatch({ type: 'set-op', op: currOp })}
+                  isSelected={currOp === op}
+                  onPress={() => dispatch({ type: 'set-op', op: currOp })}
                 />
               ))}
             </Stack>
@@ -191,7 +194,17 @@ function ConfigureField({
         )}
       </Stack>
 
-      <form action="#">
+      <Form
+        onSubmit={e => {
+          e.preventDefault();
+          onApply({
+            field,
+            op,
+            value,
+            options: subfieldToOptions(field, subfield),
+          });
+        }}
+      >
         {type !== 'boolean' && (
           <GenericInput
             inputRef={inputRef}
@@ -199,8 +212,10 @@ function ConfigureField({
             subfield={subfield}
             type={
               type === 'id' &&
-             
-              (op === 'contains' || op === 'matches' || op === 'doesNotContain' || op === 'tags')
+              (op === 'contains' ||
+                op === 'matches' ||
+                op === 'doesNotContain' ||
+                op === 'hasTags')
                 ? 'string'
                 : type
             }
@@ -220,27 +235,17 @@ function ConfigureField({
           style={{ marginTop: 15 }}
         >
           <View style={{ flex: 1 }} />
-          <Button
-            type="primary"
-            onClick={e => {
-              e.preventDefault();
-              onApply({
-                field,
-                op,
-                value,
-                options: subfieldToOptions(field, subfield),
-              });
-            }}
-          >
-            Apply
+          <Button variant="primary" type="submit">
+            <Trans>Apply</Trans>
           </Button>
         </Stack>
-      </form>
+      </Form>
     </FocusScope>
   );
 }
 
 export function FilterButton({ onApply, compact, hover, exclude }) {
+  const { t } = useTranslation();
   const filters = useFilters();
   const triggerRef = useRef(null);
 
@@ -254,7 +259,7 @@ export function FilterButton({ onApply, compact, hover, exclude }) {
         case 'configure': {
           const { field } = deserializeField(action.field);
           const type = FIELD_TYPES.get(field);
-          const ops = TYPE_INFO[type].ops;
+          const ops = getValidOps(field);
           return {
             ...state,
             fieldsOpen: false,
@@ -286,7 +291,7 @@ export function FilterButton({ onApply, compact, hover, exclude }) {
         if (isDateValid(date)) {
           cond.value = formatDate(date, 'yyyy-MM');
         } else {
-          alert('Invalid date format');
+          alert(t('Invalid date format'));
           return;
         }
       } else if (cond.options.year) {
@@ -294,7 +299,7 @@ export function FilterButton({ onApply, compact, hover, exclude }) {
         if (isDateValid(date)) {
           cond.value = formatDate(date, 'yyyy');
         } else {
-          alert('Invalid date format');
+          alert(t('Invalid date format'));
           return;
         }
       }
@@ -330,7 +335,11 @@ export function FilterButton({ onApply, compact, hover, exclude }) {
             lineHeight: 1.5,
             padding: '6px 10px',
           }}
-          content={<Text>Filters</Text>}
+          content={
+            <Text>
+              <Trans>Filters</Trans>
+            </Text>
+          }
           placement="bottom start"
           triggerProps={{
             isDisabled: !hover,
@@ -338,10 +347,10 @@ export function FilterButton({ onApply, compact, hover, exclude }) {
         >
           {compact ? (
             <CompactFiltersButton
-              onClick={() => dispatch({ type: 'select-field' })}
+              onPress={() => dispatch({ type: 'select-field' })}
             />
           ) : (
-            <FiltersButton onClick={() => dispatch({ type: 'select-field' })} />
+            <FiltersButton onPress={() => dispatch({ type: 'select-field' })} />
           )}
         </Tooltip>
       </View>

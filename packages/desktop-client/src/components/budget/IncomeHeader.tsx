@@ -1,6 +1,7 @@
 import React from 'react';
+import { Trans } from 'react-i18next';
 
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { View } from '../common/View';
 
 import { RenderMonths } from './RenderMonths';
@@ -23,8 +24,8 @@ export function IncomeHeader({
           justifyContent: 'flex-start',
         }}
       >
-        <Button onClick={onShowNewGroup} style={{ fontSize: 12, margin: 10 }}>
-          Add Group
+        <Button onPress={onShowNewGroup} style={{ fontSize: 12, margin: 10 }}>
+          <Trans>Add Group</Trans>
         </Button>
       </View>
       <RenderMonths

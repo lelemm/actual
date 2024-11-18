@@ -5,7 +5,7 @@ import { type RuleConditionEntity } from 'loot-core/types/models';
 import { theme } from '../../style';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
-import { FieldSelect } from '../modals/EditRule';
+import { FieldSelect } from '../modals/EditRuleModal';
 
 export function ConditionsOpMenu({
   conditionsOp,
@@ -13,7 +13,7 @@ export function ConditionsOpMenu({
   conditions,
 }: {
   conditionsOp: string;
-  onChange: (value: string, conditions: RuleConditionEntity[]) => void;
+  onChange: (value: 'and' | 'or') => void;
   conditions: RuleConditionEntity[];
 }) {
   return conditions.length > 1 ? (
@@ -25,7 +25,7 @@ export function ConditionsOpMenu({
           ['or', 'any'],
         ]}
         value={conditionsOp}
-        onChange={(name: string, value: string) => onChange(value, conditions)}
+        onChange={onChange}
       />
       of:
     </Text>

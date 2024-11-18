@@ -1,7 +1,8 @@
 // @ts-strict-ignore
-import React, { useState } from 'react';
+import React, { useState, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { css } from 'glamor';
+import { css } from '@emotion/css';
 import {
   BarChart,
   Bar,
@@ -27,9 +28,7 @@ import { useAccounts } from '../../../hooks/useAccounts';
 import { useCategories } from '../../../hooks/useCategories';
 import { useNavigate } from '../../../hooks/useNavigate';
 import { usePrivacyMode } from '../../../hooks/usePrivacyMode';
-import { useResponsive } from '../../../ResponsiveProvider';
 import { theme } from '../../../style';
-import { type CSSProperties } from '../../../style';
 import { AlignedText } from '../../common/AlignedText';
 import { Container } from '../Container';
 import { getCustomTick } from '../getCustomTick';
@@ -63,11 +62,12 @@ const CustomTooltip = ({
   payload,
   label,
 }: CustomTooltipProps) => {
+  const { t } = useTranslation();
   if (active && payload && payload.length) {
     let sumTotals = 0;
     return (
       <div
-        className={`${css({
+        className={css({
           zIndex: 1000,
           pointerEvents: 'none',
           borderRadius: 2,
@@ -75,7 +75,7 @@ const CustomTooltip = ({
           backgroundColor: theme.menuBackground,
           color: theme.menuItemText,
           padding: 10,
-        })}`}
+        })}
       >
         <div>
           <div style={{ marginBottom: 10 }}>
@@ -105,7 +105,7 @@ const CustomTooltip = ({
               })}
             {payload.length > 5 && compact && '...'}
             <AlignedText
-              left="Total"
+              left={t('Total')}
               right={amountToCurrency(sumTotals)}
               style={{
                 fontWeight: 600,
@@ -150,6 +150,7 @@ type StackedBarGraphProps = {
   balanceTypeOp: balanceTypeOpType;
   showHiddenCategories?: boolean;
   showOffBudget?: boolean;
+  showTooltip?: boolean;
   interval?: string;
 };
 
@@ -163,13 +164,13 @@ export function StackedBarGraph({
   balanceTypeOp,
   showHiddenCategories,
   showOffBudget,
+  showTooltip = true,
   interval,
 }: StackedBarGraphProps) {
   const navigate = useNavigate();
   const categories = useCategories();
   const accounts = useAccounts();
   const privacyMode = usePrivacyMode();
-  const { isNarrowWidth } = useResponsive();
   const [pointer, setPointer] = useState('');
   const [tooltip, setTooltip] = useState('');
 
@@ -199,7 +200,7 @@ export function StackedBarGraph({
                 style={{ cursor: pointer }}
                 stackOffset="sign" //stacked by sign
               >
-                {(!isNarrowWidth || !compact) && (
+                {showTooltip && (
                   <Tooltip
                     content={
                       <CustomTooltip compact={compact} tooltip={tooltip} />
@@ -255,7 +256,7 @@ export function StackedBarGraph({
                         }
                       }}
                       onClick={e =>
-                        !isNarrowWidth &&
+                        ((compact && showTooltip) || !compact) &&
                         !['Group', 'Interval'].includes(groupBy) &&
                         showActivity({
                           navigate,

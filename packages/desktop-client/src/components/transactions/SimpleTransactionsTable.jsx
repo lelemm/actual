@@ -5,6 +5,7 @@ import {
   isValid as isDateValid,
   parseISO,
 } from 'date-fns';
+import { t } from 'i18next';
 
 import {
   getAccountsById,
@@ -54,7 +55,11 @@ const TransactionRow = memo(function TransactionRow({
         exposed={true}
         focused={false}
         onSelect={e => {
-          dispatchSelected({ type: 'select', id: transaction.id, event: e });
+          dispatchSelected({
+            type: 'select',
+            id: transaction.id,
+            isRangeSelect: e.shiftKey,
+          });
         }}
         selected={selected}
       />
@@ -182,50 +187,55 @@ export function SimpleTransactionsTable({
             focused={false}
             selected={selectedItems.size > 0}
             width={20}
-            onSelect={e => dispatchSelected({ type: 'select-all', event: e })}
+            onSelect={e =>
+              dispatchSelected({
+                type: 'select-all',
+                isRangeSelect: e.shiftKey,
+              })
+            }
           />
           {fields.map((field, i) => {
             switch (field) {
               case 'date':
                 return (
                   <Field key={i} width={100}>
-                    Date
+                    {t('Date')}
                   </Field>
                 );
               case 'imported_payee':
                 return (
                   <Field key={i} width="flex">
-                    Imported payee
+                    {t('Imported payee')}
                   </Field>
                 );
               case 'payee':
                 return (
                   <Field key={i} width="flex">
-                    Payee
+                    {t('Payee')}
                   </Field>
                 );
               case 'category':
                 return (
                   <Field key={i} width="flex">
-                    Category
+                    {t('Category')}
                   </Field>
                 );
               case 'account':
                 return (
                   <Field key={i} width="flex">
-                    Account
+                    {t('Account')}
                   </Field>
                 );
               case 'notes':
                 return (
                   <Field key={i} width="flex">
-                    Notes
+                    {t('Notes')}
                   </Field>
                 );
               case 'amount':
                 return (
                   <Field key={i} width={75} style={{ textAlign: 'right' }}>
-                    Amount
+                    {t('Amount')}
                   </Field>
                 );
               default:

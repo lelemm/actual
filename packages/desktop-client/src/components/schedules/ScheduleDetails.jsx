@@ -1,5 +1,8 @@
 import React, { useEffect, useReducer } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
+
+import { t } from 'i18next';
 
 import { getPayeesById } from 'loot-core/client/reducers/queries';
 import { pushModal } from 'loot-core/src/client/actions/modals';
@@ -16,12 +19,13 @@ import { theme } from '../../style';
 import { AccountAutocomplete } from '../autocomplete/AccountAutocomplete';
 import { PayeeAutocomplete } from '../autocomplete/PayeeAutocomplete';
 import { Button } from '../common/Button2';
-import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal2';
+import { InitialFocus } from '../common/InitialFocus';
+import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal';
 import { Stack } from '../common/Stack';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
 import { FormField, FormLabel, Checkbox } from '../forms';
-import { OpSelect } from '../modals/EditRule';
+import { OpSelect } from '../modals/EditRuleModal';
 import { DateSelect } from '../select/DateSelect';
 import { RecurringSchedulePicker } from '../select/RecurringSchedulePicker';
 import { SelectedItemsButton } from '../table';
@@ -46,11 +50,11 @@ function updateScheduleConditions(schedule, fields) {
 
   // Validate
   if (fields.date == null) {
-    return { error: 'Date is required' };
+    return { error: t('Date is required') };
   }
 
   if (fields.amount == null) {
-    return { error: 'A valid amount is required' };
+    return { error: t('A valid amount is required') };
   }
 
   return {
@@ -70,6 +74,8 @@ function updateScheduleConditions(schedule, fields) {
 }
 
 export function ScheduleDetails({ id, transaction }) {
+  const { t } = useTranslation();
+
   const adding = id == null;
   const fromTrans = transaction != null;
   const payees = getPayeesById(usePayees());
@@ -96,8 +102,7 @@ export function ScheduleDetails({ id, transaction }) {
             fields: {
               payee: schedule._payee,
               account: schedule._account,
-              // defalut to a non-zero value so the sign can be changed before the value
-              amount: schedule._amount || -1000,
+              amount: schedule._amount || 0,
               amountOp: schedule._amountOp || 'isapprox',
               date: schedule._date,
               posts_transaction: action.schedule.posts_transaction,
@@ -292,7 +297,10 @@ export function ScheduleDetails({ id, transaction }) {
           .filter({ schedule: state.schedule.id })
           .select('*')
           .options({ splits: 'all' }),
-        data => dispatch({ type: 'set-transactions', transactions: data }),
+        {
+          onData: data =>
+            dispatch({ type: 'set-transactions', transactions: data }),
+        },
       );
       return live.unsubscribe;
     }
@@ -332,7 +340,10 @@ export function ScheduleDetails({ id, transaction }) {
               .filter({ $and: filters })
               .select('*')
               .options({ splits: 'all' }),
-            data => dispatch({ type: 'set-transactions', transactions: data }),
+            {
+              onData: data =>
+                dispatch({ type: 'set-transactions', transactions: data }),
+            },
           );
           unsubscribe = live.unsubscribe;
         }
@@ -362,7 +373,7 @@ export function ScheduleDetails({ id, transaction }) {
       if (sameName.length > 0 && sameName[0].id !== state.schedule.id) {
         dispatch({
           type: 'form-error',
-          error: 'There is already a schedule with this name',
+          error: t('There is already a schedule with this name'),
         });
         return;
       }
@@ -393,8 +404,9 @@ export function ScheduleDetails({ id, transaction }) {
     if (res.error) {
       dispatch({
         type: 'form-error',
-        error:
+        error: t(
           'An error occurred while saving. Please visit https://actualbudget.org/contact/ for support.',
+        ),
       });
       return;
     }
@@ -454,30 +466,40 @@ export function ScheduleDetails({ id, transaction }) {
       {({ state: { close } }) => (
         <>
           <ModalHeader
-            title={payee ? `Schedule: ${payee.name}` : 'Schedule'}
-            rightContent={<ModalCloseButton onClick={close} />}
+            title={
+              payee
+                ? t(`Schedule: {{name}}`, { name: payee.name })
+                : t('Schedule')
+            }
+            rightContent={<ModalCloseButton onPress={close} />}
           />
           <Stack direction="row" style={{ marginTop: 10 }}>
             <FormField style={{ flex: 1 }}>
-              <FormLabel title="Schedule Name" htmlFor="name-field" />
-              <GenericInput
-                field="string"
-                type="string"
-                value={state.fields.name}
-                multi={false}
-                onChange={e => {
-                  dispatch({ type: 'set-field', field: 'name', value: e });
-                }}
-              />
+              <FormLabel title={t('Schedule Name')} htmlFor="name-field" />
+              <InitialFocus>
+                <GenericInput
+                  field="string"
+                  type="string"
+                  value={state.fields.name}
+                  multi={false}
+                  onChange={e => {
+                    dispatch({ type: 'set-field', field: 'name', value: e });
+                  }}
+                />
+              </InitialFocus>
             </FormField>
           </Stack>
           <Stack direction="row" style={{ marginTop: 20 }}>
             <FormField style={{ flex: 1 }}>
-              <FormLabel title="Payee" id="payee-label" htmlFor="payee-field" />
+              <FormLabel
+                title={t('Payee')}
+                id="payee-label"
+                htmlFor="payee-field"
+              />
               <PayeeAutocomplete
                 value={state.fields.payee}
                 labelProps={{ id: 'payee-label' }}
-                inputProps={{ id: 'payee-field', placeholder: '(none)' }}
+                inputProps={{ id: 'payee-field', placeholder: t('(none)') }}
                 onSelect={id =>
                   dispatch({ type: 'set-field', field: 'payee', value: id })
                 }
@@ -486,7 +508,7 @@ export function ScheduleDetails({ id, transaction }) {
 
             <FormField style={{ flex: 1 }}>
               <FormLabel
-                title="Account"
+                title={t('Account')}
                 id="account-label"
                 htmlFor="account-field"
               />
@@ -494,7 +516,7 @@ export function ScheduleDetails({ id, transaction }) {
                 includeClosedAccounts={false}
                 value={state.fields.account}
                 labelProps={{ id: 'account-label' }}
-                inputProps={{ id: 'account-field', placeholder: '(none)' }}
+                inputProps={{ id: 'account-field', placeholder: t('(none)') }}
                 onSelect={id =>
                   dispatch({ type: 'set-field', field: 'account', value: id })
                 }
@@ -504,7 +526,7 @@ export function ScheduleDetails({ id, transaction }) {
             <FormField style={{ flex: 1 }}>
               <Stack direction="row" align="center" style={{ marginBottom: 3 }}>
                 <FormLabel
-                  title="Amount"
+                  title={t('Amount')}
                   htmlFor="amount-field"
                   style={{ margin: 0, flex: 1 }}
                 />
@@ -514,11 +536,11 @@ export function ScheduleDetails({ id, transaction }) {
                   formatOp={op => {
                     switch (op) {
                       case 'is':
-                        return 'is exactly';
+                        return t('is exactly');
                       case 'isapprox':
-                        return 'is approximately';
+                        return t('is approximately');
                       case 'isbetween':
-                        return 'is between';
+                        return t('is between');
                       default:
                         throw new Error('Invalid op for select: ' + op);
                     }
@@ -565,7 +587,7 @@ export function ScheduleDetails({ id, transaction }) {
           </Stack>
 
           <View style={{ marginTop: 20 }}>
-            <FormLabel title="Date" />
+            <FormLabel title={t('Date')} />
           </View>
 
           <Stack direction="row" align="flex-start" justify="space-between">
@@ -590,7 +612,7 @@ export function ScheduleDetails({ id, transaction }) {
               {state.upcomingDates && (
                 <View style={{ fontSize: 13, marginTop: 20 }}>
                   <Text style={{ color: theme.pageTextLight, fontWeight: 600 }}>
-                    Upcoming dates
+                    <Trans>Upcoming dates</Trans>
                   </Text>
                   <Stack
                     direction="column"
@@ -623,7 +645,7 @@ export function ScheduleDetails({ id, transaction }) {
                 }}
               />
               <label htmlFor="form_repeats" style={{ userSelect: 'none' }}>
-                Repeats
+                <Trans>Repeats</Trans>
               </label>
             </View>
 
@@ -652,7 +674,7 @@ export function ScheduleDetails({ id, transaction }) {
                   htmlFor="form_posts_transaction"
                   style={{ userSelect: 'none' }}
                 >
-                  Automatically add transaction
+                  <Trans>Automatically add transaction</Trans>
                 </label>
               </View>
 
@@ -666,8 +688,10 @@ export function ScheduleDetails({ id, transaction }) {
                   lineHeight: '1.4em',
                 }}
               >
-                If checked, the schedule will automatically create transactions
-                for you in the specified account
+                <Trans>
+                  If checked, the schedule will automatically create
+                  transactions for you in the specified account
+                </Trans>
               </Text>
 
               {!adding && state.schedule.rule && (
@@ -681,11 +705,13 @@ export function ScheduleDetails({ id, transaction }) {
                         width: 350,
                       }}
                     >
-                      This schedule has custom conditions and actions
+                      <Trans>
+                        This schedule has custom conditions and actions
+                      </Trans>
                     </Text>
                   )}
                   <Button onPress={() => onEditRule()} isDisabled={adding}>
-                    Edit as rule
+                    <Trans>Edit as rule</Trans>
                   </Button>
                 </Stack>
               )}
@@ -697,11 +723,11 @@ export function ScheduleDetails({ id, transaction }) {
               {adding ? (
                 <View style={{ flexDirection: 'row', padding: '5px 0' }}>
                   <Text style={{ color: theme.pageTextLight }}>
-                    These transactions match this schedule:
+                    <Trans>These transactions match this schedule:</Trans>
                   </Text>
                   <View style={{ flex: 1 }} />
                   <Text style={{ color: theme.pageTextLight }}>
-                    Select transactions to link on save
+                    <Trans>Select transactions to link on save</Trans>
                   </Text>
                 </View>
               ) : (
@@ -718,7 +744,7 @@ export function ScheduleDetails({ id, transaction }) {
                     }}
                     onPress={() => onSwitchTransactions('linked')}
                   >
-                    Linked transactions
+                    <Trans>Linked transactions</Trans>
                   </Button>{' '}
                   <Button
                     variant="bare"
@@ -731,15 +757,16 @@ export function ScheduleDetails({ id, transaction }) {
                     }}
                     onPress={() => onSwitchTransactions('matched')}
                   >
-                    Find matching transactions
+                    <Trans>Find matching transactions</Trans>
                   </Button>
                   <View style={{ flex: 1 }} />
                   <SelectedItemsButton
-                    name="transactions"
+                    id="transactions"
+                    name={count => t('{{count}} transactions', { count })}
                     items={
                       state.transactionsMode === 'linked'
-                        ? [{ name: 'unlink', text: 'Unlink from schedule' }]
-                        : [{ name: 'link', text: 'Link to schedule' }]
+                        ? [{ name: 'unlink', text: t('Unlink from schedule') }]
+                        : [{ name: 'link', text: t('Link to schedule') }]
                     }
                     onSelect={(name, ids) => {
                       switch (name) {
@@ -786,7 +813,7 @@ export function ScheduleDetails({ id, transaction }) {
               <Text style={{ color: theme.errorText }}>{state.error}</Text>
             )}
             <Button style={{ marginRight: 10 }} onPress={close}>
-              Cancel
+              <Trans>Cancel</Trans>
             </Button>
             <Button
               variant="primary"
@@ -794,7 +821,7 @@ export function ScheduleDetails({ id, transaction }) {
                 onSave(close);
               }}
             >
-              {adding ? 'Add' : 'Save'}
+              {adding ? t('Add') : t('Save')}
             </Button>
           </Stack>
         </>
@@ -804,6 +831,8 @@ export function ScheduleDetails({ id, transaction }) {
 }
 
 function NoTransactionsMessage(props) {
+  const { t } = useTranslation();
+
   return (
     <View
       style={{
@@ -814,12 +843,12 @@ function NoTransactionsMessage(props) {
     >
       {props.error ? (
         <Text style={{ color: theme.errorText }}>
-          Could not search: {props.error}
+          <Trans>Could not search: {props.error}</Trans>
         </Text>
       ) : props.transactionsMode === 'matched' ? (
-        'No matching transactions'
+        t('No matching transactions')
       ) : (
-        'No linked transactions'
+        t('No linked transactions')
       )}
     </View>
   );

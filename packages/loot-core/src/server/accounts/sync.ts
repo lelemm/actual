@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import * as asyncStorage from '../../platform/server/asyncStorage';
 import * as monthUtils from '../../shared/months';
+import { q } from '../../shared/query';
 import {
   makeChild as makeChildTransaction,
   recalculateSplit,
@@ -13,6 +14,13 @@ import {
   amountToInteger,
   integerToAmount,
 } from '../../shared/util';
+import {
+  AccountEntity,
+  BankSyncResponse,
+  SimpleFinBatchSyncResponse,
+  TransactionEntity,
+} from '../../types/models';
+import { runQuery } from '../aql';
 import * as db from '../db';
 import { runMutator } from '../mutators';
 import { post } from '../post';
@@ -61,6 +69,35 @@ async function updateAccountBalance(id, balance) {
   ]);
 }
 
+async function getAccountOldestTransaction(id): Promise<TransactionEntity> {
+  return (
+    await runQuery(
+      q('transactions')
+        .filter({
+          account: id,
+          date: { $lte: monthUtils.currentDay() },
+        })
+        .select('date')
+        .orderBy('date')
+        .limit(1),
+    )
+  ).data?.[0];
+}
+
+async function getAccountSyncStartDate(id) {
+  // Many GoCardless integrations do not support getting more than 90 days
+  // worth of data, so make that the earliest possible limit.
+  const dates = [monthUtils.subDays(monthUtils.currentDay(), 90)];
+
+  const oldestTransaction = await getAccountOldestTransaction(id);
+
+  if (oldestTransaction) dates.push(oldestTransaction.date);
+
+  return monthUtils.dayFromDate(
+    dateFns.max(dates.map(d => monthUtils.parseDate(d))),
+  );
+}
+
 export async function getGoCardlessAccounts(userId, userKey, id) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
@@ -92,6 +129,7 @@ async function downloadGoCardlessTransactions(
   acctId,
   bankId,
   since,
+  includeBalance = true,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
@@ -106,6 +144,7 @@ async function downloadGoCardlessTransactions(
       requisitionId: bankId,
       accountId: acctId,
       startDate: since,
+      includeBalance,
     },
     {
       'X-ACTUAL-TOKEN': userToken,
@@ -116,24 +155,37 @@ async function downloadGoCardlessTransactions(
     throw BankSyncError(res.error_type, res.error_code);
   }
 
-  const {
-    transactions: { all },
-    balances,
-    startingBalance,
-  } = res;
+  if (includeBalance) {
+    const {
+      transactions: { all },
+      balances,
+      startingBalance,
+    } = res;
 
-  console.log('Response:', res);
+    console.log('Response:', res);
 
-  return {
-    transactions: all,
-    accountBalance: balances,
-    startingBalance,
-  };
+    return {
+      transactions: all,
+      accountBalance: balances,
+      startingBalance,
+    };
+  } else {
+    console.log('Response:', res);
+
+    return {
+      transactions: res.transactions.all,
+    };
+  }
 }
 
-async function downloadSimpleFinTransactions(acctId, since) {
+async function downloadSimpleFinTransactions(
+  acctId: AccountEntity['id'] | AccountEntity['id'][],
+  since: string | string[],
+) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
+
+  const batchSync = Array.isArray(acctId);
 
   console.log('Pulling transactions from SimpleFin');
 
@@ -153,19 +205,37 @@ async function downloadSimpleFinTransactions(acctId, since) {
     throw BankSyncError(res.error_type, res.error_code);
   }
 
-  const {
-    transactions: { all },
-    balances,
-    startingBalance,
-  } = res;
+  let retVal = {};
+  if (batchSync) {
+    for (const [accountId, data] of Object.entries(
+      res as SimpleFinBatchSyncResponse,
+    )) {
+      if (accountId === 'errors') continue;
 
-  console.log('Response:', res);
+      const error = res?.errors?.[accountId]?.[0];
 
-  return {
-    transactions: all,
-    accountBalance: balances,
-    startingBalance,
-  };
+      retVal[accountId] = {
+        transactions: data?.transactions?.all,
+        accountBalance: data?.balances,
+        startingBalance: data?.startingBalance,
+      };
+
+      if (error) {
+        retVal[accountId].error_type = error.error_type;
+        retVal[accountId].error_code = error.error_code;
+      }
+    }
+  } else {
+    const singleRes = res as BankSyncResponse;
+    retVal = {
+      transactions: singleRes.transactions.all,
+      accountBalance: singleRes.balances,
+      startingBalance: singleRes.startingBalance,
+    };
+  }
+
+  console.log('Response:', retVal);
+  return retVal;
 }
 
 async function resolvePayee(trans, payeeName, payeesToCreate) {
@@ -228,6 +298,8 @@ async function normalizeTransactions(
     trans.account = acctId;
     trans.payee = await resolvePayee(trans, payee_name, payeesToCreate);
 
+    trans.category = trans.category ?? null;
+
     normalized.push({
       payee_name,
       subtransactions: subtransactions
@@ -272,6 +344,10 @@ async function normalizeBankSyncTransactions(transactions, acctId) {
 
     trans.cleared = Boolean(trans.booked);
 
+    const notes =
+      trans.remittanceInformationUnstructured ||
+      (trans.remittanceInformationUnstructuredArray || []).join(', ');
+
     normalized.push({
       payee_name: trans.payeeName,
       trans: {
@@ -279,9 +355,8 @@ async function normalizeBankSyncTransactions(transactions, acctId) {
         payee: trans.payee,
         account: trans.account,
         date: trans.date,
-        notes:
-          trans.remittanceInformationUnstructured ||
-          (trans.remittanceInformationUnstructuredArray || []).join(', '),
+        notes: notes.trim().replace('#', '##'),
+        category: trans.category ?? null,
         imported_id: trans.transactionId,
         imported_payee: trans.imported_payee,
         cleared: trans.cleared,
@@ -309,6 +384,7 @@ export async function reconcileTransactions(
   acctId,
   transactions,
   isBankSyncAccount = false,
+  strictIdChecking = true,
   isPreview = false,
 ) {
   console.log('Performing transaction reconciliation');
@@ -323,7 +399,12 @@ export async function reconcileTransactions(
     transactionsStep1,
     transactionsStep2,
     transactionsStep3,
-  } = await matchTransactions(acctId, transactions, isBankSyncAccount);
+  } = await matchTransactions(
+    acctId,
+    transactions,
+    isBankSyncAccount,
+    strictIdChecking,
+  );
 
   // Finally, generate & commit the changes
   for (const { trans, subtransactions, match } of transactionsStep3) {
@@ -391,6 +472,12 @@ export async function reconcileTransactions(
     }
   }
 
+  // Maintain the sort order of the server
+  const now = Date.now();
+  added.forEach((t, index) => {
+    t.sort_order ??= now - index;
+  });
+
   if (!isPreview) {
     await createNewPayees(payeesToCreate, [...added, ...updated]);
     await batchUpdateTransactions({ added, updated });
@@ -416,6 +503,7 @@ export async function matchTransactions(
   acctId,
   transactions,
   isBankSyncAccount = false,
+  strictIdChecking = true,
 ) {
   console.log('Performing transaction reconciliation matching');
 
@@ -438,7 +526,7 @@ export async function matchTransactions(
     subtransactions,
   } of normalized) {
     // Run the rules
-    const trans = runRules(originalTrans);
+    const trans = await runRules(originalTrans);
 
     let match = null;
     let fuzzyDataset = null;
@@ -459,20 +547,39 @@ export async function matchTransactions(
 
     // If it didn't match, query data needed for fuzzy matching
     if (!match) {
-      // Look 7 days ahead and 7 days back when fuzzy matching. This
+      // Fuzzy matching looks 7 days ahead and 7 days back. This
       // needs to select all fields that need to be read from the
       // matched transaction. See the final pass below for the needed
       // fields.
-      fuzzyDataset = await db.all(
-        `SELECT id, is_parent, date, imported_id, payee, imported_payee, category, notes, reconciled, cleared, amount FROM v_transactions
-           WHERE date >= ? AND date <= ? AND amount = ? AND account = ?`,
-        [
-          db.toDateRepr(monthUtils.subDays(trans.date, 7)),
-          db.toDateRepr(monthUtils.addDays(trans.date, 7)),
-          trans.amount || 0,
-          acctId,
-        ],
-      );
+      const sevenDaysBefore = db.toDateRepr(monthUtils.subDays(trans.date, 7));
+      const sevenDaysAfter = db.toDateRepr(monthUtils.addDays(trans.date, 7));
+      // strictIdChecking has the added behaviour of only matching on transactions with no import ID
+      // if the transaction being imported has an import ID.
+      if (strictIdChecking) {
+        fuzzyDataset = await db.all(
+          `SELECT id, is_parent, date, imported_id, payee, imported_payee, category, notes, reconciled, cleared, amount
+          FROM v_transactions
+          WHERE
+            -- If both ids are set, and we didn't match earlier then skip dedup
+            (imported_id IS NULL OR ? IS NULL)
+            AND date >= ? AND date <= ? AND amount = ?
+            AND account = ?`,
+          [
+            trans.imported_id || null,
+            sevenDaysBefore,
+            sevenDaysAfter,
+            trans.amount || 0,
+            acctId,
+          ],
+        );
+      } else {
+        fuzzyDataset = await db.all(
+          `SELECT id, is_parent, date, imported_id, payee, imported_payee, category, notes, reconciled, cleared, amount
+          FROM v_transactions
+          WHERE date >= ? AND date <= ? AND amount = ? AND account = ?`,
+          [sevenDaysBefore, sevenDaysAfter, trans.amount || 0, acctId],
+        );
+      }
 
       // Sort the matched transactions according to the distance from the original
       // transactions date. i.e. if the original transaction is in 21-02-2024 and
@@ -564,7 +671,7 @@ export async function addTransactions(
 
   for (const { trans: originalTrans, subtransactions } of normalized) {
     // Run the rules
-    const trans = runRules(originalTrans);
+    const trans = await runRules(originalTrans);
 
     const finalTransaction = {
       id: uuidv4(),
@@ -605,93 +712,18 @@ export async function addTransactions(
   return newTransactions;
 }
 
-export async function syncAccount(
-  userId: string,
-  userKey: string,
-  id: string,
-  acctId: string,
-  bankId: string,
+async function processBankSyncDownload(
+  download,
+  id,
+  acctRow,
+  initialSync = false,
 ) {
-  // TODO: Handle the case where transactions exist in the future
-  // (that will make start date after end date)
-  const latestTransaction = await db.first(
-    'SELECT * FROM v_transactions WHERE account = ? ORDER BY date DESC LIMIT 1',
-    [id],
-  );
+  // If syncing an account from sync source it must not use strictIdChecking. This allows
+  // the fuzzy search to match transactions where the import IDs are different. It is a known quirk
+  // that account sync sources can give two different transaction IDs even though it's the same transaction.
+  const useStrictIdChecking = !acctRow.account_sync_source;
 
-  const acctRow = await db.select('accounts', id);
-
-  if (latestTransaction) {
-    const startingTransaction = await db.first(
-      'SELECT date FROM v_transactions WHERE account = ? ORDER BY date ASC LIMIT 1',
-      [id],
-    );
-    const startingDate = db.fromDateRepr(startingTransaction.date);
-    // assert(startingTransaction)
-
-    const startDate = monthUtils.dayFromDate(
-      dateFns.max([
-        // Many GoCardless integrations do not support getting more than 90 days
-        // worth of data, so make that the earliest possible limit.
-        monthUtils.parseDate(monthUtils.subDays(monthUtils.currentDay(), 90)),
-
-        // Never download transactions before the starting date.
-        monthUtils.parseDate(startingDate),
-      ]),
-    );
-
-    let download;
-
-    if (acctRow.account_sync_source === 'simpleFin') {
-      download = await downloadSimpleFinTransactions(acctId, startDate);
-    } else if (acctRow.account_sync_source === 'goCardless') {
-      download = await downloadGoCardlessTransactions(
-        userId,
-        userKey,
-        acctId,
-        bankId,
-        startDate,
-      );
-    } else {
-      throw new Error(
-        `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,
-      );
-    }
-
-    const { transactions: originalTransactions, accountBalance } = download;
-
-    if (originalTransactions.length === 0) {
-      return { added: [], updated: [] };
-    }
-
-    const transactions = originalTransactions.map(trans => ({
-      ...trans,
-      account: id,
-    }));
-
-    return runMutator(async () => {
-      const result = await reconcileTransactions(id, transactions, true);
-      await updateAccountBalance(id, accountBalance);
-      return result;
-    });
-  } else {
-    let download;
-
-    // Otherwise, download transaction for the past 90 days
-    const startingDay = monthUtils.subDays(monthUtils.currentDay(), 90);
-
-    if (acctRow.account_sync_source === 'simpleFin') {
-      download = await downloadSimpleFinTransactions(acctId, startingDay);
-    } else if (acctRow.account_sync_source === 'goCardless') {
-      download = await downloadGoCardlessTransactions(
-        userId,
-        userKey,
-        acctId,
-        bankId,
-        startingDay,
-      );
-    }
-
+  if (initialSync) {
     const { transactions } = download;
     let balanceToUse = download.startingBalance;
 
@@ -725,11 +757,122 @@ export async function syncAccount(
         starting_balance_flag: true,
       });
 
-      const result = await reconcileTransactions(id, transactions, true);
+      const result = await reconcileTransactions(
+        id,
+        transactions,
+        true,
+        useStrictIdChecking,
+      );
       return {
         ...result,
         added: [initialId, ...result.added],
       };
     });
   }
+
+  const { transactions: originalTransactions, accountBalance } = download;
+
+  if (originalTransactions.length === 0) {
+    return { added: [], updated: [] };
+  }
+
+  const transactions = originalTransactions.map(trans => ({
+    ...trans,
+    account: id,
+  }));
+
+  return runMutator(async () => {
+    const result = await reconcileTransactions(
+      id,
+      transactions,
+      true,
+      useStrictIdChecking,
+    );
+
+    if (accountBalance) await updateAccountBalance(id, accountBalance);
+
+    return result;
+  });
+}
+
+export async function syncAccount(
+  userId: string,
+  userKey: string,
+  id: string,
+  acctId: string,
+  bankId: string,
+) {
+  const acctRow = await db.select('accounts', id);
+
+  const syncStartDate = await getAccountSyncStartDate(id);
+  const oldestTransaction = await getAccountOldestTransaction(id);
+  const newAccount = oldestTransaction == null;
+
+  let download;
+  if (acctRow.account_sync_source === 'simpleFin') {
+    download = await downloadSimpleFinTransactions(acctId, syncStartDate);
+  } else if (acctRow.account_sync_source === 'goCardless') {
+    download = await downloadGoCardlessTransactions(
+      userId,
+      userKey,
+      acctId,
+      bankId,
+      syncStartDate,
+      newAccount,
+    );
+  } else {
+    throw new Error(
+      `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,
+    );
+  }
+
+  return processBankSyncDownload(download, id, acctRow, newAccount);
+}
+
+export async function SimpleFinBatchSync(
+  accounts: {
+    id: AccountEntity['id'];
+    accountId: AccountEntity['account_id'];
+  }[],
+) {
+  const startDates = await Promise.all(
+    accounts.map(async a => getAccountSyncStartDate(a.id)),
+  );
+
+  const res = await downloadSimpleFinTransactions(
+    accounts.map(a => a.accountId),
+    startDates,
+  );
+
+  const promises = [];
+  for (let i = 0; i < accounts.length; i++) {
+    const account = accounts[i];
+    const download = res[account.accountId];
+
+    const acctRow = await db.select('accounts', account.id);
+    const oldestTransaction = await getAccountOldestTransaction(account.id);
+    const newAccount = oldestTransaction == null;
+
+    if (download.error_code) {
+      promises.push(
+        Promise.resolve({
+          accountId: account.id,
+          res: download,
+        }),
+      );
+
+      continue;
+    }
+
+    promises.push(
+      processBankSyncDownload(download, account.id, acctRow, newAccount).then(
+        res => ({
+          accountId: account.id,
+          res,
+        }),
+      ),
+    );
+  }
+
+  return await Promise.all(promises);
 }

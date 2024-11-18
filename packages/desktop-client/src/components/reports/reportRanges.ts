@@ -1,15 +1,16 @@
 import * as monthUtils from 'loot-core/src/shared/months';
-import { type LocalPrefs } from 'loot-core/types/prefs';
+import { type TimeFrame } from 'loot-core/types/models';
+import { type SyncedPrefs } from 'loot-core/types/prefs';
 
 export function validateStart(
   earliest: string,
   start: string,
   end: string,
   interval?: string,
-  firstDayOfWeekIdx?: LocalPrefs['firstDayOfWeekIdx'],
-): [string, string] {
-  let addDays;
-  let dateStart;
+  firstDayOfWeekIdx?: SyncedPrefs['firstDayOfWeekIdx'],
+): [string, string, TimeFrame['mode']] {
+  let addDays: number;
+  let dateStart: string;
   switch (interval) {
     case 'Monthly':
       dateStart = start + '-01';
@@ -46,10 +47,10 @@ export function validateEnd(
   start: string,
   end: string,
   interval?: string,
-  firstDayOfWeekIdx?: LocalPrefs['firstDayOfWeekIdx'],
-): [string, string] {
-  let subDays;
-  let dateEnd;
+  firstDayOfWeekIdx?: SyncedPrefs['firstDayOfWeekIdx'],
+): [string, string, TimeFrame['mode']] {
+  let subDays: number;
+  let dateEnd: string;
   switch (interval) {
     case 'Monthly':
       dateEnd = monthUtils.getMonthEnd(end + '-01');
@@ -97,9 +98,9 @@ function boundedRange(
   start: string,
   end: string,
   interval?: string,
-  firstDayOfWeekIdx?: LocalPrefs['firstDayOfWeekIdx'],
-): [string, string] {
-  let latest;
+  firstDayOfWeekIdx?: SyncedPrefs['firstDayOfWeekIdx'],
+): [string, string, 'static'] {
+  let latest: string;
   switch (interval) {
     case 'Daily':
       latest = monthUtils.currentDay();
@@ -114,7 +115,7 @@ function boundedRange(
       latest = monthUtils.currentDay();
       break;
     default:
-      latest = monthUtils.currentDay();
+      latest = monthUtils.currentMonth();
       break;
   }
 
@@ -124,14 +125,14 @@ function boundedRange(
   if (start < earliest) {
     start = earliest;
   }
-  return [start, end];
+  return [start, end, 'static'];
 }
 
 export function getSpecificRange(
   offset: number,
   addNumber: number | null,
   type?: string,
-  firstDayOfWeekIdx?: LocalPrefs['firstDayOfWeekIdx'],
+  firstDayOfWeekIdx?: SyncedPrefs['firstDayOfWeekIdx'],
 ) {
   const currentDay = monthUtils.currentDay();
   const currentWeek = monthUtils.currentWeek(firstDayOfWeekIdx);
@@ -150,16 +151,78 @@ export function getSpecificRange(
     );
   }
 
-  return [dateStart, dateEnd];
+  return [dateStart, dateEnd, 'static'];
 }
 
 export function getFullRange(start: string) {
   const end = monthUtils.currentMonth();
-  return [start, end];
+  return [start, end, 'full'] as const;
 }
 
 export function getLatestRange(offset: number) {
   const end = monthUtils.currentMonth();
   const start = monthUtils.subMonths(end, offset);
+  return [start, end, 'sliding-window'] as const;
+}
+
+export function calculateTimeRange(
+  timeFrame?: Partial<TimeFrame>,
+  defaultTimeFrame?: TimeFrame,
+) {
+  const start =
+    timeFrame?.start ??
+    defaultTimeFrame?.start ??
+    monthUtils.subMonths(monthUtils.currentMonth(), 5);
+  const end =
+    timeFrame?.end ?? defaultTimeFrame?.end ?? monthUtils.currentMonth();
+  const mode = timeFrame?.mode ?? defaultTimeFrame?.mode ?? 'sliding-window';
+
+  if (mode === 'full') {
+    return getFullRange(start);
+  }
+  if (mode === 'sliding-window') {
+    const offset = monthUtils.differenceInCalendarMonths(end, start);
+
+    if (start > end) {
+      return [
+        monthUtils.currentMonth(),
+        monthUtils.subMonths(monthUtils.currentMonth(), -offset),
+        'sliding-window',
+      ] as const;
+    }
+
+    return getLatestRange(offset);
+  }
+
+  return [start, end, 'static'] as const;
+}
+
+export function calculateSpendingReportTimeRange({
+  compare,
+  compareTo,
+  isLive = true,
+  mode = 'single-month',
+}: {
+  compare?: string;
+  compareTo?: string;
+  isLive?: boolean;
+  mode?: 'budget' | 'average' | 'single-month';
+}): [string, string] {
+  if (['budget', 'average'].includes(mode) && isLive) {
+    return [monthUtils.currentMonth(), monthUtils.currentMonth()];
+  }
+
+  const [start, end] = calculateTimeRange(
+    {
+      start: compare,
+      end: compareTo,
+      mode: (isLive ?? true) ? 'sliding-window' : 'static',
+    },
+    {
+      start: monthUtils.currentMonth(),
+      end: monthUtils.subMonths(monthUtils.currentMonth(), 1),
+      mode: 'sliding-window',
+    },
+  );
   return [start, end];
 }

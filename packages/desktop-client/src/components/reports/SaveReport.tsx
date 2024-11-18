@@ -5,7 +5,7 @@ import { send, sendCatch } from 'loot-core/src/platform/client/fetch';
 import { type CustomReportEntity } from 'loot-core/src/types/models';
 
 import { SvgExpandArrow } from '../../icons/v0';
-import { Button } from '../common/Button';
+import { Button } from '../common/Button2';
 import { Popover } from '../common/Popover';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
@@ -19,13 +19,30 @@ type SaveReportProps<T extends CustomReportEntity = CustomReportEntity> = {
   customReportItems: T;
   report: CustomReportEntity;
   savedStatus: string;
-  onReportChange: ({
-    savedReport,
-    type,
-  }: {
-    savedReport?: T;
-    type: string;
-  }) => void;
+  onReportChange: (
+    params:
+      | {
+          type: 'add-update';
+          savedReport: CustomReportEntity;
+        }
+      | {
+          type: 'rename';
+          savedReport?: CustomReportEntity;
+        }
+      | {
+          type: 'modify';
+        }
+      | {
+          type: 'reload';
+        }
+      | {
+          type: 'reset';
+        }
+      | {
+          type: 'choose';
+          savedReport?: CustomReportEntity;
+        },
+  ) => void;
 };
 
 export function SaveReport({
@@ -34,7 +51,7 @@ export function SaveReport({
   savedStatus,
   onReportChange,
 }: SaveReportProps) {
-  const listReports = useReports();
+  const { data: listReports } = useReports();
   const triggerRef = useRef(null);
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [nameMenuOpen, setNameMenuOpen] = useState(false);
@@ -70,6 +87,14 @@ export function SaveReport({
         setNameMenuOpen(true);
         return;
       }
+
+      // Add to dashboard
+      await send('dashboard-add-widget', {
+        type: 'custom-report',
+        width: 4,
+        height: 2,
+        meta: { id: response.data },
+      });
 
       setNameMenuOpen(false);
       onReportChange({
@@ -159,8 +184,8 @@ export function SaveReport({
     >
       <Button
         ref={triggerRef}
-        type="bare"
-        onClick={() => {
+        variant="bare"
+        onPress={() => {
           setMenuOpen(true);
         }}
       >

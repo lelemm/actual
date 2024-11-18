@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 
 import { type State } from 'loot-core/src/client/state-types';
@@ -7,12 +8,13 @@ import { useActions } from '../hooks/useActions';
 import { SvgClose } from '../icons/v1';
 import { theme } from '../style';
 
-import { Button } from './common/Button';
+import { Button } from './common/Button2';
 import { Link } from './common/Link';
 import { Text } from './common/Text';
 import { View } from './common/View';
 
 export function UpdateNotification() {
+  const { t } = useTranslation();
   const updateInfo = useSelector((state: State) => state.app.updateInfo);
   const showUpdateNotification = useSelector(
     (state: State) => state.app.showUpdateNotification,
@@ -40,7 +42,9 @@ export function UpdateNotification() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ marginRight: 10, fontWeight: 700 }}>
-            <Text>App updated to {updateInfo.version}</Text>
+            <Text>
+              {t('App updated to {{version}}', { version: updateInfo.version })}
+            </Text>
           </View>
           <View style={{ flex: 1 }} />
           <View style={{ marginTop: -1 }}>
@@ -53,7 +57,7 @@ export function UpdateNotification() {
                   textDecoration: 'underline',
                 }}
               >
-                Restart
+                {t('Restart')}
               </Link>{' '}
               (
               <Link
@@ -68,14 +72,14 @@ export function UpdateNotification() {
                   )
                 }
               >
-                notes
+                {t('notes')}
               </Link>
               )
               <Button
-                type="bare"
-                aria-label="Close"
+                variant="bare"
+                aria-label={t('Close')}
                 style={{ display: 'inline', padding: '1px 7px 2px 7px' }}
-                onClick={() => {
+                onPress={() => {
                   // Set a flag to never show an update notification again for this session
                   setAppState({
                     updateInfo: null,

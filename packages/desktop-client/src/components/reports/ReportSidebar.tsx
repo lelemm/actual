@@ -1,17 +1,22 @@
-import React, { useMemo, useRef, useState, type ComponentProps } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+
+import { t } from 'i18next';
 
 import * as monthUtils from 'loot-core/src/shared/months';
 import { type CategoryEntity } from 'loot-core/types/models/category';
 import { type CategoryGroupEntity } from 'loot-core/types/models/category-group';
+import { type TimeFrame } from 'loot-core/types/models/dashboard';
 import { type CustomReportEntity } from 'loot-core/types/models/reports';
-import { type LocalPrefs } from 'loot-core/types/prefs';
+import { type SyncedPrefs } from 'loot-core/types/prefs';
 
 import { styles } from '../../style/styles';
 import { theme } from '../../style/theme';
-import { Button } from '../common/Button';
+import { Information } from '../alerts';
+import { Button } from '../common/Button2';
 import { Menu } from '../common/Menu';
 import { Popover } from '../common/Popover';
-import { Select } from '../common/Select';
+import { Select, type SelectOption } from '../common/Select';
+import { SpaceBetween } from '../common/SpaceBetween';
 import { Text } from '../common/Text';
 import { Tooltip } from '../common/Tooltip';
 import { View } from '../common/View';
@@ -26,6 +31,7 @@ import { setSessionReport } from './setSessionReport';
 
 type ReportSidebarProps = {
   customReportItems: CustomReportEntity;
+  selectedCategories: CategoryEntity[];
   categories: { list: CategoryEntity[]; grouped: CategoryGroupEntity[] };
   dateRangeLine: number;
   allIntervals: { name: string; pretty: string }[];
@@ -42,23 +48,23 @@ type ReportSidebarProps = {
   setShowUncategorized: (value: boolean) => void;
   setIncludeCurrentInterval: (value: boolean) => void;
   setSelectedCategories: (value: CategoryEntity[]) => void;
-  onChangeDates: (dateStart: string, dateEnd: string) => void;
-  onReportChange: ({
-    savedReport,
-    type,
-  }: {
-    savedReport?: CustomReportEntity;
-    type: string;
-  }) => void;
+  onChangeDates: (
+    dateStart: string,
+    dateEnd: string,
+    mode: TimeFrame['mode'],
+  ) => void;
+  onReportChange: ({ type }: { type: 'modify' }) => void;
   disabledItems: (type: string) => string[];
   defaultItems: (item: string) => void;
   defaultModeItems: (graph: string, item: string) => void;
   earliestTransaction: string;
-  firstDayOfWeekIdx: LocalPrefs['firstDayOfWeekIdx'];
+  firstDayOfWeekIdx: SyncedPrefs['firstDayOfWeekIdx'];
+  isComplexCategoryCondition?: boolean;
 };
 
 export function ReportSidebar({
   customReportItems,
+  selectedCategories,
   categories,
   dateRangeLine,
   allIntervals,
@@ -82,9 +88,11 @@ export function ReportSidebar({
   defaultModeItems,
   earliestTransaction,
   firstDayOfWeekIdx,
+  isComplexCategoryCondition = false,
 }: ReportSidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
+
   const onSelectRange = (cond: string) => {
     setSessionReport('dateRange', cond);
     onReportChange({ type: 'modify' });
@@ -134,10 +142,9 @@ export function ReportSidebar({
   };
 
   const rangeOptions = useMemo(() => {
-    const options: ComponentProps<typeof Select>['options'] =
-      ReportOptions.dateRange
-        .filter(f => f[customReportItems.interval as keyof dateRangeProps])
-        .map(option => [option.description, option.description]);
+    const options: SelectOption[] = ReportOptions.dateRange
+      .filter(f => f[customReportItems.interval as keyof dateRangeProps])
+      .map(option => [option.description, option.description]);
 
     // Append separator if necessary
     if (dateRangeLine > 0) {
@@ -165,32 +172,30 @@ export function ReportSidebar({
           }}
         >
           <Text>
-            <strong>Display</strong>
+            <strong>{t('Display')}</strong>
           </Text>
         </View>
-        <View
+        <SpaceBetween
+          gap={5}
           style={{
-            flexDirection: 'row',
             padding: 5,
-            alignItems: 'center',
           }}
         >
-          <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }}>
-            Mode:
-          </Text>
+          <Text style={{ width: 50, textAlign: 'right' }}>{t('Mode:')}</Text>
           <ModeButton
             selected={customReportItems.mode === 'total'}
             onSelect={() => onChangeMode('total')}
           >
-            Total
+            {t('Total')}
           </ModeButton>
           <ModeButton
             selected={customReportItems.mode === 'time'}
             onSelect={() => onChangeMode('time')}
           >
-            Time
+            {t('Time')}
           </ModeButton>
-        </View>
+        </SpaceBetween>
+
         <View
           style={{
             flexDirection: 'row',
@@ -199,7 +204,7 @@ export function ReportSidebar({
           }}
         >
           <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }}>
-            Split:
+            {t('Split:')}
           </Text>
           <Select
             value={customReportItems.groupBy}
@@ -208,6 +213,7 @@ export function ReportSidebar({
             disabledKeys={disabledItems('split')}
           />
         </View>
+
         <View
           style={{
             flexDirection: 'row',
@@ -216,7 +222,7 @@ export function ReportSidebar({
           }}
         >
           <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }}>
-            Type:
+            {t('Type:')}
           </Text>
           <Select
             value={customReportItems.balanceType}
@@ -236,7 +242,7 @@ export function ReportSidebar({
           }}
         >
           <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }}>
-            Interval:
+            {t('Interval:')}
           </Text>
           <Select
             value={customReportItems.interval}
@@ -270,7 +276,7 @@ export function ReportSidebar({
           <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }} />
           <Button
             ref={triggerRef}
-            onClick={() => {
+            onPress={() => {
               setMenuOpen(true);
             }}
             style={{
@@ -278,9 +284,8 @@ export function ReportSidebar({
               padding: '5px 10px',
             }}
           >
-            Options
+            {t('Options')}
           </Button>
-
           <Popover
             triggerRef={triggerRef}
             placement="bottom start"
@@ -385,16 +390,15 @@ export function ReportSidebar({
             flexShrink: 0,
           }}
         />
-        <View
+        <SpaceBetween
+          gap={5}
           style={{
-            flexDirection: 'row',
             marginTop: 10,
             marginBottom: 5,
-            alignItems: 'center',
           }}
         >
           <Text>
-            <strong>Date filters</strong>
+            <strong>{t('Date filters')}</strong>
           </Text>
           <View style={{ flex: 1 }} />
           <ModeButton
@@ -415,12 +419,13 @@ export function ReportSidebar({
               onChangeDates(
                 customReportItems.startDate,
                 customReportItems.endDate,
+                'static',
               );
             }}
           >
-            Static
+            {t('Static')}
           </ModeButton>
-        </View>
+        </SpaceBetween>
         {!customReportItems.isDateStatic ? (
           <View
             style={{
@@ -430,7 +435,7 @@ export function ReportSidebar({
             }}
           >
             <Text style={{ width: 50, textAlign: 'right', marginRight: 5 }}>
-              Range:
+              {t('Range:')}
             </Text>
             <Select
               value={customReportItems.dateRange}
@@ -441,7 +446,7 @@ export function ReportSidebar({
               customReportItems.includeCurrentInterval && (
                 <Tooltip
                   placement="bottom start"
-                  content={<Text>Current month</Text>}
+                  content={<Text>{t('Current month')}</Text>}
                   style={{
                     ...styles.tooltip,
                     lineHeight: 1.5,
@@ -536,19 +541,25 @@ export function ReportSidebar({
           minHeight: 200,
         }}
       >
-        <CategorySelector
-          categoryGroups={categories.grouped.filter(f => {
-            return customReportItems.showHiddenCategories || !f.hidden
-              ? true
-              : false;
-          })}
-          selectedCategories={customReportItems.selectedCategories || []}
-          setSelectedCategories={e => {
-            setSelectedCategories(e);
-            onReportChange({ type: 'modify' });
-          }}
-          showHiddenCategories={customReportItems.showHiddenCategories}
-        />
+        {isComplexCategoryCondition ? (
+          <Information>
+            {t('Remove active category filters to show the category selector.')}
+          </Information>
+        ) : (
+          <CategorySelector
+            categoryGroups={categories.grouped.filter(f => {
+              return customReportItems.showHiddenCategories || !f.hidden
+                ? true
+                : false;
+            })}
+            selectedCategories={selectedCategories || []}
+            setSelectedCategories={e => {
+              setSelectedCategories(e);
+              onReportChange({ type: 'modify' });
+            }}
+            showHiddenCategories={customReportItems.showHiddenCategories}
+          />
+        )}
       </View>
     </View>
   );
