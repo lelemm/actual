@@ -6,13 +6,13 @@ import React, {
   useState,
   useCallback,
   useRef,
+  CSSProperties,
 } from 'react';
+import { css } from '@emotion/css';
 import ContentEditable from 'react-contenteditable';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { css } from 'glamor';
-
-import { type CSSProperties, styles, theme } from '../../style';
+import { styles, theme } from '../../style';
 import { TagAutocomplete } from '../autocomplete/TagAutocomplete';
 import { Popover } from './Popover';
 import { View } from './View';
