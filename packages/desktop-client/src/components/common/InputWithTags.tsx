@@ -1,5 +1,5 @@
 import React, {
-  type CSSProperties,
+  CSSProperties,
   type InputHTMLAttributes,
   type KeyboardEvent,
   type Ref,
