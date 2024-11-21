@@ -8,11 +8,7 @@ import {
   parseDate,
   dayFromDate,
 } from '../../shared/months';
-import {
-  FIELD_TYPES,
-  sortNumbers,
-  getApproxNumberThreshold,
-} from '../../shared/rules';
+import { sortNumbers, getApproxNumberThreshold } from '../../shared/rules';
 import { extractAllTags } from '../../shared/tag';
 import { ungroupTransaction } from '../../shared/transactions';
 import { partitionByField, fastSetMerge } from '../../shared/util';

@@ -134,7 +134,7 @@ function TagList({
   const [showColors, setShowColors] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Tag | null>(null);
   const [, setUncommitedTags] = useState<string[]>([]);
-  const colorRef = useRef(null);
+  const colorRef = useRef<HTMLDivElement | null>(null);
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -221,7 +221,9 @@ function TagList({
               data-keep-editing="true"
               key={item.id}
               onContextMenu={e => {
-                colorRef.current = e.target;
+                if (e.target instanceof HTMLDivElement) {
+                  colorRef.current = e.target;
+                }
                 setSelectedItem(item);
                 setShowColors(true);
                 e.preventDefault();

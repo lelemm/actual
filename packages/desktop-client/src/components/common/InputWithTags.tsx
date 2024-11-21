@@ -1,4 +1,5 @@
 import React, {
+  type CSSProperties,
   type InputHTMLAttributes,
   type KeyboardEvent,
   type Ref,
@@ -10,7 +11,7 @@ import { css } from '@emotion/css';
 
 import { useMergedRefs } from '../../hooks/useMergedRefs';
 import { useTagPopover } from '../../hooks/useTagPopover';
-import { type CSSProperties, styles, theme } from '../../style';
+import { styles, theme } from '../../style';
 import { TagPopover } from '../autocomplete/TagAutocomplete';
 
 import { defaultInputStyle } from './Input';

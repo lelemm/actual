@@ -4,6 +4,7 @@ import {
   type ComponentProps,
   type ReactNode,
   type FocusEvent,
+  type CSSProperties,
 } from 'react';
 
 import { theme } from '../../style';
