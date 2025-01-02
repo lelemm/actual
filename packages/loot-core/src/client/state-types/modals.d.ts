@@ -340,6 +340,7 @@ type FinanceModals = {
   'select-new-plugin': {
     onSave?: () => void;
   };
+  [key: `plugin-${string}`]: unknown;
 };
 
 export type PushModalAction = {

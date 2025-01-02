@@ -5,8 +5,9 @@ import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
-  plugins: [dts({ insertTypesEntry: true, include: ['src'] })],
+  plugins: [dts({ insertTypesEntry: true, include: ['src'], rollupTypes: true, copyDtsFiles: true })],
   build: {
+    outDir: 'build',
     lib: {
       entry: path.resolve(
         path.dirname(fileURLToPath(import.meta.url)),

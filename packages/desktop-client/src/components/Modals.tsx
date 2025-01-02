@@ -76,12 +76,14 @@ import { PostsOfflineNotification } from './schedules/PostsOfflineNotification';
 import { ScheduleDetails } from './schedules/ScheduleDetails';
 import { ScheduleLink } from './schedules/ScheduleLink';
 import { NamespaceContext } from './spreadsheet/NamespaceContext';
+import { useActualPlugins } from './ActualPluginsProvider';
 
 export function Modals() {
   const location = useLocation();
   const dispatch = useDispatch();
   const { modalStack } = useModalState();
   const [budgetId] = useMetadataPref('id');
+  const { plugins } = useActualPlugins();
 
   useEffect(() => {
     if (modalStack.length > 0) {
@@ -664,6 +666,15 @@ export function Modals() {
           return <SelectNewPluginModal key={name} onSave={options.onSave} />;
 
         default:
+          if (name.startsWith('plugin-')) {
+            plugins.forEach(plugin => {
+              const modals = plugin.hooks?.onMethod?.ModalList?.();
+              if (modals && modals.has(name)) {
+                return modals.get(name);
+              }
+            })
+          }
+
           throw new Error('Unknown modal');
       }
     })
