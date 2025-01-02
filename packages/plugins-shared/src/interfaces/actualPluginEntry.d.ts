@@ -7,5 +7,5 @@ import { Button } from '../../../src/components/common/Button2'
 
 export type ActualPluginEntry = (bridge: {
     React: typeof React,
-    toolKit: { useDispatch: typeof useDispatch, pushModal: typeof pushModal }
+    toolKit?: { useDispatch: typeof useDispatch, pushModal: typeof pushModal }
 }) => ActualPlugin;

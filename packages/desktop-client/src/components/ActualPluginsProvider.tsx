@@ -101,7 +101,7 @@ async function loadPluginScript(
     const pluginEntry: ActualPluginEntry = pluginModule.default;
 
     if (manifest.pluginType === 'client') {
-      const plugin = pluginEntry(React);
+      const plugin = pluginEntry({ React: React });
       console.log(
         `Plugin “${manifest.name}” v${manifest.version} loaded successfully.`,
       );
