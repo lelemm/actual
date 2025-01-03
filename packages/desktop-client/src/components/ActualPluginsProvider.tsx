@@ -125,8 +125,8 @@ async function loadPluginScript(
         toolKit: {
           commonComponents: {
             Button: props => <components.Button {...props} />,
-            Modal: props => (
-              <components.Modal {...props} name={`plugin-${props.name}`} />
+            Modal: ({ name, ...props }) => (
+              <components.Modal name={`plugin-${name}`} {...props} />
             ),
           },
           functions: {
