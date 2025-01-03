@@ -25,9 +25,16 @@ import { Popover } from '../common/Popover';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
 import { useMultiuserEnabled } from '../ServerContext';
+import { useActualPlugins } from '../ActualPluginsProvider';
+import { ActualPlugin } from '../../../../plugins-shared/src';
 
 type CreateAccountProps = {
   upgradingAccountId?: string;
+};
+
+type PluginTuple = {
+  name: string;
+  plugin: ActualPlugin;
 };
 
 export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
@@ -43,6 +50,22 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
   >(null);
   const { hasPermission } = useAuth();
   const multiuserEnabled = useMultiuserEnabled();
+  const { plugins } = useActualPlugins();
+  const [connectorPlugins, setConnectorPlugins] = useState<PluginTuple[]>([]);
+
+  useEffect(() => {
+    if (plugins.length > 0) {
+      const pluginsFiltered = plugins
+        .filter(plugin => plugin?.hooks?.onMethod?.ConnectorsNames?.()?.length)
+        .flatMap(plugin =>
+          plugin.hooks.onMethod.ConnectorsNames().map(connector => ({
+            name: connector,
+            plugin,
+          })),
+        );
+      setConnectorPlugins(pluginsFiltered);
+    }
+  }, [plugins]);
 
   const onConnectGoCardless = () => {
     if (!isGoCardlessSetupComplete) {
@@ -358,6 +381,22 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
                           'to automatically download transactions. SimpleFIN provides reliable, up-to-date information from hundreds of banks.',
                         )}{' '}
                       </Text>
+                      {connectorPlugins.map(connector => {
+                        return (
+                          <Button
+                            key={`plugin-${connector.name}`}
+                            onPress={() =>
+                              connector.plugin?.hooks?.onMethod?.ConnectorOnSetup?.(
+                                {
+                                  connectorName: connector.name,
+                                },
+                              )
+                            }
+                          >
+                            {connector.name}
+                          </Button>
+                        );
+                      })}
                     </>
                   )}
                   {(!isGoCardlessSetupComplete || !isSimpleFinSetupComplete) &&

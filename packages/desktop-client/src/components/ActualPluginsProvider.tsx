@@ -17,9 +17,8 @@ import {
   type ActualPluginEntry,
 } from '../../../plugins-shared/src';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
-import { Modal } from './common/Modal';
-import { Button } from './common/Button2';
 import { pushModal } from 'loot-core/client/actions';
+import { Dispatch } from 'loot-core/client/actions/types';
 
 // Context and Provider
 type ActualPluginsContextType = {
@@ -42,6 +41,7 @@ export function ActualPluginsProvider({
   const pluginsEnabled = useFeatureFlag('plugins');
   const [plugins, setPlugins] = useState<ActualPlugin[]>([]);
   const [pluginStore, setPluginStore] = useState<ActualPluginStored[]>([]);
+  const dispatch = useDispatch();
 
   const refreshPluginStore = useCallback(async () => {
     setPluginStore(await getAllPlugins());
@@ -53,7 +53,11 @@ export function ActualPluginsProvider({
 
       const fullPlugins = [];
       for (const plugin of allPlugins) {
-        const loadedPlugin = await loadPluginFromRepo(plugins, plugin.url);
+        const loadedPlugin = await loadPluginFromRepo(
+          plugins,
+          plugin.url,
+          dispatch,
+        );
         if (loadedPlugin) {
           fullPlugins.push(loadedPlugin);
         }
@@ -95,29 +99,37 @@ export const useActualPlugins = () => {
 async function loadPluginScript(
   scriptBlob: Blob,
   manifest: ActualPluginManifest,
+  dispatch: Dispatch,
 ): Promise<ActualPlugin | null> {
   const scriptURL = URL.createObjectURL(scriptBlob);
   const scriptCode = await scriptBlob.text();
   const pluginModule = await import(/* @vite-ignore */ scriptURL);
   const db = await getDatabase();
-  const dispatch = useDispatch();
 
   if (pluginModule?.default) {
     const pluginEntry: ActualPluginEntry = pluginModule.default;
+
+    //this is needed because the application is not ready to serve the components
+    // when the file is loaded, but it is ready at runtime
+    const loadComponents = async () => {
+      const { Button } = await import('./common/Button2');
+      const { Modal } = await import('./common/Modal');
+      return { Button, Modal };
+    };
+
+    const components = await loadComponents();
 
     if (manifest.pluginType === 'client') {
       const plugin = pluginEntry({
         React: React,
         toolKit: {
           commonComponents: {
-            Modal: ({ children, props }) => (
-              <Modal {...props}>{children}</Modal>
-            ),
-            Button: (content, props) => <Button {...props}>{content}</Button>,
+            Button: props => <components.Button {...props} />,
+            Modal: props => <components.Modal {...props} />,
           },
           functions: {
-            pushModal: (modalName: `plugin-${string}`) =>
-              dispatch(pushModal(modalName)),
+            pushModal: (modalName: string) =>
+              dispatch(pushModal(`plugin-${modalName}`)),
           },
         },
       });
@@ -193,6 +205,7 @@ export function parseGitHubRepoUrl(
 async function loadPluginFromRepo(
   loadedPlugins: ActualPlugin[],
   repo: string,
+  dispatch: Dispatch,
 ): Promise<ActualPlugin | null> {
   try {
     const parsedRepo = parseGitHubRepoUrl(repo);
@@ -252,7 +265,7 @@ async function loadPluginFromRepo(
     });
 
     console.log(`Plugin “${repo}” loaded successfully.`);
-    return await loadPluginScript(indexJsBlob, manifest);
+    return await loadPluginScript(indexJsBlob, manifest, dispatch);
   } catch (error) {
     console.error(`Error loading plugin “${repo}”:`, error);
     return null;
@@ -300,6 +313,7 @@ async function getAllPlugins(): Promise<ActualPluginStored[]> {
 export async function installPluginFromManifest(
   loadedPlugins: ActualPlugin[],
   manifest: ActualPluginManifest,
+  dispatch: Dispatch,
 ): Promise<ActualPlugin | null> {
   try {
     const foundPlugin = loadedPlugins.find(
@@ -340,7 +354,11 @@ export async function installPluginFromManifest(
     });
 
     console.log(`Plugin “${manifest.name}” loaded successfully.`);
-    const loadedPlugin = await loadPluginScript(indexJsBlob, manifest);
+    const loadedPlugin = await loadPluginScript(
+      indexJsBlob,
+      manifest,
+      dispatch,
+    );
     if (loadedPlugin) {
       loadedPlugins.push(loadedPlugin);
     }

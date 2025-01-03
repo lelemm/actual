@@ -667,12 +667,17 @@ export function Modals() {
 
         default:
           if (name.startsWith('plugin-')) {
+            let foundPlugin = null;
             plugins.forEach(plugin => {
               const modals = plugin.hooks?.onMethod?.ModalList?.();
-              if (modals && modals.has(name)) {
-                return modals.get(name);
+              if (modals && modals.has(`plugin-${name}`)) {
+                foundPlugin = modals.get(`plugin-${name}`);
               }
-            })
+            });
+
+            if (foundPlugin) {
+              return foundPlugin;
+            }
           }
 
           throw new Error('Unknown modal');

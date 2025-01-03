@@ -16,6 +16,7 @@ import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal';
 import { Text } from '../common/Text';
 import { View } from '../common/View';
 import { LoadingIndicator } from '../reports/LoadingIndicator';
+import { useDispatch } from 'react-redux';
 
 type SelectNewPluginModalProps = {
   onSave: () => void;
@@ -39,6 +40,7 @@ export function SelectNewPluginModal({ onSave }: SelectNewPluginModalProps) {
     null,
   );
   const { plugins, refreshPluginStore, pluginStore } = useActualPlugins();
+  const dispatch = useDispatch();
 
   useEffect(() => {
     const fetchPlugins = async () => {
@@ -94,7 +96,7 @@ export function SelectNewPluginModal({ onSave }: SelectNewPluginModalProps) {
 
   async function _onSave() {
     if (selectedPlugin && selectedPlugin.manifest) {
-      await installPluginFromManifest(plugins, selectedPlugin.manifest);
+      await installPluginFromManifest(plugins, selectedPlugin.manifest, dispatch);
       await refreshPluginStore();
     }
     onSave();

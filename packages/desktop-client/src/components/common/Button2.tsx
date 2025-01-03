@@ -10,11 +10,12 @@ import { Button as ReactAriaButton } from 'react-aria-components';
 import { css } from '@emotion/css';
 
 import { useAuth } from '../../auth/AuthProvider';
-import { type Permissions } from '../../auth/types';
 import { AnimatedLoading } from '../../icons/AnimatedLoading';
 import { styles, theme } from '../../style';
 
 import { View } from './View';
+import { ActualPluginButtonProps, ActualPluginButtonVariant } from '../../../../plugins-shared/src/components/props/ButtonProps';
+import { Permissions } from '../../auth/types';
 
 const backgroundColor: {
   [key in ButtonVariant | `${ButtonVariant}Disabled`]?: string;
@@ -130,16 +131,9 @@ const _getActiveStyles = (
   }
 };
 
-type ButtonProps = ComponentPropsWithoutRef<typeof ReactAriaButton> & {
-  variant?: ButtonVariant;
-  bounce?: boolean;
-  children?: ReactNode;
-  permission?: Permissions;
-};
+type ButtonVariant = ActualPluginButtonVariant;
 
-type ButtonVariant = 'normal' | 'primary' | 'bare' | 'menu' | 'menuSelected';
-
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+export const Button = forwardRef<HTMLButtonElement, ActualPluginButtonProps>(
   (props, ref) => {
     const {
       permission,
@@ -184,7 +178,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <ReactAriaButton
         ref={ref}
-        isDisabled={restProps.isDisabled || !hasPermission(permission)}
+        isDisabled={restProps.isDisabled || !hasPermission((permission as unknown) as Permissions)}
         {...restProps}
         className={
           typeof className === 'function'
@@ -201,7 +195,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
 Button.displayName = 'Button';
 
-type ButtonWithLoadingProps = ButtonProps & {
+type ButtonWithLoadingProps = ActualPluginButtonProps & {
   isLoading?: boolean;
 };
 

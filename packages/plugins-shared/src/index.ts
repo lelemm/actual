@@ -7,3 +7,5 @@ export type { ActualPluginManifest } from './interfaces/actualPluginManifest';
 export type { ActualPluginToolkit, ActualPluginToolkitCommonComponents, ActualPluginToolkitFunctions } from './interfaces/toolkit'
 
 export type { ActualPluginModalProps } from './components/props/ModalProps'
+
+export type { ActualPluginButtonProps } from './components/props/ButtonProps'

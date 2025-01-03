@@ -1,19 +1,14 @@
+import { ActualPluginButtonProps } from '../components/props/ButtonProps';
 import { ActualPluginModalProps } from '../components/props/ModalProps';
 import { ReactNode } from 'react';
 
 export type ActualPluginToolkitCommonComponents = {
-  Modal: ({
-    children,
-    props,
-  }: {
-    children: ReactNode;
-    props: ActualPluginModalProps;
-  }) => JSX.Element;
-  Button: (content: JSX.Element, props: any) => JSX.Element;
+  Modal: (props: ActualPluginModalProps) => JSX.Element;
+  Button: (props: ActualPluginButtonProps) => JSX.Element;
 };
 
 export type ActualPluginToolkitFunctions = {
-  pushModal: (modalName: `plugin-${string}`) => void;
+  pushModal: (modalName: string) => void;
 };
 
 export type ActualPluginToolkit = {
