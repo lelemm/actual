@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
-  plugins: [dts({ insertTypesEntry: true, include: ['src'], rollupTypes: true, copyDtsFiles: true })],
+  plugins: [dts({ insertTypesEntry: true, include: ['src'], copyDtsFiles: true })],
   build: {
     outDir: 'build',
     lib: {
@@ -18,7 +18,7 @@ export default defineConfig({
       fileName: format => `index.${format}.js`,
     },
     rollupOptions: {
-      external: ['react', 'react-dom', '@emotion/css'],
+      external: ['react', 'react-dom', '@emotion/css', 'react-aria', 'react-aria-components'],
       output: {
         globals: {
           react: 'React',

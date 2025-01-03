@@ -32,17 +32,20 @@ import { Input } from './Input';
 import { Text } from './Text';
 import { TextOneLine } from './TextOneLine';
 import { View } from './View';
+import { ActualPluginModalProps } from '../../../../plugins-shared/src/components/props/ModalProps';
 
-type ModalProps = ComponentPropsWithRef<typeof ReactAriaModal> & {
-  name: string;
-  isLoading?: boolean;
-  noAnimation?: boolean;
-  style?: CSSProperties;
-  onClose?: () => void;
-  containerProps?: {
-    style?: CSSProperties;
-  };
-};
+// type ModalProps = ComponentPropsWithRef<typeof ReactAriaModal> & {
+//   name: string;
+//   isLoading?: boolean;
+//   noAnimation?: boolean;
+//   style?: CSSProperties;
+//   onClose?: () => void;
+//   containerProps?: {
+//     style?: CSSProperties;
+//   };
+// };
+
+type ModalProps = ActualPluginModalProps;
 
 export const Modal = ({
   name,

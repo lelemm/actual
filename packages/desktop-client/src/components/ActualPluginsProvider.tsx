@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { useDispatch } from 'react-redux';
 
 import { getDatabase } from 'loot-core/platform/server/indexeddb';
 import { type ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
@@ -16,6 +17,9 @@ import {
   type ActualPluginEntry,
 } from '../../../plugins-shared/src';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
+import { Modal } from './common/Modal';
+import { Button } from './common/Button2';
+import { pushModal } from 'loot-core/client/actions';
 
 // Context and Provider
 type ActualPluginsContextType = {
@@ -96,12 +100,28 @@ async function loadPluginScript(
   const scriptCode = await scriptBlob.text();
   const pluginModule = await import(/* @vite-ignore */ scriptURL);
   const db = await getDatabase();
+  const dispatch = useDispatch();
 
   if (pluginModule?.default) {
     const pluginEntry: ActualPluginEntry = pluginModule.default;
 
     if (manifest.pluginType === 'client') {
-      const plugin = pluginEntry({ React: React });
+      const plugin = pluginEntry({
+        React: React,
+        toolKit: {
+          commonComponents: {
+            Modal: ({ children, props }) => (
+              <Modal {...props}>{children}</Modal>
+            ),
+            Button: (content, props) => <Button {...props}>{content}</Button>,
+          },
+          functions: {
+            pushModal: (modalName: `plugin-${string}`) =>
+              dispatch(pushModal(modalName)),
+          },
+        },
+      });
+
       console.log(
         `Plugin “${manifest.name}” v${manifest.version} loaded successfully.`,
       );
