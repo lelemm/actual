@@ -126,12 +126,12 @@ async function loadPluginScript(
           commonComponents: {
             Button: props => <components.Button {...props} />,
             Modal: ({ name, ...props }) => (
-              <components.Modal name={`plugin-${name}`} {...props} />
+              <components.Modal name={`plugin-${manifest.name}-${name}`} {...props} />
             ),
           },
           functions: {
             pushModal: (modalName: string) =>
-              dispatch(pushModal(`plugin-${modalName}`)),
+              dispatch(pushModal(`plugin-${manifest.name}-${modalName}`)),
           },
         },
       });
