@@ -669,7 +669,6 @@ export function Modals() {
           if (name.startsWith('plugin-')) {
             let foundPlugin = null;
             plugins.forEach(plugin => {
-              debugger;
               const modals = plugin.hooks?.onMethod?.ModalList?.();
               if (modals && modals.has(name.replace(`plugin-${plugin.name}-`, ""))) {
                 foundPlugin = modals.get(name.replace(`plugin-${plugin.name}-`, ""));
