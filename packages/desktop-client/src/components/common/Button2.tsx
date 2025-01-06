@@ -14,7 +14,6 @@ import { AnimatedLoading } from '../../icons/AnimatedLoading';
 import { styles, theme } from '../../style';
 
 import { View } from './View';
-import { ActualPluginButtonProps, ActualPluginButtonVariant } from '../../../../plugins-shared/src/components/props/ButtonProps';
 import { Permissions } from '../../auth/types';
 
 const backgroundColor: {
@@ -131,9 +130,23 @@ const _getActiveStyles = (
   }
 };
 
-type ButtonVariant = ActualPluginButtonVariant;
+type ButtonProps = ComponentPropsWithoutRef<
+  typeof ReactAriaButton
+> & {
+  variant?: ButtonVariant;
+  bounce?: boolean;
+  children?: ReactNode;
+  permission?: Permissions;
+};
 
-export const Button = forwardRef<HTMLButtonElement, ActualPluginButtonProps>(
+type ButtonVariant =
+| 'normal'
+| 'primary'
+| 'bare'
+| 'menu'
+| 'menuSelected';
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (props, ref) => {
     const {
       permission,
@@ -178,7 +191,7 @@ export const Button = forwardRef<HTMLButtonElement, ActualPluginButtonProps>(
     return (
       <ReactAriaButton
         ref={ref}
-        isDisabled={restProps.isDisabled || !hasPermission((permission as unknown) as Permissions)}
+        isDisabled={restProps.isDisabled || !hasPermission(permission)}
         {...restProps}
         className={
           typeof className === 'function'
@@ -195,7 +208,7 @@ export const Button = forwardRef<HTMLButtonElement, ActualPluginButtonProps>(
 
 Button.displayName = 'Button';
 
-type ButtonWithLoadingProps = ActualPluginButtonProps & {
+type ButtonWithLoadingProps = ButtonProps & {
   isLoading?: boolean;
 };
 

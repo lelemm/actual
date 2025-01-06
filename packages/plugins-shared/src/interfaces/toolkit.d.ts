@@ -1,10 +1,10 @@
+import { View } from '../../../components/src';
 import { ActualPluginButtonProps } from '../components/props/ButtonProps';
 import { ActualPluginModalProps } from '../components/props/ModalProps';
-import { ReactNode } from 'react';
+import { ComponentProps, ReactNode } from 'react';
 
 export type ActualPluginToolkitCommonComponents = {
   Modal: (props: ActualPluginModalProps) => JSX.Element;
-  Button: (props: ActualPluginButtonProps) => JSX.Element;
 };
 
 export type ActualPluginToolkitFunctions = {

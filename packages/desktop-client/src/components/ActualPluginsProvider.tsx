@@ -19,10 +19,11 @@ import {
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { pushModal } from 'loot-core/client/actions';
 import { Dispatch } from 'loot-core/client/actions/types';
+import { ActualPluginInitalized } from '../../../plugins-shared/src/interfaces/actualPlugin';
 
 // Context and Provider
 type ActualPluginsContextType = {
-  plugins: ActualPlugin[];
+  plugins: ActualPluginInitalized[];
   pluginStore: ActualPluginStored[];
   loadPlugins: () => Promise<void>;
   refreshPluginStore: () => Promise<void>;
@@ -39,7 +40,7 @@ export function ActualPluginsProvider({
   children,
 }: ActualPluginsProviderProps) {
   const pluginsEnabled = useFeatureFlag('plugins');
-  const [plugins, setPlugins] = useState<ActualPlugin[]>([]);
+  const [plugins, setPlugins] = useState<ActualPluginInitalized[]>([]);
   const [pluginStore, setPluginStore] = useState<ActualPluginStored[]>([]);
   const dispatch = useDispatch();
 
@@ -62,7 +63,7 @@ export function ActualPluginsProvider({
           fullPlugins.push(loadedPlugin);
         }
       }
-      setPlugins(fullPlugins as ActualPlugin[]);
+      setPlugins(fullPlugins as ActualPluginInitalized[]);
       await refreshPluginStore();
     } catch (error) {
       console.error('Failed to load plugins:', error);
@@ -100,9 +101,16 @@ async function loadPluginScript(
   scriptBlob: Blob,
   manifest: ActualPluginManifest,
   dispatch: Dispatch,
-): Promise<ActualPlugin | null> {
+): Promise<ActualPluginInitalized | null> {
   const scriptURL = URL.createObjectURL(scriptBlob);
   const scriptCode = await scriptBlob.text();
+  if (!window.process) {
+    window.process = {
+      env: {
+        NODE_ENV: import.meta.env.MODE || 'development',
+      },
+    };
+  }
   const pluginModule = await import(/* @vite-ignore */ scriptURL);
   const db = await getDatabase();
 
@@ -112,19 +120,16 @@ async function loadPluginScript(
     //this is needed because the application is not ready to serve the components
     // when the file is loaded, but it is ready at runtime
     const loadComponents = async () => {
-      const { Button } = await import('./common/Button2');
       const { Modal } = await import('./common/Modal');
-      return { Button, Modal };
+      return { Modal };
     };
 
     const components = await loadComponents();
 
     if (manifest.pluginType === 'client') {
       const plugin = pluginEntry({
-        React: React,
         toolKit: {
           commonComponents: {
-            Button: props => <components.Button {...props} />,
             Modal: ({ name, ...props }) => (
               <components.Modal name={`plugin-${manifest.name}-${name}`} {...props} />
             ),
@@ -205,10 +210,10 @@ export function parseGitHubRepoUrl(
 }
 
 async function loadPluginFromRepo(
-  loadedPlugins: ActualPlugin[],
+  loadedPlugins: ActualPluginInitalized[],
   repo: string,
   dispatch: Dispatch,
-): Promise<ActualPlugin | null> {
+): Promise<ActualPluginInitalized | null> {
   try {
     const parsedRepo = parseGitHubRepoUrl(repo);
     if (parsedRepo == null) throw new Error(`Invalid repo ${repo}`);

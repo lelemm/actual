@@ -7,6 +7,7 @@ import dts from 'vite-plugin-dts';
 export default defineConfig({
   plugins: [dts({ insertTypesEntry: true, include: ['src'], copyDtsFiles: true })],
   build: {
+    minify: false,
     outDir: 'build',
     lib: {
       entry: path.resolve(

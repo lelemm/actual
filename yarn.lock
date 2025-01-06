@@ -7457,6 +7457,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/react-dom@npm:^18.2.0":
+  version: 18.3.5
+  resolution: "@types/react-dom@npm:18.3.5"
+  peerDependencies:
+    "@types/react": ^18.0.0
+  checksum: 10/02095b326f373867498e0eb2b5ebb60f9bd9535db0d757ea13504c4b7d75e16605cf1d43ce7a2e67893d177b51db4357cabb2842fb4257c49427d02da1a14e09
+  languageName: node
+  linkType: hard
+
 "@types/react-grid-layout@npm:^1":
   version: 1.3.5
   resolution: "@types/react-grid-layout@npm:1.3.5"
@@ -8235,6 +8244,30 @@ __metadata:
   checksum: 10/ff559b891382ad4cd34cc3c493511d0a7075a51f5f9f02a03440e92be3705679367238338566c5fbd3521ecadd565d29301bc8e16cb48379206bffbff3d72500
   languageName: node
   linkType: hard
+
+"actual-components@link:/home/leandro-menezes/opensource/actual-repos/actual/packages/components::locator=plugins-shared%40workspace%3Apackages%2Fplugins-shared":
+  version: 0.0.0-use.local
+  resolution: "actual-components@link:/home/leandro-menezes/opensource/actual-repos/actual/packages/components::locator=plugins-shared%40workspace%3Apackages%2Fplugins-shared"
+  languageName: node
+  linkType: soft
+
+"actual-components@workspace:packages/components":
+  version: 0.0.0-use.local
+  resolution: "actual-components@workspace:packages/components"
+  dependencies:
+    "@emotion/css": "npm:^11.13.4"
+    "@types/react": "npm:^18.2.0"
+    "@types/react-redux": "npm:^7.1.34"
+    i18next: "npm:^23.11.5"
+    react: "npm:18.2.0"
+    react-aria: "npm:^3.36.0"
+    react-aria-components: "npm:^1.5.0"
+    throttleit: "npm:^1.0.1"
+    typescript: "npm:^5.0.0"
+    vite: "npm:^5.2.14"
+    vite-plugin-dts: "npm:4.3.0"
+  languageName: unknown
+  linkType: soft
 
 "actual@workspace:.":
   version: 0.0.0-use.local
@@ -17509,11 +17542,14 @@ __metadata:
   dependencies:
     "@emotion/css": "npm:^11.13.4"
     "@types/react": "npm:^18.2.0"
+    "@types/react-dom": "npm:^18.2.0"
     "@types/react-redux": "npm:^7.1.34"
+    actual-components: "link:/home/leandro-menezes/opensource/actual-repos/actual/packages/components"
     i18next: "npm:^23.11.5"
     react: "npm:18.2.0"
     react-aria: "npm:^3.36.0"
     react-aria-components: "npm:^1.5.0"
+    react-dom: "npm:^18.2.0"
     throttleit: "npm:^1.0.1"
     typescript: "npm:^5.0.0"
     vite: "npm:^5.2.14"
@@ -18077,6 +18113,18 @@ __metadata:
   peerDependencies:
     react: ^18.2.0
   checksum: 10/ca5e7762ec8c17a472a3605b6f111895c9f87ac7d43a610ab7024f68cd833d08eda0625ce02ec7178cc1f3c957cf0b9273cdc17aa2cd02da87544331c43b1d21
+  languageName: node
+  linkType: hard
+
+"react-dom@npm:^18.2.0":
+  version: 18.3.1
+  resolution: "react-dom@npm:18.3.1"
+  dependencies:
+    loose-envify: "npm:^1.1.0"
+    scheduler: "npm:^0.23.2"
+  peerDependencies:
+    react: ^18.3.1
+  checksum: 10/3f4b73a3aa083091173b29812b10394dd06f4ac06aff410b74702cfb3aa29d7b0ced208aab92d5272919b612e5cda21aeb1d54191848cf6e46e9e354f3541f81
   languageName: node
   linkType: hard
 
@@ -19169,6 +19217,15 @@ __metadata:
   dependencies:
     loose-envify: "npm:^1.1.0"
   checksum: 10/0c4557aa37bafca44ff21dc0ea7c92e2dbcb298bc62eae92b29a39b029134f02fb23917d6ebc8b1fa536b4184934314c20d8864d156a9f6357f3398aaf7bfda8
+  languageName: node
+  linkType: hard
+
+"scheduler@npm:^0.23.2":
+  version: 0.23.2
+  resolution: "scheduler@npm:0.23.2"
+  dependencies:
+    loose-envify: "npm:^1.1.0"
+  checksum: 10/e8d68b89d18d5b028223edf090092846868a765a591944760942b77ea1f69b17235f7e956696efbb62c8130ab90af7e0949bfb8eba7896335507317236966bc9
   languageName: node
   linkType: hard
 

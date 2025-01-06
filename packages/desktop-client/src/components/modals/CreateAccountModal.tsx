@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DialogTrigger } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
@@ -52,6 +52,7 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
   const multiuserEnabled = useMultiuserEnabled();
   const { plugins } = useActualPlugins();
   const [connectorPlugins, setConnectorPlugins] = useState<PluginTuple[]>([]);
+  const pluginRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (plugins.length > 0) {
@@ -66,6 +67,20 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
       setConnectorPlugins(pluginsFiltered);
     }
   }, [plugins]);
+
+  // const PluginItems = useMemo(() => {
+  //   if (plugins.length > 0 && pluginRef.current) {
+  //     return () => (
+  //       <>
+  //         {plugins.map(plugin =>
+  //           plugin.hooks.components.ComponentTest(pluginRef.current),
+  //         )}
+  //       </>
+  //     );
+  //   }
+
+  //   return null;
+  // }, [plugins, pluginRef]);
 
   const onConnectGoCardless = () => {
     if (!isGoCardlessSetupComplete) {
@@ -381,6 +396,10 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
                           'to automatically download transactions. SimpleFIN provides reliable, up-to-date information from hundreds of banks.',
                         )}{' '}
                       </Text>
+                      {
+                        pluginRef.current && plugins[0].renderComponent.ComponentTest(pluginRef.current)
+                      }
+                      <div ref={pluginRef}></div>
                       {connectorPlugins.map(connector => {
                         return (
                           <Button
