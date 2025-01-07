@@ -28,9 +28,11 @@ export type OnMethodArguments<K extends keyof OnMethodArgumentMap> =
 export type OnMethodReturn<K extends keyof OnMethodReturnMap> =
   K extends keyof OnMethodReturnMap ? OnMethodReturnMap[K] : void;
 
-export interface ComponentArgumentMap {
+export interface ComponentArgumentMap extends ComponentArg {
   ComponentTest: undefined;
-  ComponentTest2: undefined;
+  ComponentTest2: {
+    helloworld: string;
+  };
 }
 
 export interface ActualPlugin {

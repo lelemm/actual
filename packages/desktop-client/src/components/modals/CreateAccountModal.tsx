@@ -27,6 +27,7 @@ import { View } from '../common/View';
 import { useMultiuserEnabled } from '../ServerContext';
 import { useActualPlugins } from '../ActualPluginsProvider';
 import { ActualPlugin } from '../../../../plugins-shared/src';
+import RenderPluginsComponent from '../RenderPluginsComponent';
 
 type CreateAccountProps = {
   upgradingAccountId?: string;
@@ -396,10 +397,9 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
                           'to automatically download transactions. SimpleFIN provides reliable, up-to-date information from hundreds of banks.',
                         )}{' '}
                       </Text>
-                      {
-                        pluginRef.current && plugins[0].renderComponent.ComponentTest(pluginRef.current)
-                      }
-                      <div ref={pluginRef}></div>
+
+                      <RenderPluginsComponent componentName='ComponentTest' />
+
                       {connectorPlugins.map(connector => {
                         return (
                           <Button
