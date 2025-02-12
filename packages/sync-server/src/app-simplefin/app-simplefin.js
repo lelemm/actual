@@ -1,7 +1,9 @@
-import express from 'express';
 import https from 'https';
-import { SecretName, secretsService } from '../services/secrets-service.js';
+
+import express from 'express';
+
 import { handleError } from '../app-gocardless/util/handle-error.js';
+import { SecretName, secretsService } from '../services/secrets-service.js';
 import { requestLoggerMiddleware } from '../util/middlewares.js';
 
 const app = express();
@@ -18,7 +20,7 @@ app.post(
     res.send({
       status: 'ok',
       data: {
-        configured: configured,
+        configured,
       },
     });
   }),
@@ -149,8 +151,9 @@ function getAccountResponse(results, accountId, startDate) {
     console.log(
       `The account "${accountId}" was not found. Here were the accounts returned:`,
     );
-    if (results?.accounts)
+    if (results?.accounts) {
       results.accounts.forEach(a => console.log(`${a.id} - ${a.org.name}`));
+    }
     logAccountError(results, accountId, {
       error_type: 'ACCOUNT_MISSING',
       error_code: 'ACCOUNT_MISSING',
@@ -216,6 +219,7 @@ function getAccountResponse(results, accountId, startDate) {
       continue;
     }
 
+    newTrans.sortOrder = dateToUse;
     newTrans.date = getDate(transactionDate);
     newTrans.payeeName = trans.payee;
     newTrans.remittanceInformationUnstructured = trans.description;
@@ -231,7 +235,21 @@ function getAccountResponse(results, accountId, startDate) {
     all.push(newTrans);
   }
 
-  return { balances, startingBalance, transactions: { all, booked, pending } };
+  const sortFunction = (a, b) => b.sortOrder - a.sortOrder;
+
+  const bookedSorted = booked.sort(sortFunction);
+  const pendingSorted = pending.sort(sortFunction);
+  const allSorted = all.sort(sortFunction);
+
+  return {
+    balances,
+    startingBalance,
+    transactions: {
+      all: allSorted,
+      booked: bookedSorted,
+      pending: pendingSorted,
+    },
+  };
 }
 
 function invalidToken(res) {
@@ -276,9 +294,9 @@ function parseAccessKey(accessKey) {
   [username, password] = auth.split(':');
   baseUrl = `${scheme}//${rest}`;
   return {
-    baseUrl: baseUrl,
-    username: username,
-    password: password,
+    baseUrl,
+    username,
+    password,
   };
 }
 
