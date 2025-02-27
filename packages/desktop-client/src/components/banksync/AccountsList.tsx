@@ -1,8 +1,8 @@
 import React from 'react';
 
-import { type AccountEntity } from 'loot-core/src/types/models';
+import { View } from '@actual-app/components/view';
 
-import { View } from '../common/View';
+import { type AccountEntity } from 'loot-core/src/types/models';
 
 import { AccountRow } from './AccountRow';
 
@@ -24,7 +24,11 @@ export function AccountsList({
   }
 
   return (
-    <View>
+    <View
+      style={{
+        minHeight: 'initial',
+      }}
+    >
       {accounts.map(account => {
         const hovered = hoveredAccount === account.id;
 
