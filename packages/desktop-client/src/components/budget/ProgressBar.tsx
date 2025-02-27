@@ -14,8 +14,8 @@ import { useSheetValue } from '../spreadsheet/useSheetValue';
 import { useEnvelopeBudget } from './envelope/EnvelopeBudgetContext';
 
 const ColorDefUnderBudgetRemaining = theme.reportsGreen;
-const ColorDefUnderBudgetSpent = theme.reportsGray;
-const ColorDefOverBudgetSpent = theme.reportsGray;
+const ColorDefUnderBudgetSpent = theme.budgetProgressBarBackground;
+const ColorDefOverBudgetSpent = theme.budgetProgressBarBackground;
 const ColorDefOverBudgetOverSpent = theme.reportsRed;
 const ColorDefGoalRemaining = theme.reportsLabel;
 const ColorDefGoalSaved = theme.reportsBlue;
@@ -203,8 +203,8 @@ export function ProgressBar({ month, category }: ProgressBarProps) {
         display: 'flex',
         position: 'absolute',
         bottom: 0,
-        marginBottom: 1,
-        width: '100%',
+        marginBottom: 2,
+        width: '50%',
         opacity: barOpacity,
         transition: 'opacity 0.25s',
       }}
@@ -218,8 +218,7 @@ export function ProgressBar({ month, category }: ProgressBarProps) {
           position: 'absolute',
           bottom: 0,
           left: 0,
-          borderTopLeftRadius: borderRadius,
-          borderBottomLeftRadius: borderRadius,
+          borderRadius,
           transition: 'width 0.5s ease-in-out',
         }}
         title={`${t(leftBar.category)}: ${leftBar.rawValue}`}

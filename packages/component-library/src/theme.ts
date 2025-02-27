@@ -200,4 +200,5 @@ export const theme = {
   tooltipBackground: 'var(--color-tooltipBackground)',
   tooltipBorder: 'var(--color-tooltipBorder)',
   calendarCellBackground: 'var(--color-calendarCellBackground)',
+  budgetProgressBarBackground: 'var(--color-budgetProgressBarBackground)',
 };

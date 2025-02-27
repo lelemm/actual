@@ -261,6 +261,8 @@ export const ExpenseCategoryMonth = memo(function ExpenseCategoryMonth({
         style={{
           flex: 1,
           flexDirection: 'row',
+          position: 'relative',
+          justifyContent: 'end',
         }}
         onContextMenu={e => {
           if (editing) return;

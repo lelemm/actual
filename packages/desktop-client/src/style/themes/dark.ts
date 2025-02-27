@@ -215,3 +215,5 @@ export const tooltipBackground = colorPalette.navy800;
 export const tooltipBorder = colorPalette.navy700;
 
 export const calendarCellBackground = colorPalette.navy900;
+
+export const budgetProgressBarBackground = '#1118';
