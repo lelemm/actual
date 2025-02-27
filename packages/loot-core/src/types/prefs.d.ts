@@ -72,6 +72,7 @@ export type LocalPrefs = Partial<{
   reportsViewLabel: boolean;
   sidebarWidth: number;
   'mobile.showSpentColumn': boolean;
+  'budget.showProgressBars': boolean;
 }>;
 
 export type Theme = 'light' | 'dark' | 'auto' | 'midnight' | 'development';
@@ -85,7 +86,6 @@ export type GlobalPrefs = Partial<{
   preferredDarkTheme: DarkTheme;
   documentDir: string; // Electron only
   serverSelfSignedCert: string; // Electron only
-  useProgressBars: boolean;
 }>;
 
 export type AuthMethods = 'password' | 'openid';

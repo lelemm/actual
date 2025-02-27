@@ -8,7 +8,6 @@ import {
 } from 'loot-core/types/models';
 
 import { useContextMenu } from '../../hooks/useContextMenu';
-import { useGlobalPref } from '../../hooks/useGlobalPref';
 import { SvgCheveronDown } from '../../icons/v1';
 import { theme } from '../../style';
 import { Button } from '../common/Button2';
@@ -17,8 +16,6 @@ import { Popover } from '../common/Popover';
 import { View } from '../common/View';
 import { NotesButton } from '../NotesButton';
 import { InputCell } from '../table';
-
-import { ProgressBar } from './ProgressBar';
 
 type SidebarCategoryProps = {
   innerRef: Ref<HTMLDivElement>;
@@ -56,7 +53,6 @@ export function SidebarCategory({
   const { setMenuOpen, menuOpen, handleContextMenu, resetPosition, position } =
     useContextMenu();
   const triggerRef = useRef(null);
-  const [useProgressBars] = useGlobalPref('useProgressBars');
 
   const displayed = (
     <View
@@ -199,7 +195,6 @@ export function SidebarCategory({
           placeholder: temporary ? t('New category name') : '',
         }}
       />
-      {useProgressBars && <ProgressBar category={category} />}
     </View>
   );
 }
