@@ -233,6 +233,17 @@ const finalConfig = {
         return value === 'true';
       })()
     : config.enforceOpenId,
+  secretsPerBudget: process.env.ACTUAL_SECRETS_PER_BUDGET
+    ? (() => {
+        const value = process.env.ACTUAL_SECRETS_PER_BUDGET.toLowerCase();
+        if (!['true', 'false'].includes(value)) {
+          throw new Error(
+            'ACTUAL_SECRETS_PER_BUDGET must be either "true" or "false"',
+          );
+        }
+        return value === 'true';
+      })()
+    : config.secretsPerBudget,
 };
 debug(`using port ${finalConfig.port}`);
 debug(`using hostname ${finalConfig.hostname}`);

@@ -45,6 +45,7 @@ describe('/user-get-key', () => {
       .set('x-actual-token', 'valid-token')
       .send({ fileId });
 
+      console.log(res);
     expect(res.statusCode).toEqual(200);
     expect(res.body).toEqual({
       status: 'ok',

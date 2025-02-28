@@ -9,6 +9,7 @@ import { View } from '@actual-app/components/view';
 import { send } from 'loot-core/platform/client/fetch';
 import { getSecretsError } from 'loot-core/shared/errors';
 
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { Error } from '../alerts';
 import { Input } from '../common/Input';
 import { Link } from '../common/Link';
@@ -32,6 +33,7 @@ export const SimpleFinInitialiseModal = ({
   const [isValid, setIsValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(t('It is required to provide a token.'));
+  const [fileId] = useMetadataPref('cloudFileId');
 
   const onSubmit = async (close: () => void) => {
     if (!token) {
@@ -45,6 +47,7 @@ export const SimpleFinInitialiseModal = ({
       (await send('secret-set', {
         name: 'simplefin_token',
         value: token,
+        fileId,
       })) || {};
 
     if (error) {

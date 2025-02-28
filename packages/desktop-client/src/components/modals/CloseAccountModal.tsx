@@ -18,6 +18,7 @@ import { type TransObjectLiteral } from 'loot-core/types/util';
 
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCategories } from '../../hooks/useCategories';
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { useDispatch } from '../../redux';
 import { theme } from '../../style';
 import { AccountAutocomplete } from '../autocomplete/AccountAutocomplete';
@@ -63,6 +64,7 @@ export function CloseAccountModal({
   const [categoryError, setCategoryError] = useState(false);
   const dispatch = useDispatch();
   const { isNarrowWidth } = useResponsive();
+  const [fileId] = useMetadataPref('cloudFileId');
 
   const onSelectAccount = accId => {
     setTransferAccountId(accId);
@@ -104,6 +106,7 @@ export function CloseAccountModal({
           id: account.id,
           transferAccountId: transferAccountId || null,
           categoryId: categoryId || null,
+          fileId,
         }),
       );
     }
@@ -258,6 +261,7 @@ export function CloseAccountModal({
                             closeAccount({
                               id: account.id,
                               forced: true,
+                              fileId,
                             }),
                           );
                           close();

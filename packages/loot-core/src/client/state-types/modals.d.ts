@@ -73,6 +73,7 @@ type FinanceModals = {
   'gocardless-external-msg': {
     onMoveExternal: (arg: {
       institutionId: string;
+      fileId: string;
     }) => Promise<{ error: string } | { data: unknown }>;
     onClose?: (() => void) | undefined;
     onSuccess: (data: GoCardlessToken) => Promise<void>;

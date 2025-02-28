@@ -15,10 +15,11 @@ function _authorize(
 ) {
   dispatch(
     pushModal('gocardless-external-msg', {
-      onMoveExternal: async ({ institutionId }) => {
+      onMoveExternal: async ({ institutionId, fileId }) => {
         const resp = await send('gocardless-create-web-token', {
           institutionId,
           accessValidForDays: 90,
+          fileId,
         });
 
         if ('error' in resp) return resp;
@@ -27,6 +28,7 @@ function _authorize(
 
         return send('gocardless-poll-web-token', {
           requisitionId,
+          fileId,
         });
       },
 

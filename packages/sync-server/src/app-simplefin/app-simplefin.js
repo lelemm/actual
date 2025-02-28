@@ -3,6 +3,7 @@ import https from 'https';
 import express from 'express';
 
 import { handleError } from '../app-gocardless/util/handle-error.js';
+import { config } from '../load-config.js';
 import { SecretName, secretsService } from '../services/secrets-service.js';
 import { requestLoggerMiddleware } from '../util/middlewares.js';
 
@@ -14,7 +15,11 @@ app.use(requestLoggerMiddleware);
 app.post(
   '/status',
   handleError(async (req, res) => {
-    const token = secretsService.get(SecretName.simplefin_token);
+    const fileId = req.body.fileId;
+    const token = secretsService.get(
+      SecretName.simplefin_token,
+      config.secretsPerBudget ? fileId : null,
+    );
     const configured = token != null && token !== 'Forbidden';
 
     res.send({
@@ -29,16 +34,17 @@ app.post(
 app.post(
   '/accounts',
   handleError(async (req, res) => {
-    let accessKey = secretsService.get(SecretName.simplefin_accessKey);
+    const fileId = req.body.fileId;
+    let accessKey = secretsService.get(SecretName.simplefin_accessKey, fileId);
 
     try {
       if (accessKey == null || accessKey === 'Forbidden') {
-        const token = secretsService.get(SecretName.simplefin_token);
+        const token = secretsService.get(SecretName.simplefin_token, fileId);
         if (token == null || token === 'Forbidden') {
           throw new Error('No token');
         } else {
           accessKey = await getAccessKey(token);
-          secretsService.set(SecretName.simplefin_accessKey, accessKey);
+          secretsService.set(SecretName.simplefin_accessKey, accessKey, fileId);
           if (accessKey == null || accessKey === 'Forbidden') {
             throw new Error('No access key');
           }

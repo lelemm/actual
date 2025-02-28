@@ -7,39 +7,39 @@ describe('secretsService', () => {
   const testSecretValue = 'testValue';
 
   it('should set a secret', () => {
-    const result = secretsService.set(testSecretName, testSecretValue);
+    const result = secretsService.set(testSecretName, testSecretValue, null);
     expect(result).toBeDefined();
     expect(result.changes).toBe(1);
   });
 
   it('should get a secret', () => {
-    const result = secretsService.get(testSecretName);
+    const result = secretsService.get(testSecretName, null);
     expect(result).toBeDefined();
     expect(result).toBe(testSecretValue);
   });
 
   it('should check if a secret exists', () => {
-    const exists = secretsService.exists(testSecretName);
+    const exists = secretsService.exists(testSecretName, null);
     expect(exists).toBe(true);
 
-    const nonExistent = secretsService.exists('nonExistentSecret');
+    const nonExistent = secretsService.exists('nonExistentSecret', '');
     expect(nonExistent).toBe(false);
   });
 
   it('should update a secret', () => {
     const newValue = 'newValue';
-    const setResult = secretsService.set(testSecretName, newValue);
+    const setResult = secretsService.set(testSecretName, newValue, null);
     expect(setResult).toBeDefined();
     expect(setResult.changes).toBe(1);
 
-    const getResult = secretsService.get(testSecretName);
+    const getResult = secretsService.get(testSecretName, null);
     expect(getResult).toBeDefined();
     expect(getResult).toBe(newValue);
   });
 
   describe('secrets api', () => {
     it('returns 401 if the user is not authenticated', async () => {
-      secretsService.set(testSecretName, testSecretValue);
+      secretsService.set(testSecretName, testSecretValue, null);
       const res = await request(app).get(`/${testSecretName}`);
 
       expect(res.statusCode).toEqual(401);
@@ -59,9 +59,9 @@ describe('secretsService', () => {
     });
 
     it('returns 204 if secret exists', async () => {
-      secretsService.set(testSecretName, testSecretValue);
+      secretsService.set(testSecretName, testSecretValue, 'any-file-id');
       const res = await request(app)
-        .get(`/${testSecretName}`)
+        .get(`/${testSecretName}/any-file-id`)
         .set('x-actual-token', 'valid-token');
 
       expect(res.statusCode).toEqual(204);

@@ -266,16 +266,18 @@ async function closeAccount({
   transferAccountId,
   categoryId,
   forced = false,
+  fileId,
 }: {
   id: AccountEntity['id'];
   transferAccountId?: AccountEntity['id'] | undefined;
   categoryId?: CategoryEntity['id'] | undefined;
   forced?: boolean | undefined;
+  fileId: string;
 }) {
   // Unlink the account if it's linked. This makes sure to remove it from
   // bank-sync providers. (This should not be undo-able, as it mutates the
   // remote server and the user will have to link the account again)
-  await unlinkAccount({ id });
+  await unlinkAccount({ id, fileId });
 
   return withUndo(async () => {
     const account: AccountEntity = await db.first(
@@ -376,9 +378,11 @@ async function moveAccount({
 async function setSecret({
   name,
   value,
+  fileId,
 }: {
   name: string;
   value: string | null;
+  fileId: string;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
 
@@ -397,6 +401,7 @@ async function setSecret({
       {
         name,
         value,
+        fileId,
       },
       {
         'X-ACTUAL-TOKEN': userToken,
@@ -409,7 +414,7 @@ async function setSecret({
     };
   }
 }
-async function checkSecret(name: string) {
+async function checkSecret({ name, fileId }: { name: string; fileId: string }) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -422,7 +427,7 @@ async function checkSecret(name: string) {
   }
 
   try {
-    return await get(serverConfig.BASE_SERVER + '/secret/' + name, {
+    return await get(serverConfig.BASE_SERVER + `/secret/${name}/${fileId}`, {
       'X-ACTUAL-TOKEN': userToken,
     });
   } catch (error) {
@@ -435,8 +440,10 @@ let stopPolling = false;
 
 async function pollGoCardlessWebToken({
   requisitionId,
+  fileId,
 }: {
   requisitionId: string;
+  fileId: string;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return { error: 'unknown' };
@@ -465,6 +472,7 @@ async function pollGoCardlessWebToken({
       serverConfig.GOCARDLESS_SERVER + '/get-accounts',
       {
         requisitionId,
+        fileId,
       },
       {
         'X-ACTUAL-TOKEN': userToken,
@@ -498,7 +506,7 @@ async function stopGoCardlessWebTokenPolling() {
   return 'ok';
 }
 
-async function goCardlessStatus() {
+async function goCardlessStatus({ fileId }: { fileId: string }) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -512,14 +520,14 @@ async function goCardlessStatus() {
 
   return post(
     serverConfig.GOCARDLESS_SERVER + '/status',
-    {},
+    { fileId },
     {
       'X-ACTUAL-TOKEN': userToken,
     },
   );
 }
 
-async function simpleFinStatus() {
+async function simpleFinStatus({ fileId }: { fileId: string }) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -533,14 +541,14 @@ async function simpleFinStatus() {
 
   return post(
     serverConfig.SIMPLEFIN_SERVER + '/status',
-    {},
+    { fileId },
     {
       'X-ACTUAL-TOKEN': userToken,
     },
   );
 }
 
-async function simpleFinAccounts() {
+async function simpleFinAccounts({ fileId }: { fileId: string }) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -555,7 +563,7 @@ async function simpleFinAccounts() {
   try {
     return await post(
       serverConfig.SIMPLEFIN_SERVER + '/accounts',
-      {},
+      { fileId },
       {
         'X-ACTUAL-TOKEN': userToken,
       },
@@ -566,7 +574,13 @@ async function simpleFinAccounts() {
   }
 }
 
-async function getGoCardlessBanks(country: string) {
+async function getGoCardlessBanks({
+  country,
+  fileId,
+}: {
+  country: string;
+  fileId: string;
+}) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -580,7 +594,7 @@ async function getGoCardlessBanks(country: string) {
 
   return post(
     serverConfig.GOCARDLESS_SERVER + '/get-banks',
-    { country, showDemo: isNonProductionEnvironment() },
+    { country, showDemo: isNonProductionEnvironment(), fileId },
     {
       'X-ACTUAL-TOKEN': userToken,
     },
@@ -590,9 +604,11 @@ async function getGoCardlessBanks(country: string) {
 async function createGoCardlessWebToken({
   institutionId,
   accessValidForDays,
+  fileId,
 }: {
   institutionId: string;
   accessValidForDays: number;
+  fileId: string;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
 
@@ -611,6 +627,7 @@ async function createGoCardlessWebToken({
       {
         institutionId,
         accessValidForDays,
+        fileId,
       },
       {
         'X-ACTUAL-TOKEN': userToken,
@@ -947,7 +964,13 @@ async function importTransactions({
   }
 }
 
-async function unlinkAccount({ id }: { id: AccountEntity['id'] }) {
+async function unlinkAccount({
+  id,
+  fileId,
+}: {
+  id: AccountEntity['id'];
+  fileId: string;
+}) {
   const { bank: bankId }: Pick<AccountEntity, 'bank'> = await db.first(
     'SELECT bank FROM accounts WHERE id = ?',
     [id],
@@ -1004,6 +1027,7 @@ async function unlinkAccount({ id }: { id: AccountEntity['id'] }) {
         serverConfig.GOCARDLESS_SERVER + '/remove-account',
         {
           requisitionId,
+          fileId,
         },
         {
           'X-ACTUAL-TOKEN': userToken,

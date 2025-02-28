@@ -17,6 +17,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { Permissions } from '../../auth/types';
 import { authorizeBank } from '../../gocardless';
 import { useGoCardlessStatus } from '../../hooks/useGoCardlessStatus';
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { useSimpleFinStatus } from '../../hooks/useSimpleFinStatus';
 import { useSyncServerStatus } from '../../hooks/useSyncServerStatus';
 import { SvgDotsHorizontalTriple } from '../../icons/v1';
@@ -44,6 +45,7 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
   >(null);
   const { hasPermission } = useAuth();
   const multiuserEnabled = useMultiuserEnabled();
+  const [fileId] = useMetadataPref('cloudFileId');
 
   const onConnectGoCardless = () => {
     if (!isGoCardlessSetupComplete) {
@@ -71,7 +73,9 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
     setLoadingSimpleFinAccounts(true);
 
     try {
-      const results = await send('simplefin-accounts');
+      const results = await send('simplefin-accounts', {
+        fileId: fileId ?? '',
+      });
       if (results.error_code) {
         throw new Error(results.reason);
       }
@@ -138,10 +142,12 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
     send('secret-set', {
       name: 'gocardless_secretId',
       value: null,
+      fileId: fileId ?? '',
     }).then(() => {
       send('secret-set', {
         name: 'gocardless_secretKey',
         value: null,
+        fileId: fileId ?? '',
       }).then(() => {
         setIsGoCardlessSetupComplete(false);
       });
@@ -152,10 +158,12 @@ export function CreateAccountModal({ upgradingAccountId }: CreateAccountProps) {
     send('secret-set', {
       name: 'simplefin_token',
       value: null,
+      fileId: fileId ?? '',
     }).then(() => {
       send('secret-set', {
         name: 'simplefin_accessKey',
         value: null,
+        fileId: fileId ?? '',
       }).then(() => {
         setIsSimpleFinSetupComplete(false);
       });

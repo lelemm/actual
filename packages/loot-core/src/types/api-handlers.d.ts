@@ -126,11 +126,12 @@ export interface ApiHandlers {
     id;
     transferAccountId;
     transferCategoryId;
+    fileId;
   }) => Promise<unknown>;
 
   'api/account-reopen': (arg: { id }) => Promise<unknown>;
 
-  'api/account-delete': (arg: { id }) => Promise<unknown>;
+  'api/account-delete': (arg: { id; fileId }) => Promise<unknown>;
 
   'api/account-balance': (arg: {
     id: string;

@@ -14,6 +14,7 @@ import {
 } from 'loot-core/types/models';
 
 import { useGoCardlessStatus } from '../../hooks/useGoCardlessStatus';
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { AnimatedLoading } from '../../icons/AnimatedLoading';
 import { useDispatch } from '../../redux';
 import { theme } from '../../style';
@@ -28,6 +29,7 @@ function useAvailableBanks(country: string) {
   const [banks, setBanks] = useState<GoCardlessInstitution[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [fileId] = useMetadataPref('cloudFileId');
 
   useEffect(() => {
     async function fetch() {
@@ -41,7 +43,10 @@ function useAvailableBanks(country: string) {
 
       setIsLoading(true);
 
-      const { data, error } = await sendCatch('gocardless-get-banks', country);
+      const { data, error } = await sendCatch('gocardless-get-banks', {
+        country,
+        fileId,
+      });
 
       if (error || !Array.isArray(data)) {
         setIsError(true);
@@ -54,7 +59,7 @@ function useAvailableBanks(country: string) {
     }
 
     fetch();
-  }, [setBanks, setIsLoading, country]);
+  }, [setBanks, setIsLoading, country, fileId]);
 
   return {
     data: banks,

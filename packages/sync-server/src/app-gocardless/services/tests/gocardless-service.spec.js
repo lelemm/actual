@@ -16,7 +16,7 @@ import {
 import {
   goCardlessService,
   handleGoCardlessError,
-  client,
+  client as clientFn,
 } from '../gocardless-service.js';
 
 import {
@@ -51,6 +51,7 @@ describe('goCardlessService', () => {
   let setTokenSpy;
 
   beforeEach(() => {
+    const client = clientFn();
     getInstitutionsSpy = jest.spyOn(client, 'getInstitutions');
     getInstitutionSpy = jest.spyOn(client, 'getInstitutionById');
     getRequisitionsSpy = jest.spyOn(client, 'getRequisitionById');

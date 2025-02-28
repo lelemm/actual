@@ -179,6 +179,7 @@ type CloseAccountPayload = {
   transferAccountId?: AccountEntity['id'];
   categoryId?: CategoryEntity['id'];
   forced?: boolean;
+  fileId: string;
 };
 
 export const closeAccount = createAppAsyncThunk(
@@ -188,12 +189,14 @@ export const closeAccount = createAppAsyncThunk(
     transferAccountId,
     categoryId,
     forced,
+    fileId,
   }: CloseAccountPayload) => {
     await send('account-close', {
       id,
       transferAccountId: transferAccountId || null,
       categoryId: categoryId || null,
       forced,
+      fileId,
     });
   },
 );

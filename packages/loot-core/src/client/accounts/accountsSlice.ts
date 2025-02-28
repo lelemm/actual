@@ -72,13 +72,14 @@ const accountsSlice = createSlice({
 
 type UnlinkAccountPayload = {
   id: AccountEntity['id'];
+  fileId: string;
 };
 
 export const unlinkAccount = createAppAsyncThunk(
   `${sliceName}/unlinkAccount`,
-  async ({ id }: UnlinkAccountPayload, { dispatch }) => {
+  async ({ id, fileId }: UnlinkAccountPayload, { dispatch }) => {
     const { markAccountSuccess } = accountsSlice.actions;
-    await send('account-unlink', { id });
+    await send('account-unlink', { id, fileId });
     dispatch(markAccountSuccess({ id }));
     dispatch(getAccounts());
   },

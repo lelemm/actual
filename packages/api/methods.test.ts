@@ -284,7 +284,7 @@ describe('API CRUD operations', () => {
 
     await api.updateAccount(accountId1, { offbudget: false });
     await api.closeAccount(accountId1, accountId2, null);
-    await api.deleteAccount(accountId2);
+    await api.deleteAccount(accountId2, null);
 
     // accounts successfully updated, and one of them deleted
     accounts = await api.getAccounts();

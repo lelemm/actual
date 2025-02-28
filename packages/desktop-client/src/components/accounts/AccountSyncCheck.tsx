@@ -12,6 +12,7 @@ import { type AccountEntity } from 'loot-core/types/models';
 import { authorizeBank } from '../../gocardless';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useFailedAccounts } from '../../hooks/useFailedAccounts';
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { SvgExclamationOutline } from '../../icons/v1';
 import { useDispatch } from '../../redux';
 import { theme } from '../../style';
@@ -90,6 +91,7 @@ export function AccountSyncCheck() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef(null);
   const { getErrorMessage } = useErrorMessage();
+  const [fileId] = useMetadataPref('cloudFileId');
 
   const reauth = useCallback(
     (acc: AccountEntity) => {
@@ -105,12 +107,12 @@ export function AccountSyncCheck() {
   const unlink = useCallback(
     (acc: AccountEntity) => {
       if (acc.id) {
-        dispatch(unlinkAccount({ id: acc.id }));
+        dispatch(unlinkAccount({ id: acc.id, fileId: fileId ?? '' }));
       }
 
       setOpen(false);
     },
-    [dispatch],
+    [dispatch, fileId],
   );
 
   if (!failedAccounts || !id) {

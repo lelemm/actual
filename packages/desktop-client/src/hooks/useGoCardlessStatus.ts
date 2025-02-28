@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { send } from 'loot-core/platform/client/fetch';
 
+import { useMetadataPref } from './useMetadataPref';
 import { useSyncServerStatus } from './useSyncServerStatus';
 
 export function useGoCardlessStatus() {
@@ -10,12 +11,13 @@ export function useGoCardlessStatus() {
   >(null);
   const [isLoading, setIsLoading] = useState(false);
   const status = useSyncServerStatus();
+  const [fileId] = useMetadataPref('cloudFileId');
 
   useEffect(() => {
     async function fetch() {
       setIsLoading(true);
 
-      const results = await send('gocardless-status');
+      const results = await send('gocardless-status', { fileId: fileId ?? '' });
 
       setConfiguredGoCardless(results.configured || false);
       setIsLoading(false);
@@ -24,7 +26,7 @@ export function useGoCardlessStatus() {
     if (status === 'online') {
       fetch();
     }
-  }, [status]);
+  }, [status, fileId]);
 
   return {
     configuredGoCardless,

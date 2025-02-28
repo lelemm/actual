@@ -29,7 +29,7 @@ app.post('/', async (req, res) => {
       details: 'Failed to validate authentication method',
     });
   }
-  const { name, value } = req.body;
+  const { name, value, fileId } = req.body;
 
   if (method === 'openid') {
     const canSaveSecrets = isAdmin(res.locals.user_id);
@@ -45,14 +45,15 @@ app.post('/', async (req, res) => {
     }
   }
 
-  secretsService.set(name, value);
+  secretsService.set(name, value, fileId);
 
   res.status(200).send({ status: 'ok' });
 });
 
-app.get('/:name', async (req, res) => {
+app.get('/:name/:fileId/', async (req, res) => {
   const name = req.params.name;
-  const keyExists = secretsService.exists(name);
+  const fileId = req.params.fileId;
+  const keyExists = secretsService.exists(name, fileId);
   if (keyExists) {
     res.sendStatus(204);
   } else {

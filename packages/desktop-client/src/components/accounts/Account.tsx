@@ -75,6 +75,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { useDateFormat } from '../../hooks/useDateFormat';
 import { useFailedAccounts } from '../../hooks/useFailedAccounts';
 import { useLocalPref } from '../../hooks/useLocalPref';
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { usePayees } from '../../hooks/usePayees';
 import {
   SelectedProviderWithItems,
@@ -308,6 +309,7 @@ type AccountInternalProps = {
   hideFraction: boolean;
   accountsSyncing: string[];
   dispatch: AppDispatch;
+  fileId: string;
 };
 type AccountInternalState = {
   search: string;
@@ -356,11 +358,13 @@ class AccountInternal extends PureComponent<
   table: TableRef;
   unlisten?: () => void;
   dispatchSelected?: (action: Actions) => void;
+  fileId: string;
 
   constructor(props: AccountInternalProps) {
     super(props);
     this.paged = null;
     this.table = createRef();
+    this.fileId = props.fileId;
 
     this.state = {
       search: '',
@@ -816,6 +820,7 @@ class AccountInternal extends PureComponent<
       | 'toggle-reconciled',
   ) => {
     const accountId = this.props.accountId!;
+    const fileId = this.fileId;
     const account = this.props.accounts.find(
       account => account.id === accountId,
     )!;
@@ -833,7 +838,7 @@ class AccountInternal extends PureComponent<
           pushModal('confirm-unlink-account', {
             accountName: account.name,
             onUnlink: () => {
-              this.props.dispatch(unlinkAccount({ id: accountId }));
+              this.props.dispatch(unlinkAccount({ id: accountId, fileId }));
             },
           }),
         );
@@ -1988,6 +1993,8 @@ export function Account() {
     [params.id],
   );
 
+  const [fileId] = useMetadataPref('cloudFileId');
+
   return (
     <SchedulesProvider query={schedulesQuery}>
       <SplitsExpandedProvider
@@ -2022,6 +2029,7 @@ export function Account() {
           categoryId={location?.state?.categoryId}
           location={location}
           savedFilters={savedFiters}
+          fileId={fileId ?? ''}
         />
       </SplitsExpandedProvider>
     </SchedulesProvider>

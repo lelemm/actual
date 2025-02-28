@@ -10,6 +10,7 @@ import { View } from '@actual-app/components/view';
 import { send } from 'loot-core/platform/client/fetch';
 import { getSecretsError } from 'loot-core/shared/errors';
 
+import { useMetadataPref } from '../../hooks/useMetadataPref';
 import { Error } from '../alerts';
 import { Input } from '../common/Input';
 import { Link } from '../common/Link';
@@ -33,6 +34,7 @@ export const GoCardlessInitialiseModal = ({
   const [secretKey, setSecretKey] = useState('');
   const [isValid, setIsValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [fileId] = useMetadataPref('cloudFileId');
   const [error, setError] = useState(
     t('It is required to provide both the secret id and secret key.'),
   );
@@ -52,6 +54,7 @@ export const GoCardlessInitialiseModal = ({
       (await send('secret-set', {
         name: 'gocardless_secretId',
         value: secretId,
+        fileId,
       })) || {};
 
     if (error) {
@@ -64,6 +67,7 @@ export const GoCardlessInitialiseModal = ({
         (await send('secret-set', {
           name: 'gocardless_secretKey',
           value: secretKey,
+          fileId,
         })) || {});
       if (error) {
         setIsLoading(false);

@@ -127,11 +127,17 @@ export function updateAccount(id, fields) {
   return send('api/account-update', { id, fields });
 }
 
-export function closeAccount(id, transferAccountId?, transferCategoryId?) {
+export function closeAccount(
+  id,
+  fileId,
+  transferAccountId?,
+  transferCategoryId?,
+) {
   return send('api/account-close', {
     id,
     transferAccountId,
     transferCategoryId,
+    fileId,
   });
 }
 
@@ -139,8 +145,8 @@ export function reopenAccount(id) {
   return send('api/account-reopen', { id });
 }
 
-export function deleteAccount(id) {
-  return send('api/account-delete', { id });
+export function deleteAccount(id, fileId) {
+  return send('api/account-delete', { id, fileId });
 }
 
 export function getAccountBalance(id, cutoff?) {

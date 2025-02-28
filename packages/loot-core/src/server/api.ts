@@ -583,12 +583,14 @@ handlers['api/account-close'] = withMutation(async function ({
   id,
   transferAccountId,
   transferCategoryId,
+  fileId,
 }) {
   checkFileOpen();
   return handlers['account-close']({
     id,
     transferAccountId,
     categoryId: transferCategoryId,
+    fileId,
   });
 });
 
@@ -597,9 +599,9 @@ handlers['api/account-reopen'] = withMutation(async function ({ id }) {
   return handlers['account-reopen']({ id });
 });
 
-handlers['api/account-delete'] = withMutation(async function ({ id }) {
+handlers['api/account-delete'] = withMutation(async function ({ id, fileId }) {
   checkFileOpen();
-  return handlers['account-close']({ id, forced: true });
+  return handlers['account-close']({ id, forced: true, fileId });
 });
 
 handlers['api/account-balance'] = withMutation(async function ({

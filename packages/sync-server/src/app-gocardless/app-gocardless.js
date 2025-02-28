@@ -31,10 +31,11 @@ app.use(express.json());
 app.use(validateSessionMiddleware);
 
 app.post('/status', async (req, res) => {
+  const fileId = req.body.fileId;
   res.send({
     status: 'ok',
     data: {
-      configured: goCardlessService.isConfigured(),
+      configured: goCardlessService.isConfigured(fileId),
     },
   });
 });
@@ -42,12 +43,13 @@ app.post('/status', async (req, res) => {
 app.post(
   '/create-web-token',
   handleError(async (req, res) => {
-    const { institutionId } = req.body;
+    const { institutionId, fileId } = req.body;
     const { origin } = req.headers;
 
     const { link, requisitionId } = await goCardlessService.createRequisition({
       institutionId,
       host: origin,
+      fileId,
     });
 
     res.send({
@@ -63,11 +65,14 @@ app.post(
 app.post(
   '/get-accounts',
   handleError(async (req, res) => {
-    const { requisitionId } = req.body;
+    const { requisitionId, fileId } = req.body;
 
     try {
       const { requisition, accounts } =
-        await goCardlessService.getRequisitionWithAccounts(requisitionId);
+        await goCardlessService.getRequisitionWithAccounts(
+          requisitionId,
+          fileId,
+        );
 
       res.send({
         status: 'ok',
@@ -98,10 +103,10 @@ app.post(
 app.post(
   '/get-banks',
   handleError(async (req, res) => {
-    const { country, showDemo = false } = req.body;
+    const { country, showDemo = false, fileId } = req.body;
 
-    await goCardlessService.setToken();
-    const data = await goCardlessService.getInstitutions(country);
+    await goCardlessService.setToken(fileId);
+    const data = await goCardlessService.getInstitutions(country, fileId);
 
     res.send({
       status: 'ok',
@@ -121,9 +126,12 @@ app.post(
 app.post(
   '/remove-account',
   handleError(async (req, res) => {
-    const { requisitionId } = req.body;
+    const { requisitionId, fileId } = req.body;
 
-    const data = await goCardlessService.deleteRequisition(requisitionId);
+    const data = await goCardlessService.deleteRequisition(
+      requisitionId,
+      fileId,
+    );
     if (data.summary === 'Requisition deleted') {
       res.send({
         status: 'ok',
@@ -150,6 +158,7 @@ app.post(
       endDate,
       accountId,
       includeBalance = true,
+      fileId,
     } = req.body;
 
     try {
@@ -164,6 +173,7 @@ app.post(
           accountId,
           startDate,
           endDate,
+          fileId,
         );
 
         res.send({
@@ -188,6 +198,7 @@ app.post(
           accountId,
           startDate,
           endDate,
+          fileId,
         );
 
         res.send({

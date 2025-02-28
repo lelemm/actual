@@ -102,7 +102,7 @@ async function getAccountSyncStartDate(id) {
   );
 }
 
-export async function getGoCardlessAccounts(userId, userKey, id) {
+export async function getGoCardlessAccounts(userId, userKey, id, fileId) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
 
@@ -112,6 +112,7 @@ export async function getGoCardlessAccounts(userId, userKey, id) {
       userId,
       key: userKey,
       item_id: id,
+      fileId,
     },
     {
       'X-ACTUAL-TOKEN': userToken,
