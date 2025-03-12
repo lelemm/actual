@@ -44,17 +44,6 @@ export const init: T.Init = function (serverChn, handlers) {
         return;
       }
 
-      else if (data.type === 'plugin-list') {
-        const processedData = {
-          message: 'Processed by Web Worker!',
-          timestamp: Date.now(),
-        };
-  
-        // Send back the response via MessagePort
-        e.ports[0].postMessage(processedData);
-      }
-
-
       if (msg.name === 'client-connected-to-backend') {
         // the client is indicating that it is connected to this backend. Stop attempting to connect
         console.info('Backend: Client connected');
