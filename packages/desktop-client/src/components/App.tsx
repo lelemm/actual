@@ -26,6 +26,7 @@ import { init as initConnection, send } from 'loot-core/platform/client/fetch';
 import { handleGlobalEvents } from '../global-events';
 import { useMetadataPref } from '../hooks/useMetadataPref';
 import { setI18NextLanguage } from '../i18n';
+import { ActualPluginsProvider, useActualPlugins } from '../plugin/ActualPluginsProvider';
 import { installPolyfills } from '../polyfills';
 import { useDispatch, useSelector, useStore } from '../redux';
 import { hasHiddenScrollbars, ThemeStyle, useTheme } from '../style';
@@ -48,9 +49,11 @@ function AppInner() {
   const { showBoundary: showErrorBoundary } = useErrorBoundary();
   const dispatch = useDispatch();
   const userData = useSelector(state => state.user.data);
+  const { refreshPluginStore } = useActualPlugins();
 
   useEffect(() => {
     setI18NextLanguage(null);
+    refreshPluginStore();
   }, []);
 
   useEffect(() => {
@@ -207,43 +210,48 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <ExposeNavigate />
-      <HotkeysProvider initiallyActiveScopes={['*']}>
-        <SpreadsheetProvider>
-          <SidebarProvider>
-            <BudgetMonthCountProvider>
-              <DndProvider backend={HTML5Backend}>
-                <View
-                  data-theme={theme}
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
+      <ActualPluginsProvider>
+        <ExposeNavigate />
+        <HotkeysProvider initiallyActiveScopes={['*']}>
+          <SpreadsheetProvider>
+            <SidebarProvider>
+              <BudgetMonthCountProvider>
+                <DndProvider backend={HTML5Backend}>
                   <View
-                    key={hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'}
+                    data-theme={theme}
                     style={{
-                      flexGrow: 1,
-                      overflow: 'hidden',
-                      ...styles.lightScrollbar,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
                     }}
                   >
-                    <ErrorBoundary FallbackComponent={ErrorFallback}>
-                      {process.env.REACT_APP_REVIEW_ID &&
-                        !Platform.isPlaywright && <DevelopmentTopBar />}
-                      <AppInner />
-                    </ErrorBoundary>
-                    <ThemeStyle />
-                    <Modals />
-                    <UpdateNotification />
+                    <View
+                      key={
+                        hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'
+                      }
+                      style={{
+                        flexGrow: 1,
+                        overflow: 'hidden',
+                        ...styles.lightScrollbar,
+                      }}
+                    >
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        {process.env.REACT_APP_REVIEW_ID &&
+                          !Platform.isPlaywright && <DevelopmentTopBar />}
+                        <AppInner />
+                      </ErrorBoundary>
+                      <ThemeStyle />
+                      <Modals />
+                      <UpdateNotification />
+                    </View>
+                    <div id="plugin-sidebar-root"></div>
                   </View>
-                </View>
-              </DndProvider>
-            </BudgetMonthCountProvider>
-          </SidebarProvider>
-        </SpreadsheetProvider>
-      </HotkeysProvider>
+                </DndProvider>
+              </BudgetMonthCountProvider>
+            </SidebarProvider>
+          </SpreadsheetProvider>
+        </HotkeysProvider>
+      </ActualPluginsProvider>
     </BrowserRouter>
   );
 }
