@@ -11024,6 +11024,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fast-glob@npm:^3.2.11":
+  version: 3.3.3
+  resolution: "fast-glob@npm:3.3.3"
+  dependencies:
+    "@nodelib/fs.stat": "npm:^2.0.2"
+    "@nodelib/fs.walk": "npm:^1.2.3"
+    glob-parent: "npm:^5.1.2"
+    merge2: "npm:^1.3.0"
+    micromatch: "npm:^4.0.8"
+  checksum: 10/dcc6432b269762dd47381d8b8358bf964d8f4f60286ac6aa41c01ade70bda459ff2001b516690b96d5365f68a49242966112b5d5cc9cd82395fa8f9d017c90ad
+  languageName: node
+  linkType: hard
+
 "fast-glob@npm:^3.2.9, fast-glob@npm:^3.3.2":
   version: 3.3.2
   resolution: "fast-glob@npm:3.3.2"
@@ -14354,6 +14367,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.8.2"
     uuid: "npm:^9.0.1"
+    vite-plugin-static-copy: "npm:^2.3.0"
     webpack: "npm:^5.94.0"
     webpack-bundle-analyzer: "npm:^4.10.1"
     webpack-cli: "npm:^5.1.4"
@@ -16234,6 +16248,13 @@ __metadata:
   dependencies:
     aggregate-error: "npm:^3.0.0"
   checksum: 10/7ba4a2b1e24c05e1fc14bbaea0fc6d85cf005ae7e9c9425d4575550f37e2e584b1af97bcde78eacd7559208f20995988d52881334db16cf77bc1bcf68e48ed7c
+  languageName: node
+  linkType: hard
+
+"p-map@npm:^7.0.3":
+  version: 7.0.3
+  resolution: "p-map@npm:7.0.3"
+  checksum: 10/2ef48ccfc6dd387253d71bf502604f7893ed62090b2c9d73387f10006c342606b05233da0e4f29388227b61eb5aeface6197e166520c465c234552eeab2fe633
   languageName: node
   linkType: hard
 
@@ -20625,6 +20646,21 @@ __metadata:
     "@vite-pwa/assets-generator":
       optional: true
   checksum: 10/8850b1f73580ea392821960096ec2cd107059fd0198c7a0ddfcd3d0b2d6be78ea089ecd13f71952871715e3ed1803200230b131b6dc3097818a77d2397ea9bd0
+  languageName: node
+  linkType: hard
+
+"vite-plugin-static-copy@npm:^2.3.0":
+  version: 2.3.0
+  resolution: "vite-plugin-static-copy@npm:2.3.0"
+  dependencies:
+    chokidar: "npm:^3.5.3"
+    fast-glob: "npm:^3.2.11"
+    fs-extra: "npm:^11.1.0"
+    p-map: "npm:^7.0.3"
+    picocolors: "npm:^1.0.0"
+  peerDependencies:
+    vite: ^5.0.0 || ^6.0.0
+  checksum: 10/cdc110e0711c48ce1eca98a1adc29ea5320d87af352add5ea5d5e7d2ecc1b506d360f9c7862fb3a61ffc5848a9e68363cd977c6cb65ac2d849922f15df145729
   languageName: node
   linkType: hard
 

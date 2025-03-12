@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 import * as Platform from 'loot-core/client/platform';
 
 import packageJson from '../package.json';
+import { send } from 'loot-core/platform/client/fetch';
 
 const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 
@@ -41,6 +42,27 @@ function createBackendWorker() {
       'SharedArrayBufferOverride',
     ),
   });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register('./browser-sw.js').then(
+      (registration) => {
+        console.log("Service worker registration succeeded:", registration);
+        
+      },
+      (error) => {
+        console.error(`Service worker registration failed: ${error}`);
+      },
+    );
+
+    navigator.serviceWorker.addEventListener('message', async (event) => {
+      console.log('Main App received message from Service Worker:', event.data);
+  
+      if (event.data.type === 'plugin-list') {
+        const plugins = await send('list-plugins');
+        event.ports[0].postMessage(plugins);
+      }
+    });
+  }
 }
 
 createBackendWorker();

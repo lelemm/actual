@@ -9,6 +9,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig, loadEnv, Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import viteTsconfigPaths from 'vite-tsconfig-paths';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const addWatchers = (): Plugin => ({
   name: 'add-watchers',
@@ -154,6 +155,11 @@ export default defineConfig(async ({ mode }) => {
       extensions: resolveExtensions,
     },
     plugins: [
+      viteStaticCopy({
+        targets: [
+          { src: 'src/browser-sw.js', dest: '' }, // Copy to dist root
+        ],
+      }),
       // electron (desktop) builds do not support PWA
       mode === 'desktop'
         ? undefined

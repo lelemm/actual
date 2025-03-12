@@ -1406,6 +1406,10 @@ handlers['app-focused'] = async function () {
   }
 };
 
+handlers['list-plugins'] = async function () {
+  return Promise.resolve(['a','b']);
+};
+
 handlers = installAPI(handlers) as Handlers;
 
 injectAPI.override((name, args) => runHandler(app.handlers[name], args));

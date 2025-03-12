@@ -270,4 +270,6 @@ export interface ServerHandlers {
     | { error: string }
     | null
   >;
+
+  'list-plugins': () => Promise<string[]>;
 }
