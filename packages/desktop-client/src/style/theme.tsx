@@ -1,37 +1,28 @@
 import { useEffect, useState } from 'react';
 
+import { themes } from 'actual-components/src/style';
+import * as developmentTheme from 'actual-components/src/style/themes/development';
+
 import { isNonProductionEnvironment } from 'loot-core/shared/environment';
 import type { DarkTheme, Theme } from 'loot-core/types/prefs';
 
+import { type ThemeDefinition } from '../../../plugins-shared/src';
+import { useActualPlugins } from '../components/ActualPluginsProvider';
 import { useGlobalPref } from '../hooks/useGlobalPref';
 
-import * as darkTheme from './themes/dark';
-import * as developmentTheme from './themes/development';
-import * as lightTheme from './themes/light';
-import * as midnightTheme from './themes/midnight';
-
-const themes = {
-  light: { name: 'Light', colors: lightTheme },
-  dark: { name: 'Dark', colors: darkTheme },
-  midnight: { name: 'Midnight', colors: midnightTheme },
-  auto: { name: 'System default', colors: darkTheme },
+const themesComplete = {
+  ...themes,
   ...(isNonProductionEnvironment() && {
     development: { name: 'Development', colors: developmentTheme },
   }),
 };
 
-export const themeOptions = Object.entries(themes).map(
-  ([key, { name }]) => [key, name] as [Theme, string],
-);
-
-export const darkThemeOptions = Object.entries({
-  dark: themes.dark,
-  midnight: themes.midnight,
-}).map(([key, { name }]) => [key, name] as [DarkTheme, string]);
+export * from 'actual-components/src/style';
 
 export function useTheme() {
   const [theme = 'auto', setThemePref] = useGlobalPref('theme');
-  return [theme, setThemePref] as const;
+  const [customTheme, setCustomTheme] = useGlobalPref('customTheme');
+  return [theme, setThemePref, customTheme, setCustomTheme] as const;
 }
 
 export function usePreferredDarkTheme() {
@@ -41,25 +32,47 @@ export function usePreferredDarkTheme() {
 }
 
 export function ThemeStyle() {
-  const [activeTheme] = useTheme();
+  const [activeTheme, , customTheme] = useTheme();
+  const [themesExtended, setThemesExtended] = useState(themesComplete);
+
   const [darkThemePreference] = usePreferredDarkTheme();
-  const [themeColors, setThemeColors] = useState<
-    | typeof lightTheme
-    | typeof darkTheme
-    | typeof midnightTheme
-    | typeof developmentTheme
-    | undefined
-  >(undefined);
+  const [themeColors, setThemeColors] = useState<ThemeDefinition | undefined>(
+    undefined,
+  );
+
+  const { plugins: loadedPlugins } = useActualPlugins();
 
   useEffect(() => {
+    const customThemes =
+      loadedPlugins?.reduce((acc, plugin) => {
+        if (plugin.availableThemes?.()?.length) {
+          plugin.availableThemes().forEach(theme => {
+            acc[theme] = {
+              name: theme,
+              colors: plugin.getThemeSchema(theme),
+            };
+          });
+        }
+        return acc;
+      }, {}) ?? {};
+
+    setThemesExtended({ ...themesComplete, ...customThemes });
+  }, [loadedPlugins]);
+
+  useEffect(() => {
+    if (customTheme) {
+      setThemeColors(JSON.parse(customTheme).colors);
+      return;
+    }
+
     if (activeTheme === 'auto') {
-      const darkTheme = themes[darkThemePreference];
+      const darkTheme = themesExtended[darkThemePreference];
 
       function darkThemeMediaQueryListener(event: MediaQueryListEvent) {
         if (event.matches) {
           setThemeColors(darkTheme.colors);
         } else {
-          setThemeColors(themes['light'].colors);
+          setThemeColors(themesExtended['light'].colors);
         }
       }
       const darkThemeMediaQuery = window.matchMedia(
@@ -74,7 +87,7 @@ export function ThemeStyle() {
       if (darkThemeMediaQuery.matches) {
         setThemeColors(darkTheme.colors);
       } else {
-        setThemeColors(themes['light'].colors);
+        setThemeColors(themesExtended['light'].colors);
       }
 
       return () => {
@@ -84,9 +97,9 @@ export function ThemeStyle() {
         );
       };
     } else {
-      setThemeColors(themes[activeTheme]?.colors);
+      setThemeColors(themesExtended[activeTheme]?.colors);
     }
-  }, [activeTheme, darkThemePreference]);
+  }, [activeTheme, darkThemePreference, themesExtended, customTheme]);
 
   if (!themeColors) return null;
 

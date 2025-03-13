@@ -117,6 +117,12 @@ export function ExperimentalFeatures() {
             >
               <Trans>Pluggy.ai Bank Sync (Brazilian banks only)</Trans>
             </FeatureToggle>
+            <FeatureToggle
+              flag="plugins"
+              feedbackLink="https://github.com/actualbudget/actual/"
+            >
+              <Trans>Plugins</Trans>
+            </FeatureToggle>
           </View>
         ) : (
           <Link

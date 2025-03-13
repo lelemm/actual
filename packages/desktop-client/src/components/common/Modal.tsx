@@ -31,18 +31,21 @@ import { View } from '@actual-app/components/view';
 import { css } from '@emotion/css';
 import { AutoTextSize } from 'auto-text-size';
 
+import { type ActualPluginModalProps } from '../../../../plugins-shared/src/components/props/ModalProps';
 import { useModalState } from '../../hooks/useModalState';
 
-type ModalProps = ComponentPropsWithRef<typeof ReactAriaModal> & {
-  name: string;
-  isLoading?: boolean;
-  noAnimation?: boolean;
-  style?: CSSProperties;
-  onClose?: () => void;
-  containerProps?: {
-    style?: CSSProperties;
-  };
-};
+// type ModalProps = ComponentPropsWithRef<typeof ReactAriaModal> & {
+//   name: string;
+//   isLoading?: boolean;
+//   noAnimation?: boolean;
+//   style?: CSSProperties;
+//   onClose?: () => void;
+//   containerProps?: {
+//     style?: CSSProperties;
+//   };
+// };
+
+type ModalProps = ActualPluginModalProps;
 
 export const Modal = ({
   name,

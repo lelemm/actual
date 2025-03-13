@@ -523,6 +523,12 @@ export type Modal =
     }
   | {
       name: 'category-automations-edit';
+    }
+  | {
+      name: 'select-new-plugin';
+      options: {
+        onSave: () => void;
+      };
     };
 
 type OpenAccountCloseModalPayload = {

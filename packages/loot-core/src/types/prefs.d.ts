@@ -4,7 +4,8 @@ export type FeatureFlag =
   | 'actionTemplating'
   | 'contextMenus'
   | 'openidAuth'
-  | 'pluggyAiBankSync';
+  | 'pluggyAiBankSync'
+  | 'plugins';
 
 /**
  * Cross-device preferences. These sync across devices when they are changed.
@@ -76,7 +77,13 @@ export type LocalPrefs = Partial<{
   'mobile.showSpentColumn': boolean;
 }>;
 
-export type Theme = 'light' | 'dark' | 'auto' | 'midnight' | 'development';
+export type Theme =
+  | 'light'
+  | 'dark'
+  | 'auto'
+  | 'midnight'
+  | 'development'
+  | string;
 export type DarkTheme = 'dark' | 'midnight';
 
 // GlobalPrefs are the parsed global-store.json values
@@ -89,6 +96,7 @@ export type GlobalPrefs = Partial<{
   preferredDarkTheme: DarkTheme;
   documentDir: string; // Electron only
   serverSelfSignedCert: string; // Electron only
+  customTheme: string | null;
 }>;
 
 // GlobalPrefsJson represents what's saved in the global-store.json file

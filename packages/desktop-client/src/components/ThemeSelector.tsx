@@ -1,4 +1,11 @@
-import React, { useRef, useState, type CSSProperties } from 'react';
+import {
+  type CSSProperties,
+  type SVGProps,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
@@ -10,30 +17,109 @@ import {
 } from '@actual-app/components/icons/v2';
 import { Menu } from '@actual-app/components/menu';
 import { Popover } from '@actual-app/components/popover';
+import { View } from '@actual-app/components/view';
 
 import type { Theme } from 'loot-core/types/prefs';
 
-import { themeOptions, useTheme } from '../style';
+import { type ThemeDefinition } from '../../../plugins-shared/src';
+import { themeOptions, themes, useTheme } from '../style';
+
+import { useActualPlugins } from './ActualPluginsProvider';
 
 type ThemeSelectorProps = {
   style?: CSSProperties;
+};
+
+type ThemesExtendedType = {
+  [key: string]: {
+    name: string;
+    colors: ThemeDefinition;
+  };
+};
+
+type ThemesIconsType = {
+  [key: string]: (props: SVGProps<SVGSVGElement>) => JSX.Element;
 };
 
 export function ThemeSelector({ style }: ThemeSelectorProps) {
   const [theme, switchTheme] = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
+  const [themesExtended, setThemesExtended] =
+    useState<ThemesExtendedType>(themes);
+  const [themeOptionsExtended, setThemeOptionsExtended] =
+    useState(themeOptions);
 
   const { isNarrowWidth } = useResponsive();
   const { t } = useTranslation();
 
-  const themeIcons = {
-    light: SvgSun,
-    dark: SvgMoonStars,
-    auto: SvgSystem,
-    midnight: SvgMoonStars,
-    development: SvgMoonStars,
-  } as const;
+  const baseIcons = useMemo(
+    () => ({
+      light: SvgSun,
+      dark: SvgMoonStars,
+      auto: SvgSystem,
+      midnight: SvgMoonStars,
+      development: SvgMoonStars,
+    }),
+    [],
+  );
+  const [themeIcons, setThemeIcons] = useState<ThemesIconsType>(baseIcons);
+  const { plugins: loadedPlugins } = useActualPlugins();
+
+  useEffect(() => {
+    const pluginIcons =
+      loadedPlugins?.reduce((acc, plugin) => {
+        if (
+          plugin &&
+          plugin.availableThemes &&
+          plugin.availableThemes().length > 0
+        ) {
+          plugin.availableThemes().forEach(theme => {
+            acc = {
+              ...acc,
+              [theme]: (props: SVGProps<SVGSVGElement>) =>
+                plugin?.getThemeIcon?.(theme, props.style) ?? <View />,
+            };
+          });
+        }
+        return acc;
+      }, {} as ThemesIconsType) ?? ({} as ThemesIconsType);
+
+    const customThemes =
+      loadedPlugins?.reduce((acc, plugin) => {
+        if (
+          plugin &&
+          plugin.availableThemes &&
+          plugin.availableThemes().length > 0
+        ) {
+          plugin
+            .availableThemes()
+            .filter(theme => theme !== undefined)
+            .forEach(theme => {
+              acc = {
+                ...acc,
+                [theme]: {
+                  name: theme,
+                  colors: plugin?.getThemeSchema?.(theme) ?? {},
+                },
+              };
+            });
+        }
+        return acc;
+      }, {} as ThemesExtendedType) ?? ({} as ThemesExtendedType);
+
+    setThemeIcons({ ...baseIcons, ...pluginIcons });
+
+    setThemesExtended({ ...themes, ...customThemes });
+  }, [loadedPlugins, baseIcons]);
+
+  useEffect(() => {
+    setThemeOptionsExtended(
+      Object.entries(themesExtended).map(
+        ([key, { name }]) => [key, name] as [Theme, string],
+      ),
+    );
+  }, [themesExtended]);
 
   function onMenuSelect(newTheme: Theme) {
     setMenuOpen(false);
@@ -66,7 +152,7 @@ export function ThemeSelector({ style }: ThemeSelectorProps) {
       >
         <Menu
           onMenuSelect={onMenuSelect}
-          items={themeOptions.map(([name, text]) => ({ name, text }))}
+          items={themeOptionsExtended.map(([name, text]) => ({ name, text }))}
         />
       </Popover>
     </>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DialogTrigger } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -19,6 +19,7 @@ import {
 import { addNotification } from 'loot-core/client/notifications/notificationsSlice';
 import { send } from 'loot-core/platform/client/fetch';
 
+import { type ActualPlugin } from '../../../../plugins-shared/src';
 import { useAuth } from '../../auth/AuthProvider';
 import { Permissions } from '../../auth/types';
 import { authorizeBank } from '../../gocardless';
@@ -28,15 +29,21 @@ import { usePluggyAiStatus } from '../../hooks/usePluggyAiStatus';
 import { useSimpleFinStatus } from '../../hooks/useSimpleFinStatus';
 import { useSyncServerStatus } from '../../hooks/useSyncServerStatus';
 import { useDispatch } from '../../redux';
+import { useActualPlugins } from '../ActualPluginsProvider';
 import { Warning } from '../alerts';
 import { Link } from '../common/Link';
 import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal';
+import RenderPluginsComponent from '../RenderPluginsComponent';
 import { useMultiuserEnabled } from '../ServerContext';
-
 type CreateAccountModalProps = Extract<
   ModalType,
   { name: 'add-account' }
 >['options'];
+
+type PluginTuple = {
+  name: string;
+  plugin: ActualPlugin;
+};
 
 export function CreateAccountModal({
   upgradingAccountId,
@@ -58,6 +65,37 @@ export function CreateAccountModal({
   >(null);
   const { hasPermission } = useAuth();
   const multiuserEnabled = useMultiuserEnabled();
+  const { plugins } = useActualPlugins();
+  const [connectorPlugins, setConnectorPlugins] = useState<PluginTuple[]>([]);
+  const pluginRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (plugins.length > 0) {
+      const pluginsFiltered = plugins
+        .filter(plugin => plugin?.hooks?.onMethod?.ConnectorsNames?.()?.length)
+        .flatMap(plugin =>
+          plugin.hooks.onMethod.ConnectorsNames().map(connector => ({
+            name: connector,
+            plugin,
+          })),
+        );
+      setConnectorPlugins(pluginsFiltered);
+    }
+  }, [plugins]);
+
+  // const PluginItems = useMemo(() => {
+  //   if (plugins.length > 0 && pluginRef.current) {
+  //     return () => (
+  //       <>
+  //         {plugins.map(plugin =>
+  //           plugin.hooks.components.ComponentTest(pluginRef.current),
+  //         )}
+  //       </>
+  //     );
+  //   }
+
+  //   return null;
+  // }, [plugins, pluginRef]);
 
   const onConnectGoCardless = () => {
     if (!isGoCardlessSetupComplete) {
@@ -572,6 +610,25 @@ export function CreateAccountModal({
                           </Text>
                         </>
                       )}
+
+                      <RenderPluginsComponent componentName="ComponentTest" />
+
+                      {connectorPlugins.map(connector => {
+                        return (
+                          <Button
+                            key={`plugin-${connector.name}`}
+                            onPress={() =>
+                              connector.plugin?.hooks?.onMethod?.ConnectorOnSetup?.(
+                                {
+                                  connectorName: connector.name,
+                                },
+                              )
+                            }
+                          >
+                            {connector.name}
+                          </Button>
+                        );
+                      })}
                     </>
                   )}
                   {(!isGoCardlessSetupComplete ||
