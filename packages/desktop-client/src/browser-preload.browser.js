@@ -57,9 +57,9 @@ function createBackendWorker() {
     navigator.serviceWorker.addEventListener('message', async (event) => {
       console.log('Main App received message from Service Worker:', event.data);
   
-      if (event.data.type === 'plugin-list') {
-        const plugins = await send('list-plugins');
-        event.ports[0].postMessage(plugins);
+      if (event.data.type.startsWith('plugin-')) {
+        const object = await send(event.data.type, event.data.eventData);
+        event.ports[0].postMessage(object);
       }
     });
   }

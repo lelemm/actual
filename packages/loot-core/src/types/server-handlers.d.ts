@@ -6,6 +6,7 @@ import { Message } from '../server/sync';
 import { Budget } from './budget';
 import { CategoryEntity, CategoryGroupEntity } from './models';
 import { OpenIdConfig } from './models/openid';
+import { PluginFile } from './models/plugin-file';
 // eslint-disable-next-line import/no-unresolved
 import { Query } from './query';
 import { EmptyObject } from './util';
@@ -271,5 +272,7 @@ export interface ServerHandlers {
     | null
   >;
 
-  'list-plugins': () => Promise<string[]>;
+  'plugin-list': () => Promise<string[]>;
+
+  'plugin-files': (arg: {pluginName: string}) => Promise<PluginFile[]>;
 }

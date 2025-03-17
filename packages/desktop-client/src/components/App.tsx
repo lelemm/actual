@@ -39,6 +39,8 @@ import { ManagementApp } from './manager/ManagementApp';
 import { Modals } from './Modals';
 import { SidebarProvider } from './sidebar/SidebarProvider';
 import { UpdateNotification } from './UpdateNotification';
+import { loadedPlugins, loadPluginsScript } from '../plugin/plugin';
+import { loadRemote } from '@module-federation/enhanced/runtime';
 
 function AppInner() {
   const [budgetId] = useMetadataPref('id');
@@ -86,6 +88,15 @@ function AppInner() {
         }),
       );
       await dispatch(loadGlobalPrefs());
+
+      await loadPluginsScript([
+        {
+          name: 'dummy',
+          url: '/plugins/data/dummy/'
+        }
+      ]);
+
+      loadedPlugins.get('dummy').default();
 
       // Open the last opened budget, if any
       dispatch(

@@ -1406,8 +1406,58 @@ handlers['app-focused'] = async function () {
   }
 };
 
-handlers['list-plugins'] = async function () {
-  return Promise.resolve(['a','b']);
+handlers['plugin-list'] = async function () {
+  return Promise.resolve(['dummy']);
+};
+
+handlers['plugin-files'] = async function ({ pluginName }) {
+  const remote = await (await fetch('/remote.js')).text();
+  return [
+    {
+      name: `hostInit-E6bzouN3.js`,
+      content: `const i = import("./remoteEntry-DByPsMxx.js");
+Promise.resolve(i).then((e) => Promise.resolve(e.__tla).then(e.init).catch(e.init));
+
+`,
+    },
+    {
+      name: `mf-manifest.json`,
+      content: `{"id":"vite_provider","name":"vite_provider","metaData":{"name":"vite_provider","type":"app","buildInfo":{"buildVersion":"1.0.0","buildName":"vite_provider"},"remoteEntry":{"name":"remoteEntry-DByPsMxx.js","path":"/plugins/data/dummy/","type":"module"},"ssrRemoteEntry":{"name":"remoteEntry-DByPsMxx.js","path":"","type":"module"},"types":{"path":"","name":""},"globalName":"vite_provider","pluginVersion":"0.2.5","publicPath":"/"},"shared":[],"remotes":[],"exposes":[{"id":"vite_provider:.","name":"index.js","assets":{"js":{"async":[],"sync":["plugin-dummy.es.js"]},"css":{"sync":[],"async":[]}},"path":"./index.js"}]}`,
+    },
+    {
+      name: 'plugin-dummy.es.js',
+      content:
+`function o() {
+  console.log("hello world");
+}
+export {
+  o as default
+};
+`
+    },
+    {
+      name: 'remoteEntry-DByPsMxx.js',
+      content: remote
+    },
+    {
+      name: 'virtualExposes-CILBbA-y.js',
+      content:
+`const o = {
+  ".": async () => {
+    const t = await import("./plugin-dummy.es.js"), e = {};
+    return Object.assign(e, t), Object.defineProperty(e, "__esModule", {
+      value: !0,
+      enumerable: !1
+    }), e;
+  }
+};
+export {
+  o as default
+};
+
+`      
+    }
+  ];
 };
 
 handlers = installAPI(handlers) as Handlers;

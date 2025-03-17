@@ -1,0 +1,17 @@
+{
+  "name": "plugin-dummy",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "module": "build/my-library.es.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.2.5",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
+  },
+  "packageManager": "yarn@4.3.1"
+}
