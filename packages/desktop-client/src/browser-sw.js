@@ -27,7 +27,6 @@ self.addEventListener('fetch', (event) => {
       const pluginsIndex = pathSegments.indexOf('plugins');
       const dataIndex = pathSegments.indexOf('data');
       if (pluginsIndex !== -1 && dataIndex === pluginsIndex + 1 && pathSegments.length > dataIndex + 1) {
-        debugger;
         const slug = pathSegments[dataIndex + 1];
         let fileName = pathSegments.slice(dataIndex + 2).join('/').split('?')[0];
         event.respondWith(handlePlugin(slug, fileName.replace("?import", "")));

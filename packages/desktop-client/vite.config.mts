@@ -176,6 +176,7 @@ export default defineConfig(async ({ mode }) => {
                 /^\/admin\/.*$/,
                 /^\/secret\/.*$/,
                 /^\/openid\/.*$/,
+                /^\/plugins\/.*$/,
               ],
             },
           }),
