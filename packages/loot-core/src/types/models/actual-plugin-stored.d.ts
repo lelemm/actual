@@ -1,4 +1,4 @@
-import { ActualPluginManifest } from "../../../../plugins-core/src";
+import { ActualPluginManifest } from '../../../../plugins-core/src';
 
 export type ActualPluginStored = {
   plugin: Blob;

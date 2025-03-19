@@ -1,4 +1,5 @@
-import { ComponentProps, ReactNode } from 'react';
+import { ReactNode } from 'react';
+
 import { ModalProps } from './props';
 
 export type ActualPluginToolkitCommonComponents = {

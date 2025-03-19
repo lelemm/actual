@@ -7,7 +7,7 @@ import {
   SvgCheveronRight,
   SvgCog,
   SvgCreditCard,
-  SvgPlugin,  
+  SvgPlugin,
   SvgReports,
   SvgStoreFront,
   SvgTuning,
@@ -16,11 +16,11 @@ import {
 import { SvgCalendar3 } from '@actual-app/components/icons/v2';
 import { View } from '@actual-app/components/view';
 
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 import { useSyncServerStatus } from '../../hooks/useSyncServerStatus';
 
 import { Item } from './Item';
 import { SecondaryItem } from './SecondaryItem';
-import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
 export function PrimaryButtons() {
   const pluginsEnabled = useFeatureFlag('plugins');

@@ -10,6 +10,7 @@ import { captureException, captureBreadcrumb } from '../platform/exceptions';
 import * as asyncStorage from '../platform/server/asyncStorage';
 import * as connection from '../platform/server/connection';
 import * as fs from '../platform/server/fs';
+import * as idb from '../platform/server/indexeddb';
 import { logger } from '../platform/server/log';
 import * as sqlite from '../platform/server/sqlite';
 import * as monthUtils from '../shared/months';
@@ -17,6 +18,7 @@ import { q } from '../shared/query';
 import { type Budget } from '../types/budget';
 import { Handlers } from '../types/handlers';
 import { CategoryEntity, CategoryGroupEntity } from '../types/models';
+import { ActualPluginStored } from '../types/models/actual-plugin-stored';
 import { OpenIdConfig } from '../types/models/openid';
 
 import { app as accountsApp } from './accounts/app';
@@ -45,6 +47,7 @@ import { mutator, runHandler } from './mutators';
 import { app as notesApp } from './notes/app';
 import { app as payeesApp } from './payees/app';
 import * as Platform from './platform';
+import { extractZipToMap } from './plugins/pluginUtil';
 import { get, post } from './post';
 import { app as preferencesApp } from './preferences/app';
 import * as prefs from './prefs';
@@ -75,10 +78,6 @@ import {
   idFromBudgetName,
   validateBudgetName,
 } from './util/budget-name';
-import { O } from '@actual-app/web/build-electron/static/js/index.ZOd2zRcg';
-import { ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
-import * as idb from '../platform/server/indexeddb';
-import { extractZipToMap } from './plugins/pluginUtil';
 
 const DEMO_BUDGET_ID = '_demo-budget';
 const TEST_BUDGET_ID = '_test-budget';
@@ -1410,39 +1409,19 @@ handlers['app-focused'] = async function () {
   }
 };
 
-handlers['plugin-list'] = async function () {
-  const db = await idb.getDatabase();
-  const transaction = db.transaction(['plugins'], 'readonly');
-  const objectStore = transaction.objectStore('plugins');
-
-  return new Promise((resolve, reject) => {
-    const req = objectStore.getAll();
-
-    req.onsuccess = () => {
-      const storedPlugins: ActualPluginStored[] = req.result;
-
-      resolve(storedPlugins.map(p => p.name));
-    };
-
-    req.onerror = () => {
-      reject(req.error);
-    };
-  });
-};
-
-handlers['plugin-files'] = async function ({ pluginName }) {
+handlers['plugin-files'] = async function ({ pluginUrl }) {
   const { store } = idb.getStore(await idb.getDatabase(), 'plugins');
-  const item: ActualPluginStored = await idb.get(store, pluginName);
-
-  const filesMap = await extractZipToMap(item.plugin);
+  const item: ActualPluginStored = await idb.get(store, decodeURIComponent(pluginUrl));
 
   if (item == null) {
-    throw new Error('Plugin does not exist: ' + pluginName);
+    throw new Error('Plugin does not exist: ' + decodeURIComponent(pluginUrl));
   }
+  
+  const filesMap = await extractZipToMap(item.plugin);
 
-  return [...filesMap.entries()].map((key, value) => ({
-    name: key.toString(),
-    content: value.toString()
+  return [...filesMap.entries()].map((keyValue ) => ({
+    name: keyValue[0].toString(),
+    content: keyValue[1].toString(),
   }));
 };
 

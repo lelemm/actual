@@ -6,26 +6,28 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+
 import { getDatabase } from 'loot-core/platform/server/indexeddb';
+import { type ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
 
-import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import {
-  ActualPlugin,
-  ActualPluginInitalized,
-} from '../../../plugins-core/src/types/actualPlugin';
-import {
-  ActualPluginManifest,
+  ActualPluginEntry,
+  type ActualPluginManifest,
 } from '../../../plugins-core/src';
-import { ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
-import { useDispatch } from '../redux';
+import {
+  type ActualPlugin,
+  type ActualPluginInitalized,
+} from '../../../plugins-core/src/types/actualPlugin';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
 
-import { loadPluginsScript } from './plugin';
+import { init, loadRemote } from '@module-federation/enhanced/runtime';
+import { pushModal as basePushModal } from 'loot-core/client/modals/modalsSlice';
+import { useDispatch } from '../redux';
 
 // Context and Provider
 type ActualPluginsContextType = {
   plugins: ActualPluginInitalized[];
   pluginStore: ActualPluginStored[];
-  loadPlugins: () => Promise<void>;
   refreshPluginStore: () => Promise<void>;
 };
 
@@ -42,47 +44,82 @@ export function ActualPluginsProvider({
   const pluginsEnabled = useFeatureFlag('plugins');
   const [plugins, setPlugins] = useState<ActualPluginInitalized[]>([]);
   const [pluginStore, setPluginStore] = useState<ActualPluginStored[]>([]);
+  const [pluginsModules, setPluginsModules] = useState<
+    Map<string, ActualPluginEntry>
+  >(new Map());
   const dispatch = useDispatch();
+
+  const loadPluginsScript = async (plugins: ActualPluginStored[]) => {
+    init({
+      name: '@actual/host-app',
+      remotes: plugins.map(plugin => ({
+        name: plugin.name,
+        alias: plugin.name,
+        entry: `plugin-data/${encodeURIComponent(plugin.url)}`,
+      })),
+      shared: {
+        react: {
+          strategy: 'loaded-first',
+        },
+      },
+    });
+
+    const loadedPlugins: Map<string, ActualPluginEntry> = new Map();
+    for (let plugin of plugins) {
+      loadedPlugins.set(
+        plugin.name,
+        await loadRemote<ActualPluginEntry>(plugin.name),
+      );
+    }
+
+    setPluginsModules(loadedPlugins);
+    loadPlugins(loadedPlugins);
+  };
 
   const refreshPluginStore = useCallback(async () => {
     const plugins = await getAllPlugins();
 
-    loadPluginsScript(plugins);
+    if (plugins.length !== pluginStore.length) {
+      loadPluginsScript(plugins);
+    }
+
     setPluginStore(plugins);
   }, []);
 
-  const loadPlugins = useCallback(async () => {
-    try {
-      const allPlugins = await getAllPlugins();
+  const loadPlugins = useCallback(
+    (pluginsEntries: Map<string, ActualPluginEntry>) => {
+      try {
+        const list: ActualPluginInitalized[] = [];
+        [...pluginsEntries.entries()].forEach(keyValue => {
+          const plugin = (
+            keyValue[1] as unknown as { default: ActualPluginEntry }
+          ).default;
+          const toInitialize = plugin({
+            toolKit: {
+              functions: {
+                pushModal: (modalName: string) =>
+                  dispatch(
+                    basePushModal({
+                      modal: { name: `plugin-${keyValue[0]}-${modalName}` },
+                    }),
+                  ),
+              },
+            },
+          });
 
-      const fullPlugins = [];
-      for (const plugin of allPlugins) {
-        const loadedPlugin = await loadPluginFromRepo(
-          plugins,
-          plugin.url,
-          dispatch,
-        );
-        if (loadedPlugin) {
-          fullPlugins.push(loadedPlugin);
-        }
+          list.push(toInitialize);
+        });
+        setPlugins(list);
+      } catch (error) {
+        console.error('Failed to load plugins:', error);
       }
-      setPlugins(fullPlugins as ActualPluginInitalized[]);
-      await refreshPluginStore();
-    } catch (error) {
-      console.error('Failed to load plugins:', error);
-    }
-  }, [plugins, refreshPluginStore]);
-
-  useEffect(() => {
-    if (pluginsEnabled && plugins.length === 0) {
-      loadPlugins();
-      refreshPluginStore();
-    }
-  }, [pluginsEnabled, plugins, loadPlugins, refreshPluginStore]);
+    },
+    [plugins, refreshPluginStore, pluginsModules],
+  );
 
   return (
     <ActualPluginsContext.Provider
-      value={{ plugins, loadPlugins, pluginStore, refreshPluginStore }}
+      value={{ plugins, pluginStore, refreshPluginStore }}
     >
       {children}
     </ActualPluginsContext.Provider>
@@ -103,7 +140,6 @@ export const useActualPlugins = () => {
 async function persistPlugin(
   scriptBlob: Blob,
   manifest: ActualPluginManifest,
-  dispatch: ReturnType<typeof useDispatch>,
 ): Promise<void> {
   const db = await getDatabase();
 
@@ -119,13 +155,21 @@ type GitHubAsset = {
   name: string;
   browser_download_url: string;
 };
+
+async function fetchWithHeader(url: string): Promise<Response> {
+  return await fetch(url, {
+    headers: {
+      'x-requested-with': 'actual-budget'
+    }
+  });
+}
 export async function fetchRelease(
   owner: string,
   repo: string,
   releasePath: string,
 ): Promise<{ version: string; scriptUrl: string; manifestUrl: string }> {
   const apiUrl = `https://cors-anywhere.herokuapp.com/https://api.github.com/repos/${owner}/${repo}/releases/${releasePath}`;
-  const response = await fetch(apiUrl);
+  const response = await fetchWithHeader(apiUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch release metadata for ${repo}`);
   }
@@ -168,7 +212,6 @@ export function parseGitHubRepoUrl(
 async function loadPluginFromRepo(
   loadedPlugins: ActualPluginInitalized[],
   repo: string,
-  dispatch: ReturnType<typeof useDispatch>,
 ): Promise<ActualPluginInitalized | null> {
   try {
     const parsedRepo = parseGitHubRepoUrl(repo);
@@ -182,7 +225,7 @@ async function loadPluginFromRepo(
       manifestUrl,
     } = await fetchRelease(parsedRepo.owner, parsedRepo.repo, 'latest');
 
-    let response = await fetch(
+    let response = await fetchWithHeader(
       `https://cors-anywhere.herokuapp.com/${manifestUrl}`,
     );
 
@@ -203,7 +246,7 @@ async function loadPluginFromRepo(
     if (!storedPlugin || storedPlugin.version !== latestVersion) {
       console.log(`Downloading plugin “${repo}” v${latestVersion}...`);
       //need to change the cors proxy at some point:
-      response = await fetch(
+      response = await fetchWithHeader(
         `https://cors-anywhere.herokuapp.com/${scriptUrl}`,
       );
 
@@ -231,7 +274,7 @@ async function loadPluginFromRepo(
     }
 
     console.log(`Plugin “${repo}” loaded successfully.`);
-    await persistPlugin(zipBlob, manifest, dispatch);
+    await persistPlugin(zipBlob, manifest);
   } catch (error) {
     console.error(`Error saving plugin “${repo}”:`, error);
     return null;
@@ -279,7 +322,6 @@ async function getAllPlugins(): Promise<ActualPluginStored[]> {
 export async function installPluginFromManifest(
   loadedPlugins: ActualPlugin[],
   manifest: ActualPluginManifest,
-  dispatch: ReturnType<typeof useDispatch>,
 ): Promise<void> {
   try {
     const foundPlugin = loadedPlugins.find(
@@ -301,7 +343,7 @@ export async function installPluginFromManifest(
     );
 
     //need to change the cors proxy at some point:
-    const response = await fetch(
+    const response = await fetchWithHeader(
       `https://cors-anywhere.herokuapp.com/${scriptUrl}`,
     );
 
@@ -319,7 +361,7 @@ export async function installPluginFromManifest(
     const blob = new Blob([zipBytes], { type: 'application/zip' });
 
     console.log(`Plugin “${manifest.name}” loaded successfully.`);
-    await persistPlugin(blob, manifest, dispatch);
+    await persistPlugin(blob, manifest);
   } catch (error) {
     console.error(`Error saving plugin “${manifest.name}”:`, error);
     return null;

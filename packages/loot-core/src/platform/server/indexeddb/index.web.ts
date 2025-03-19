@@ -32,7 +32,7 @@ function _openDatabase() {
       }
       if (!db.objectStoreNames.contains('plugins')) {
         db.createObjectStore('plugins', { keyPath: 'url' });
-      }      
+      }
     };
 
     openRequest.onblocked = e => console.log('blocked', e);

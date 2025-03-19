@@ -1,16 +1,3 @@
-import { CSSProperties } from 'react';
-
-export interface ComponentArg {}
-
-export interface MethodArgumentMap {}
-
-export interface MethodReturnMap {}
-
-export type MethodArguments<K extends keyof MethodArgumentMap> =
-  MethodArgumentMap[K];
-export type MethodReturn<K extends keyof MethodReturnMap> =
-  K extends keyof MethodReturnMap ? MethodReturnMap[K] : void;
-
 export interface OnMethodArgumentMap {
   ConnectorsNames: undefined;
   ConnectorOnSetup: { connectorName: string };
@@ -23,17 +10,22 @@ export interface OnMethodReturnMap {
   ModalList: Map<string, JSX.Element>;
 }
 
-export type OnMethodArguments<K extends keyof OnMethodArgumentMap> =
-  OnMethodArgumentMap[K];
-export type OnMethodReturn<K extends keyof OnMethodReturnMap> =
-  K extends keyof OnMethodReturnMap ? OnMethodReturnMap[K] : void;
-
-export interface ComponentArgumentMap extends ComponentArg {
+export interface ComponentArgumentMap {
   ComponentTest: undefined;
   ComponentTest2: {
     helloworld: string;
   };
 }
+
+export type MethodArguments<K extends keyof MethodArgumentMap> =
+  MethodArgumentMap[K];
+export type MethodReturn<K extends keyof MethodReturnMap> =
+  K extends keyof MethodReturnMap ? MethodReturnMap[K] : void;
+
+export type OnMethodArguments<K extends keyof OnMethodArgumentMap> =
+  OnMethodArgumentMap[K];
+export type OnMethodReturn<K extends keyof OnMethodReturnMap> =
+  K extends keyof OnMethodReturnMap ? OnMethodReturnMap[K] : void;
 
 export interface ActualPlugin {
   name: string;
@@ -57,7 +49,9 @@ export interface ActualPlugin {
     };
     components?: {
       [T in keyof ComponentArgumentMap]?: (
-        arg: ComponentArgumentMap[T] extends undefined ? never : ComponentArgumentMap[T]
+        arg: ComponentArgumentMap[T] extends undefined
+          ? never
+          : ComponentArgumentMap[T],
       ) => JSX.Element;
     };
   };
@@ -68,7 +62,12 @@ export type ActualPluginInitalized = {
   renderComponent?: {
     [T in keyof ComponentArgumentMap]?: (
       container: HTMLDivElement,
-      arg: ComponentArgumentMap[T] extends undefined ? never : ComponentArgumentMap[T]
+      arg: ComponentArgumentMap[T] extends undefined
+        ? never
+        : ComponentArgumentMap[T],
     ) => JSX.Element;
   };
 } & ActualPlugin;
+
+export type MethodArgumentMap = Record<string, any>;
+export type MethodReturnMap = Record<string, any>;

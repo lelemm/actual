@@ -1,18 +1,21 @@
 import { useTranslation } from 'react-i18next';
 
-import { Cell, Row } from '../table';
-import { View } from '@actual-app/components/view';
+import { Button } from '@actual-app/components/button';
+import { Stack } from '@actual-app/components/stack';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
-import { Link } from '../common/Link';
-import { PluginsHeader } from './PluginsHeader';
-import { Stack } from '@actual-app/components/stack';
-import { Button } from '@actual-app/components/button';
-import { useActualPlugins } from '../../plugin/ActualPluginsProvider';
-import { InfiniteScrollWrapper } from '../common/InfiniteScrollWrapper';
+import { View } from '@actual-app/components/view';
+
 import { pushModal } from 'loot-core/client/modals/modalsSlice';
+import { type ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
+
+import { useActualPlugins } from '../../plugin/ActualPluginsProvider';
 import { useDispatch } from '../../redux';
-import { ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
+import { InfiniteScrollWrapper } from '../common/InfiniteScrollWrapper';
+import { Link } from '../common/Link';
+import { Cell, Row } from '../table';
+
+import { PluginsHeader } from './PluginsHeader';
 
 export function ManagePlugins() {
   const dispatch = useDispatch();

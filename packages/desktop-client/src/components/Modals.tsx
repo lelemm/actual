@@ -8,6 +8,7 @@ import * as monthUtils from 'loot-core/shared/months';
 
 import { useMetadataPref } from '../hooks/useMetadataPref';
 import { useModalState } from '../hooks/useModalState';
+import { useActualPlugins } from '../plugin/ActualPluginsProvider';
 import { useDispatch } from '../redux';
 
 import { EditSyncAccount } from './banksync/EditSyncAccount';
@@ -64,6 +65,7 @@ import { PayeeAutocompleteModal } from './modals/PayeeAutocompleteModal';
 import { PluggyAiInitialiseModal } from './modals/PluggyAiInitialiseModal';
 import { ScheduledTransactionMenuModal } from './modals/ScheduledTransactionMenuModal';
 import { SelectLinkedAccountsModal } from './modals/SelectLinkedAccountsModal';
+import { SelectNewPluginModal } from './modals/SelectNewPluginModal';
 import { SimpleFinInitialiseModal } from './modals/SimpleFinInitialiseModal';
 import { TrackingBalanceMenuModal } from './modals/TrackingBalanceMenuModal';
 import { TrackingBudgetMenuModal } from './modals/TrackingBudgetMenuModal';
@@ -78,8 +80,6 @@ import { ScheduleDetails } from './schedules/ScheduleDetails';
 import { ScheduleLink } from './schedules/ScheduleLink';
 import { UpcomingLength } from './schedules/UpcomingLength';
 import { NamespaceContext } from './spreadsheet/NamespaceContext';
-import { SelectNewPluginModal } from './modals/SelectNewPluginModal';
-import { useActualPlugins } from '../plugin/ActualPluginsProvider';
 
 export function Modals() {
   const location = useLocation();
@@ -658,30 +658,32 @@ export function Modals() {
             <PasswordEnableModal key={name} onSave={modal.options.onSave} />
           );
 
-          case 'select-new-plugin':
-            return <SelectNewPluginModal key={name} onSave={modal.options.onSave} />;
-  
-          default:
-            if (name.startsWith('plugin-')) {
-              let foundPlugin = null;
-              plugins.forEach(plugin => {
-                const modals = plugin.hooks?.onMethod?.ModalList?.();
-                if (
-                  modals &&
-                  modals.has(name.replace(`plugin-${plugin.name}-`, ''))
-                ) {
-                  foundPlugin = modals.get(
-                    name.replace(`plugin-${plugin.name}-`, ''),
-                  );
-                }
-              });
-  
-              if (foundPlugin) {
-                return foundPlugin;
-              }
-            }
+        case 'select-new-plugin':
+          return (
+            <SelectNewPluginModal key={name} onSave={modal.options.onSave} />
+          );
 
-            throw new Error('Unknown modal');
+        default:
+          if (name.startsWith('plugin-')) {
+            let foundPlugin = null;
+            plugins.forEach(plugin => {
+              const modals = plugin.hooks?.onMethod?.ModalList?.();
+              if (
+                modals &&
+                modals.has(name.replace(`plugin-${plugin.name}-`, ''))
+              ) {
+                foundPlugin = modals.get(
+                  name.replace(`plugin-${plugin.name}-`, ''),
+                );
+              }
+            });
+
+            if (foundPlugin) {
+              return foundPlugin;
+            }
+          }
+
+          throw new Error('Unknown modal');
       }
     })
     .map((modal, idx) => (

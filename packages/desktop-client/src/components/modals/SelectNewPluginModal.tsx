@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { LoadingIndicator } from '../reports/LoadingIndicator';
-import { ActualPluginManifest } from '../../../../plugins-core/src';
-import { fetchRelease, installPluginFromManifest, parseGitHubRepoUrl, useActualPlugins } from '../../plugin/ActualPluginsProvider';
-import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal';
-
-import { Text } from '@actual-app/components/text';
-import { View } from '@actual-app/components/view';
-import { theme } from '@actual-app/components/theme';
-import { Card } from '@actual-app/components/card';
 import { Button } from '@actual-app/components/button';
+import { Card } from '@actual-app/components/card';
 import { SvgCheck } from '@actual-app/components/icons/v2';
+import { Text } from '@actual-app/components/text';
+import { theme } from '@actual-app/components/theme';
+import { View } from '@actual-app/components/view';
+
+import { type ActualPluginManifest } from '../../../../plugins-core/src';
+import {
+  fetchRelease,
+  installPluginFromManifest,
+  parseGitHubRepoUrl,
+  useActualPlugins,
+} from '../../plugin/ActualPluginsProvider';
 import { useDispatch } from '../../redux';
+import { Modal, ModalCloseButton, ModalHeader } from '../common/Modal';
+import { LoadingIndicator } from '../reports/LoadingIndicator';
 
 type SelectNewPluginModalProps = {
   onSave: () => void;
@@ -87,16 +92,12 @@ export function SelectNewPluginModal({ onSave }: SelectNewPluginModalProps) {
       }
     };
 
-    fetchPlugins();
+    refreshPluginStore().then(() => fetchPlugins());
   }, []);
 
   async function _onSave() {
     if (selectedPlugin && selectedPlugin.manifest) {
-      await installPluginFromManifest(
-        plugins,
-        selectedPlugin.manifest,
-        dispatch,
-      );
+      await installPluginFromManifest(plugins, selectedPlugin.manifest);
       await refreshPluginStore();
     }
     onSave();

@@ -1,4 +1,4 @@
 export type PluginFile = {
-    name: string;
-    content: string;
-}
+  name: string;
+  content: string;
+};

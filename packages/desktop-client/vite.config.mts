@@ -108,6 +108,9 @@ export default defineConfig(async ({ mode }) => {
   const browserOpen = env.BROWSER_OPEN ? `//${env.BROWSER_OPEN}` : true;
 
   return {
+    define: {
+      'process.env': {},
+    },
     base: '/',
     envPrefix: 'REACT_APP_',
     build: {

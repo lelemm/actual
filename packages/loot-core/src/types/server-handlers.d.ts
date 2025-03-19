@@ -272,7 +272,5 @@ export interface ServerHandlers {
     | null
   >;
 
-  'plugin-list': () => Promise<string[]>;
-
-  'plugin-files': (arg: {pluginName: string}) => Promise<PluginFile[]>;
+  'plugin-files': (arg: { pluginUrl: string }) => Promise<PluginFile[]>;
 }

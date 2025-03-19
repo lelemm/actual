@@ -25,6 +25,7 @@ import { init as initConnection, send } from 'loot-core/platform/client/fetch';
 import { handleGlobalEvents } from '../global-events';
 import { useMetadataPref } from '../hooks/useMetadataPref';
 import { setI18NextLanguage } from '../i18n';
+import { ActualPluginsProvider } from '../plugin/ActualPluginsProvider';
 import { installPolyfills } from '../polyfills';
 import { useDispatch, useSelector, useStore } from '../redux';
 import { hasHiddenScrollbars, ThemeStyle, useTheme } from '../style';
@@ -39,9 +40,7 @@ import { ManagementApp } from './manager/ManagementApp';
 import { Modals } from './Modals';
 import { SidebarProvider } from './sidebar/SidebarProvider';
 import { UpdateNotification } from './UpdateNotification';
-import { loadedPlugins, loadPluginsScript } from '../plugin/plugin';
-import { loadRemote } from '@module-federation/enhanced/runtime';
-import { ActualPluginsProvider } from '../plugin/ActualPluginsProvider';
+import { RenderPluginsComponent } from './plugins/RenderPluginsComponent';
 
 function AppInner() {
   const [budgetId] = useMetadataPref('id');
@@ -214,6 +213,7 @@ export function App() {
             <SidebarProvider>
               <BudgetMonthCountProvider>
                 <DndProvider backend={HTML5Backend}>
+                  <RenderPluginsComponent componentName='ComponentTest' />
                   <View
                     data-theme={theme}
                     style={{

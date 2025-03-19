@@ -3,9 +3,9 @@ import { initBackend as initSQLBackend } from 'absurd-sql/dist/indexeddb-main-th
 import { registerSW } from 'virtual:pwa-register';
 
 import * as Platform from 'loot-core/client/platform';
+import { send } from 'loot-core/platform/client/fetch';
 
 import packageJson from '../package.json';
-import { send } from 'loot-core/platform/client/fetch';
 
 const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 
@@ -43,20 +43,19 @@ function createBackendWorker() {
     ),
   });
 
-  if ("serviceWorker" in navigator) {
+  if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./browser-sw.js').then(
-      (registration) => {
-        console.log("Service worker registration succeeded:", registration);
-        
+      registration => {
+        console.log('Service worker registration succeeded:', registration);
       },
-      (error) => {
+      error => {
         console.error(`Service worker registration failed: ${error}`);
       },
     );
 
-    navigator.serviceWorker.addEventListener('message', async (event) => {
+    navigator.serviceWorker.addEventListener('message', async event => {
       console.log('Main App received message from Service Worker:', event.data);
-  
+
       if (event.data.type.startsWith('plugin-')) {
         const object = await send(event.data.type, event.data.eventData);
         event.ports[0].postMessage(object);

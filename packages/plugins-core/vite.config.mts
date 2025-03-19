@@ -8,18 +8,16 @@ export default defineConfig({
       entry: 'src/index.ts',
       name: '@actual-app/plugins-core',
       fileName: `index`,
-      formats: ['es']
+      formats: ['es'],
     },
     rollupOptions: {
-      external: [
-        'react'
-      ],
+      external: ['react'],
       output: {
         globals: {
-          react: 'react'
-        }
-      }
-    }
+          react: 'react',
+        },
+      },
+    },
   },
   plugins: [
     dts({
