@@ -16,7 +16,7 @@ import {
 } from '../../../plugins-core/src';
 import {
   type ActualPlugin,
-  type ActualPluginInitalized,
+  type ActualPluginInitialized,
 } from '../../../plugins-core/src/types/actualPlugin';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
 
@@ -26,7 +26,7 @@ import { useDispatch } from '../redux';
 
 // Context and Provider
 type ActualPluginsContextType = {
-  plugins: ActualPluginInitalized[];
+  plugins: ActualPluginInitialized[];
   pluginStore: ActualPluginStored[];
   refreshPluginStore: () => Promise<void>;
 };
@@ -42,7 +42,7 @@ export function ActualPluginsProvider({
   children,
 }: ActualPluginsProviderProps) {
   const pluginsEnabled = useFeatureFlag('plugins');
-  const [plugins, setPlugins] = useState<ActualPluginInitalized[]>([]);
+  const [plugins, setPlugins] = useState<ActualPluginInitialized[]>([]);
   const [pluginStore, setPluginStore] = useState<ActualPluginStored[]>([]);
   const [pluginsModules, setPluginsModules] = useState<
     Map<string, ActualPluginEntry>
@@ -89,7 +89,7 @@ export function ActualPluginsProvider({
   const loadPlugins = useCallback(
     (pluginsEntries: Map<string, ActualPluginEntry>) => {
       try {
-        const list: ActualPluginInitalized[] = [];
+        const list: ActualPluginInitialized[] = [];
         [...pluginsEntries.entries()].forEach(keyValue => {
           const plugin = (
             keyValue[1] as unknown as { default: ActualPluginEntry }
@@ -97,10 +97,10 @@ export function ActualPluginsProvider({
           const toInitialize = plugin({
             toolKit: {
               functions: {
-                pushModal: (modalName: string) =>
+                pushModal: (modalName: string, options?: unknown) =>
                   dispatch(
                     basePushModal({
-                      modal: { name: `plugin-${keyValue[0]}-${modalName}` },
+                      modal: { name: `plugin-${keyValue[0]}-${modalName}`, options },
                     }),
                   ),
               },
@@ -210,9 +210,9 @@ export function parseGitHubRepoUrl(
 }
 
 async function loadPluginFromRepo(
-  loadedPlugins: ActualPluginInitalized[],
+  loadedPlugins: ActualPluginInitialized[],
   repo: string,
-): Promise<ActualPluginInitalized | null> {
+): Promise<ActualPluginInitialized | null> {
   try {
     const parsedRepo = parseGitHubRepoUrl(repo);
     if (parsedRepo == null) throw new Error(`Invalid repo ${repo}`);
@@ -320,7 +320,7 @@ async function getAllPlugins(): Promise<ActualPluginStored[]> {
 }
 
 export async function installPluginFromManifest(
-  loadedPlugins: ActualPlugin[],
+  loadedPlugins: ActualPluginInitialized[],
   manifest: ActualPluginManifest,
 ): Promise<void> {
   try {

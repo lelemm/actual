@@ -7,7 +7,7 @@ export type ActualPluginToolkitCommonComponents = {
 };
 
 export type ActualPluginToolkitFunctions = {
-  pushModal: (modalName: string) => void;
+  pushModal: (modalName: string, options?: unknown) => void;
 };
 
 export type ActualPluginToolkit = {

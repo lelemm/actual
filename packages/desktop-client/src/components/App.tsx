@@ -213,7 +213,6 @@ export function App() {
             <SidebarProvider>
               <BudgetMonthCountProvider>
                 <DndProvider backend={HTML5Backend}>
-                  <RenderPluginsComponent componentName='ComponentTest' />
                   <View
                     data-theme={theme}
                     style={{

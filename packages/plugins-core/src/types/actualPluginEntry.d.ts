@@ -1,8 +1,8 @@
 import React from 'react';
 
-import { ActualPluginInitalized } from './actualPlugin';
 import { ActualPluginToolkit } from './toolkit';
+import { ActualPluginInitialized } from './actualPlugin';
 
 export type ActualPluginEntry = (bridge: {
   toolKit: ActualPluginToolkit;
-}) => ActualPluginInitalized;
+}) => ActualPluginInitialized;

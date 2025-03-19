@@ -37,6 +37,8 @@ import { RepairTransactions } from './RepairTransactions';
 import { ResetCache, ResetSync } from './Reset';
 import { ThemeSettings } from './Themes';
 import { AdvancedToggle, Setting } from './UI';
+import { RenderPluginsComponent } from '../plugins/RenderPluginsComponent';
+import { usePluginEventHook } from '../plugins/usePluginEventHook';
 
 function About() {
   const version = useServerVersion();
@@ -146,10 +148,15 @@ export function Settings() {
   const [floatingSidebar] = useGlobalPref('floatingSidebar');
   const [budgetName] = useMetadataPref('budgetName');
   const dispatch = useDispatch();
+  const pluginHook = usePluginEventHook("settings");
 
   const onCloseBudget = () => {
     dispatch(closeBudget());
   };
+
+  useEffect(() => {
+    pluginHook("onInit");
+  }, []);
 
   useEffect(() => {
     const unlisten = listen('prefs-updated', () => {
@@ -170,6 +177,7 @@ export function Settings() {
         paddingBottom: MOBILE_NAV_HEIGHT,
       }}
     >
+      <RenderPluginsComponent page="settings" componentName="afterHeader" />
       <View
         data-testid="settings"
         style={{
@@ -206,6 +214,10 @@ export function Settings() {
         <BudgetTypeSettings />
         {isElectron() && <Backups />}
         <ExportBudget />
+        <RenderPluginsComponent
+          page="settings"
+          componentName="appendComponents"
+        />
         <AdvancedToggle>
           <AdvancedAbout />
           <ResetCache />
