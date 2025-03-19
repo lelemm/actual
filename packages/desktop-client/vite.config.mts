@@ -10,6 +10,7 @@ import { defineConfig, loadEnv, Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import viteTsconfigPaths from 'vite-tsconfig-paths';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { federation } from '@module-federation/vite';
 
 const addWatchers = (): Plugin => ({
   name: 'add-watchers',
@@ -155,6 +156,18 @@ export default defineConfig(async ({ mode }) => {
       extensions: resolveExtensions,
     },
     plugins: [
+      federation({
+        name: 'vite_provider',
+        manifest: true,
+        shared: {
+          react: {
+            singleton: true,
+          },
+          'react/': {
+            singleton: true,
+          },
+        },
+      }),
       viteStaticCopy({
         targets: [
           { src: 'src/browser-sw.js', dest: '' }, // Copy to dist root

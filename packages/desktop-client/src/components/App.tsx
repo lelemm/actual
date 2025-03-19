@@ -41,6 +41,7 @@ import { SidebarProvider } from './sidebar/SidebarProvider';
 import { UpdateNotification } from './UpdateNotification';
 import { loadedPlugins, loadPluginsScript } from '../plugin/plugin';
 import { loadRemote } from '@module-federation/enhanced/runtime';
+import { ActualPluginsProvider } from '../plugin/ActualPluginsProvider';
 
 function AppInner() {
   const [budgetId] = useMetadataPref('id');
@@ -88,15 +89,6 @@ function AppInner() {
         }),
       );
       await dispatch(loadGlobalPrefs());
-
-      await loadPluginsScript([
-        {
-          name: 'dummy',
-          url: '/plugins/data/dummy/'
-        }
-      ]);
-
-      loadedPlugins.get('dummy').default();
 
       // Open the last opened budget, if any
       dispatch(
@@ -215,43 +207,47 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <ExposeNavigate />
-      <HotkeysProvider initiallyActiveScopes={['*']}>
-        <SpreadsheetProvider>
-          <SidebarProvider>
-            <BudgetMonthCountProvider>
-              <DndProvider backend={HTML5Backend}>
-                <View
-                  data-theme={theme}
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
+      <ActualPluginsProvider>
+        <ExposeNavigate />
+        <HotkeysProvider initiallyActiveScopes={['*']}>
+          <SpreadsheetProvider>
+            <SidebarProvider>
+              <BudgetMonthCountProvider>
+                <DndProvider backend={HTML5Backend}>
                   <View
-                    key={hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'}
+                    data-theme={theme}
                     style={{
-                      flexGrow: 1,
-                      overflow: 'hidden',
-                      ...styles.lightScrollbar,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
                     }}
                   >
-                    <ErrorBoundary FallbackComponent={ErrorFallback}>
-                      {process.env.REACT_APP_REVIEW_ID &&
-                        !Platform.isPlaywright && <DevelopmentTopBar />}
-                      <AppInner />
-                    </ErrorBoundary>
-                    <ThemeStyle />
-                    <Modals />
-                    <UpdateNotification />
+                    <View
+                      key={
+                        hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'
+                      }
+                      style={{
+                        flexGrow: 1,
+                        overflow: 'hidden',
+                        ...styles.lightScrollbar,
+                      }}
+                    >
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        {process.env.REACT_APP_REVIEW_ID &&
+                          !Platform.isPlaywright && <DevelopmentTopBar />}
+                        <AppInner />
+                      </ErrorBoundary>
+                      <ThemeStyle />
+                      <Modals />
+                      <UpdateNotification />
+                    </View>
                   </View>
-                </View>
-              </DndProvider>
-            </BudgetMonthCountProvider>
-          </SidebarProvider>
-        </SpreadsheetProvider>
-      </HotkeysProvider>
+                </DndProvider>
+              </BudgetMonthCountProvider>
+            </SidebarProvider>
+          </SpreadsheetProvider>
+        </HotkeysProvider>
+      </ActualPluginsProvider>
     </BrowserRouter>
   );
 }

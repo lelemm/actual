@@ -1,13 +1,11 @@
 import { init, loadRemote } from '@module-federation/enhanced/runtime';
+import { ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
 
-type PluginDeclaration = {
-  name: string;
-  url?: string;
-};
 
 export var loadedPlugins: Map<string, any> = new Map();
 
-export async function loadPluginsScript(plugins: PluginDeclaration[]) {
+export async function loadPluginsScript(plugins: ActualPluginStored[]) {
+  debugger;
   init({
     name: '@actual/host-app',
     remotes: plugins.map(plugin => ({
@@ -15,6 +13,11 @@ export async function loadPluginsScript(plugins: PluginDeclaration[]) {
       alias: plugin.name,
       entry: plugin.url,
     })),
+    shared: {
+        react: {
+            strategy: 'loaded-first',
+          }
+    }
   });
 
   for (let plugin of plugins) {

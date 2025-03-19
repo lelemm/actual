@@ -21,3 +21,16 @@ export { Toggle } from '@actual-app/components/toggle'
 export { Tooltip } from '@actual-app/components/tooltip'
 
 export { View } from '@actual-app/components/view'
+
+export { initializePlugin } from './middleware';
+
+export type { ActualPlugin } from './types/actualPlugin';
+export type { ActualPluginEntry } from './types/actualPluginEntry';
+
+export type { ActualPluginManifest } from './types/actualPluginManifest';
+
+export type {
+  ActualPluginToolkit,
+  ActualPluginToolkitFunctions,
+} from './types/toolkit';
+

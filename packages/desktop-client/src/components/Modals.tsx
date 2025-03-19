@@ -78,12 +78,15 @@ import { ScheduleDetails } from './schedules/ScheduleDetails';
 import { ScheduleLink } from './schedules/ScheduleLink';
 import { UpcomingLength } from './schedules/UpcomingLength';
 import { NamespaceContext } from './spreadsheet/NamespaceContext';
+import { SelectNewPluginModal } from './modals/SelectNewPluginModal';
+import { useActualPlugins } from '../plugin/ActualPluginsProvider';
 
 export function Modals() {
   const location = useLocation();
   const dispatch = useDispatch();
   const { modalStack } = useModalState();
   const [budgetId] = useMetadataPref('id');
+  const { plugins } = useActualPlugins();
 
   useEffect(() => {
     if (modalStack.length > 0) {
@@ -655,8 +658,30 @@ export function Modals() {
             <PasswordEnableModal key={name} onSave={modal.options.onSave} />
           );
 
-        default:
-          throw new Error('Unknown modal');
+          case 'select-new-plugin':
+            return <SelectNewPluginModal key={name} onSave={modal.options.onSave} />;
+  
+          default:
+            if (name.startsWith('plugin-')) {
+              let foundPlugin = null;
+              plugins.forEach(plugin => {
+                const modals = plugin.hooks?.onMethod?.ModalList?.();
+                if (
+                  modals &&
+                  modals.has(name.replace(`plugin-${plugin.name}-`, ''))
+                ) {
+                  foundPlugin = modals.get(
+                    name.replace(`plugin-${plugin.name}-`, ''),
+                  );
+                }
+              });
+  
+              if (foundPlugin) {
+                return foundPlugin;
+              }
+            }
+
+            throw new Error('Unknown modal');
       }
     })
     .map((modal, idx) => (

@@ -75,6 +75,10 @@ import {
   idFromBudgetName,
   validateBudgetName,
 } from './util/budget-name';
+import { O } from '@actual-app/web/build-electron/static/js/index.ZOd2zRcg';
+import { ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
+import * as idb from '../platform/server/indexeddb';
+import { extractZipToMap } from './plugins/pluginUtil';
 
 const DEMO_BUDGET_ID = '_demo-budget';
 const TEST_BUDGET_ID = '_test-budget';
@@ -1407,57 +1411,39 @@ handlers['app-focused'] = async function () {
 };
 
 handlers['plugin-list'] = async function () {
-  return Promise.resolve(['dummy']);
+  const db = await idb.getDatabase();
+  const transaction = db.transaction(['plugins'], 'readonly');
+  const objectStore = transaction.objectStore('plugins');
+
+  return new Promise((resolve, reject) => {
+    const req = objectStore.getAll();
+
+    req.onsuccess = () => {
+      const storedPlugins: ActualPluginStored[] = req.result;
+
+      resolve(storedPlugins.map(p => p.name));
+    };
+
+    req.onerror = () => {
+      reject(req.error);
+    };
+  });
 };
 
 handlers['plugin-files'] = async function ({ pluginName }) {
-  const remote = await (await fetch('/remote.js')).text();
-  return [
-    {
-      name: `hostInit-E6bzouN3.js`,
-      content: `const i = import("./remoteEntry-DByPsMxx.js");
-Promise.resolve(i).then((e) => Promise.resolve(e.__tla).then(e.init).catch(e.init));
+  const { store } = idb.getStore(await idb.getDatabase(), 'plugins');
+  const item: ActualPluginStored = await idb.get(store, pluginName);
 
-`,
-    },
-    {
-      name: `mf-manifest.json`,
-      content: `{"id":"vite_provider","name":"vite_provider","metaData":{"name":"vite_provider","type":"app","buildInfo":{"buildVersion":"1.0.0","buildName":"vite_provider"},"remoteEntry":{"name":"remoteEntry-DByPsMxx.js","path":"/plugins/data/dummy/","type":"module"},"ssrRemoteEntry":{"name":"remoteEntry-DByPsMxx.js","path":"","type":"module"},"types":{"path":"","name":""},"globalName":"vite_provider","pluginVersion":"0.2.5","publicPath":"/"},"shared":[],"remotes":[],"exposes":[{"id":"vite_provider:.","name":"index.js","assets":{"js":{"async":[],"sync":["plugin-dummy.es.js"]},"css":{"sync":[],"async":[]}},"path":"./index.js"}]}`,
-    },
-    {
-      name: 'plugin-dummy.es.js',
-      content:
-`function o() {
-  console.log("hello world");
-}
-export {
-  o as default
-};
-`
-    },
-    {
-      name: 'remoteEntry-DByPsMxx.js',
-      content: remote
-    },
-    {
-      name: 'virtualExposes-CILBbA-y.js',
-      content:
-`const o = {
-  ".": async () => {
-    const t = await import("./plugin-dummy.es.js"), e = {};
-    return Object.assign(e, t), Object.defineProperty(e, "__esModule", {
-      value: !0,
-      enumerable: !1
-    }), e;
+  const filesMap = await extractZipToMap(item.plugin);
+
+  if (item == null) {
+    throw new Error('Plugin does not exist: ' + pluginName);
   }
-};
-export {
-  o as default
-};
 
-`      
-    }
-  ];
+  return [...filesMap.entries()].map((key, value) => ({
+    name: key.toString(),
+    content: value.toString()
+  }));
 };
 
 handlers = installAPI(handlers) as Handlers;
