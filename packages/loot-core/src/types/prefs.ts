@@ -141,10 +141,11 @@ export type GlobalPrefsJson = Partial<{
   theme?: GlobalPrefs['theme'];
   'preferred-dark-theme'?: GlobalPrefs['preferredDarkTheme'];
   plugins?: string; // "true" or "false"
-  'plugin-theme'?: string; // JSON string of complete plugin theme (current selected plugin theme)
+  //'plugin-theme'?: string; // JSON string of complete plugin theme (current selected plugin theme)
   'server-self-signed-cert'?: GlobalPrefs['serverSelfSignedCert'];
   syncServerConfig?: GlobalPrefs['syncServerConfig'];
   notifyWhenUpdateIsAvailable?: GlobalPrefs['notifyWhenUpdateIsAvailable'];
+  pluginThemes?: GlobalPrefs['pluginThemes'];
 }>;
 
 export type AuthMethods = 'password' | 'openid';

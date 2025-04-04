@@ -126,7 +126,7 @@ export default defineConfig(async ({ mode }) => {
       sourcemap: true,
       outDir: mode === 'desktop' ? 'build-electron' : 'build',
       assetsDir: 'static',
-      manifest: true,
+      manifest: false, // Disable Vite manifest since we're using PWA
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 1500,
       rollupOptions: {

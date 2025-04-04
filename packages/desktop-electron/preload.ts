@@ -99,4 +99,8 @@ contextBridge.exposeInMainWorld('Actual', {
   applyAppUpdate: async () => {
     throw new Error('applyAppUpdate not implemented in electron app');
   },
+
+  refreshServiceWorker: async () => {
+    // No-op in Electron - service workers not used
+  },
 } satisfies typeof global.Actual);

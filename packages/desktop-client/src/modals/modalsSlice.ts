@@ -1,3 +1,4 @@
+import { type BasicModalProps } from '@actual-app/components/props/modalProps';
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { send } from 'loot-core/platform/client/fetch';
@@ -552,6 +553,19 @@ export type Modal =
       options: {
         categoryId: CategoryEntity['id'];
         templates: Template[];
+      };
+    }
+  | {
+      name: 'select-new-plugin';
+      options: {
+        onSave?: () => void;
+      };
+    }
+  | {
+      name: 'plugin-modal';
+      options: {
+        parameter: (container: HTMLDivElement) => void;
+        modalProps?: BasicModalProps;
       };
     };
 

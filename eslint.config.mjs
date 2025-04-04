@@ -108,6 +108,7 @@ export default pluginTypescript.config(
       'packages/shared-types/build/',
       'packages/query/dist/',
       'packages/query/build/',
+      'packages/test-plugin/',
     ],
   },
   {

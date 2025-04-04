@@ -114,6 +114,15 @@ async function saveGlobalPrefs(prefs: GlobalPrefs) {
       prefs.notifyWhenUpdateIsAvailable,
     );
   }
+  if (prefs.plugins !== undefined) {
+    await asyncStorage.setItem('plugins', '' + prefs.plugins);
+  }
+  // if (prefs.pluginThemes) {
+  //   await asyncStorage.setItem(
+  //     'plugin-themes',
+  //     JSON.stringify(prefs.pluginThemes),
+  //   );
+  // }
   return 'ok';
 }
 
@@ -130,6 +139,8 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
     'server-self-signed-cert': serverSelfSignedCert,
     syncServerConfig,
     notifyWhenUpdateIsAvailable,
+    plugins,
+//    'plugin-themes': pluginThemes,
   } = await asyncStorage.multiGet([
     'floating-sidebar',
     'category-expanded-state',
@@ -142,6 +153,8 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
     'server-self-signed-cert',
     'syncServerConfig',
     'notifyWhenUpdateIsAvailable',
+    'plugins',
+//    'plugin-themes',
   ] as const);
   return {
     floatingSidebar: floatingSidebar === 'true',
@@ -157,11 +170,13 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
       theme === 'development' ||
       theme === 'midnight'
         ? theme
-        : 'auto',
+        : theme || 'auto',
     preferredDarkTheme:
       preferredDarkTheme === 'dark' || preferredDarkTheme === 'midnight'
         ? preferredDarkTheme
         : 'dark',
+    plugins: plugins === 'true',
+    pluginThemes: pluginThemes ? JSON.parse(pluginThemes) : {},
     serverSelfSignedCert: serverSelfSignedCert || undefined,
     syncServerConfig: syncServerConfig || undefined,
     notifyWhenUpdateIsAvailable:
