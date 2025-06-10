@@ -85,21 +85,13 @@ export function addTransactions(
   });
 }
 
-export interface ImportTransactionsOpts {
-  defaultCleared?: boolean;
-}
-
-export function importTransactions(
-  accountId,
-  transactions,
-  opts: ImportTransactionsOpts = {
-    defaultCleared: true,
-  },
-) {
+export function importTransactions(accountId, transactions) {
   return send('api/transactions-import', {
     accountId,
     transactions,
-    opts,
+    detectInstallments: false,
+    updateDetectInstallmentDate: false,
+    ignoreAlreadyDetectedInstallments: false,
   });
 }
 

@@ -20,8 +20,128 @@ export interface ServerHandlers {
     applySpecialCases?: boolean;
   }) => Promise<{ filters: unknown[] }>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query: (query: Query) => Promise<{ data: any; dependencies: string[] }>;
+  getCell: (arg: {
+    sheetName;
+    name;
+  }) => Promise<SpreadsheetNode | { value?: SpreadsheetNode['value'] }>;
+
+  getCells: (arg: { names }) => Promise<unknown>;
+
+  getCellNamesInSheet: (arg: { sheetName }) => Promise<unknown>;
+
+  debugCell: (arg: { sheetName; name }) => Promise<unknown>;
+
+  'create-query': (arg: { sheetName; name; query }) => Promise<unknown>;
+
+  query: (query) => Promise<{ data; dependencies }>;
+
+  'account-update': (arg: { id; name }) => Promise<unknown>;
+
+  'accounts-get': () => Promise<AccountEntity[]>;
+
+  'account-properties': (arg: {
+    id;
+  }) => Promise<{ balance: number; numTransactions: number }>;
+
+  'gocardless-accounts-link': (arg: {
+    requisitionId;
+    account;
+    upgradingId;
+    offBudget;
+  }) => Promise<'ok'>;
+
+  'simplefin-accounts-link': (arg: {
+    externalAccount;
+    upgradingId;
+    offBudget;
+  }) => Promise<'ok'>;
+
+  'account-create': (arg: {
+    name: string;
+    balance?: number;
+    offBudget?: boolean;
+    closed?: 0 | 1;
+  }) => Promise<string>;
+
+  'account-close': (arg: {
+    id;
+    transferAccountId?;
+    categoryId?;
+    forced?;
+  }) => Promise<unknown>;
+
+  'account-reopen': (arg: { id }) => Promise<unknown>;
+
+  'account-move': (arg: { id; targetId }) => Promise<unknown>;
+
+  'secret-set': (arg: { name: string; value: string }) => Promise<null>;
+  'secret-check': (arg: string) => Promise<string | { error?: string }>;
+
+  'gocardless-poll-web-token': (arg: {
+    upgradingAccountId?: string;
+    requisitionId: string;
+  }) => Promise<
+    { error: 'unknown' } | { error: 'timeout' } | { data: GoCardlessToken }
+  >;
+
+  'gocardless-status': () => Promise<{ configured: boolean }>;
+
+  'simplefin-status': () => Promise<{ configured: boolean }>;
+
+  'simplefin-accounts': () => Promise<{ accounts: SimpleFinAccount[] }>;
+
+  'gocardless-get-banks': (country: string) => Promise<{
+    data: GoCardlessInstitution[];
+    error?: { reason: string };
+  }>;
+
+  'gocardless-poll-web-token-stop': () => Promise<'ok'>;
+
+  'gocardless-create-web-token': (arg: {
+    upgradingAccountId?: string;
+    institutionId: string;
+    accessValidForDays: number;
+  }) => Promise<
+    | {
+        requisitionId: string;
+        link: string;
+      }
+    | { error: 'unauthorized' }
+    | { error: 'failed' }
+  >;
+
+  'accounts-bank-sync': (arg: { id?: string }) => Promise<{
+    errors;
+    newTransactions;
+    matchedTransactions;
+    updatedAccounts;
+  }>;
+
+  'transactions-import': (arg: {
+    accountId;
+    transactions;
+    detectInstallments;
+    updateDetectInstallmentDate;
+    ignoreAlreadyDetectedInstallments;
+  }) => Promise<{
+    errors?: { message: string }[];
+    added;
+    updated;
+  }>;
+
+  'account-unlink': (arg: { id }) => Promise<'ok'>;
+
+  'save-global-prefs': (prefs) => Promise<'ok'>;
+
+  'load-global-prefs': () => Promise<GlobalPrefs>;
+
+  'save-prefs': (prefsToSet) => Promise<'ok'>;
+
+  'load-prefs': () => Promise<LocalPrefs | null>;
+
+  'sync-reset': () => Promise<{ error?: { reason: string; meta?: unknown } }>;
+
+  'sync-repair': () => Promise<unknown>;
 
   'key-make': (arg: {
     password;

@@ -82,8 +82,9 @@ export interface ApiHandlers {
   'api/transactions-import': (arg: {
     accountId;
     transactions;
-    isPreview?;
-    opts?: ImportTransactionsOpts;
+    detectInstallments;
+    updateDetectInstallmentDate;
+    ignoreAlreadyDetectedInstallments;
   }) => Promise<{
     errors?: { message: string }[];
     added;

@@ -117,6 +117,757 @@ handlers['query'] = async function (query) {
   return aqlQuery(query);
 };
 
+handlers['account-update'] = mutator(async function ({ id, name }) {
+  return withUndo(async () => {
+    await db.update('accounts', { id, name });
+    return {};
+  });
+});
+
+handlers['accounts-get'] = async function () {
+  return db.getAccounts();
+};
+
+handlers['account-properties'] = async function ({ id }) {
+  const { balance } = await db.first(
+    'SELECT sum(amount) as balance FROM transactions WHERE acct = ? AND isParent = 0 AND tombstone = 0',
+    [id],
+  );
+  const { count } = await db.first(
+    'SELECT count(id) as count FROM transactions WHERE acct = ? AND tombstone = 0',
+    [id],
+  );
+
+  return { balance: balance || 0, numTransactions: count };
+};
+
+handlers['gocardless-accounts-link'] = async function ({
+  requisitionId,
+  account,
+  upgradingId,
+  offBudget,
+}) {
+  let id;
+  const bank = await link.findOrCreateBank(account.institution, requisitionId);
+
+  if (upgradingId) {
+    const accRow = await db.first('SELECT * FROM accounts WHERE id = ?', [
+      upgradingId,
+    ]);
+    id = accRow.id;
+    await db.update('accounts', {
+      id,
+      account_id: account.account_id,
+      bank: bank.id,
+      account_sync_source: 'goCardless',
+    });
+  } else {
+    id = uuidv4();
+    await db.insertWithUUID('accounts', {
+      id,
+      account_id: account.account_id,
+      mask: account.mask,
+      name: account.name,
+      official_name: account.official_name,
+      bank: bank.id,
+      offbudget: offBudget ? 1 : 0,
+      account_sync_source: 'goCardless',
+    });
+    await db.insertPayee({
+      name: '',
+      transfer_acct: id,
+    });
+  }
+
+  await bankSync.syncAccount(
+    undefined,
+    undefined,
+    id,
+    account.account_id,
+    bank.bank_id,
+  );
+
+  connection.send('sync-event', {
+    type: 'success',
+    tables: ['transactions'],
+  });
+
+  return 'ok';
+};
+
+handlers['simplefin-accounts-link'] = async function ({
+  externalAccount,
+  upgradingId,
+  offBudget,
+}) {
+  let id;
+
+  const institution = {
+    name: externalAccount.institution ?? 'Unknown',
+  };
+
+  const bank = await link.findOrCreateBank(
+    institution,
+    externalAccount.orgDomain ?? externalAccount.orgId,
+  );
+
+  if (upgradingId) {
+    const accRow = await db.first('SELECT * FROM accounts WHERE id = ?', [
+      upgradingId,
+    ]);
+    id = accRow.id;
+    await db.update('accounts', {
+      id,
+      account_id: externalAccount.account_id,
+      bank: bank.id,
+      account_sync_source: 'simpleFin',
+    });
+  } else {
+    id = uuidv4();
+    await db.insertWithUUID('accounts', {
+      id,
+      account_id: externalAccount.account_id,
+      name: externalAccount.name,
+      official_name: externalAccount.name,
+      bank: bank.id,
+      offbudget: offBudget ? 1 : 0,
+      account_sync_source: 'simpleFin',
+    });
+    await db.insertPayee({
+      name: '',
+      transfer_acct: id,
+    });
+  }
+
+  await bankSync.syncAccount(
+    undefined,
+    undefined,
+    id,
+    externalAccount.account_id,
+    bank.bank_id,
+  );
+
+  await connection.send('sync-event', {
+    type: 'success',
+    tables: ['transactions'],
+  });
+
+  return 'ok';
+};
+
+handlers['account-create'] = mutator(async function ({
+  name,
+  balance,
+  offBudget,
+  closed,
+}) {
+  return withUndo(async () => {
+    const id = await db.insertAccount({
+      name,
+      offbudget: offBudget ? 1 : 0,
+      closed: closed ? 1 : 0,
+    });
+
+    await db.insertPayee({
+      name: '',
+      transfer_acct: id,
+    });
+
+    if (balance != null && balance !== 0) {
+      const payee = await getStartingBalancePayee();
+
+      await db.insertTransaction({
+        account: id,
+        amount: amountToInteger(balance),
+        category: offBudget ? null : payee.category,
+        payee: payee.id,
+        date: monthUtils.currentDay(),
+        cleared: true,
+        starting_balance_flag: true,
+      });
+    }
+
+    return id;
+  });
+});
+
+handlers['account-close'] = mutator(async function ({
+  id,
+  transferAccountId,
+  categoryId,
+  forced,
+}) {
+  // Unlink the account if it's linked. This makes sure to remove it from
+  // bank-sync providers. (This should not be undo-able, as it mutates the
+  // remote server and the user will have to link the account again)
+  await handlers['account-unlink']({ id });
+
+  return withUndo(async () => {
+    const account = await db.first(
+      'SELECT * FROM accounts WHERE id = ? AND tombstone = 0',
+      [id],
+    );
+
+    // Do nothing if the account doesn't exist or it's already been
+    // closed
+    if (!account || account.closed === 1) {
+      return;
+    }
+
+    const { balance, numTransactions } = await handlers['account-properties']({
+      id,
+    });
+
+    // If there are no transactions, we can simply delete the account
+    if (numTransactions === 0) {
+      await db.deleteAccount({ id });
+    } else if (forced) {
+      const rows = await db.runQuery(
+        'SELECT id, transfer_id FROM v_transactions WHERE account = ?',
+        [id],
+        true,
+      );
+
+      const { id: payeeId } = await db.first(
+        'SELECT id FROM payees WHERE transfer_acct = ?',
+        [id],
+      );
+
+      await batchMessages(async () => {
+        // TODO: what this should really do is send a special message that
+        // automatically marks the tombstone value for all transactions
+        // within an account... or something? This is problematic
+        // because another client could easily add new data that
+        // should be marked as deleted.
+
+        rows.forEach(row => {
+          if (row.transfer_id) {
+            db.updateTransaction({
+              id: row.transfer_id,
+              payee: null,
+              transfer_id: null,
+            });
+          }
+
+          db.deleteTransaction({ id: row.id });
+        });
+
+        db.deleteAccount({ id });
+        db.deleteTransferPayee({ id: payeeId });
+      });
+    } else {
+      if (balance !== 0 && transferAccountId == null) {
+        throw APIError('balance is non-zero: transferAccountId is required');
+      }
+
+      await db.update('accounts', { id, closed: 1 });
+
+      // If there is a balance we need to transfer it to the specified
+      // account (and possibly categorize it)
+      if (balance !== 0) {
+        const { id: payeeId } = await db.first(
+          'SELECT id FROM payees WHERE transfer_acct = ?',
+          [transferAccountId],
+        );
+
+        await handlers['transaction-add']({
+          id: uuidv4(),
+          payee: payeeId,
+          amount: -balance,
+          account: id,
+          date: monthUtils.currentDay(),
+          notes: 'Closing account',
+          category: categoryId || null,
+        });
+      }
+    }
+  });
+});
+
+handlers['account-reopen'] = mutator(async function ({ id }) {
+  return withUndo(async () => {
+    await db.update('accounts', { id, closed: 0 });
+  });
+});
+
+handlers['account-move'] = mutator(async function ({ id, targetId }) {
+  return withUndo(async () => {
+    await db.moveAccount(id, targetId);
+  });
+});
+
+let stopPolling = false;
+
+handlers['secret-set'] = async function ({ name, value }) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  try {
+    return await post(
+      getServer().BASE_SERVER + '/secret',
+      {
+        name,
+        value,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
+};
+
+handlers['secret-check'] = async function (name) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  try {
+    return await get(getServer().BASE_SERVER + '/secret/' + name, {
+      'X-ACTUAL-TOKEN': userToken,
+    });
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
+};
+
+handlers['gocardless-poll-web-token'] = async function ({
+  upgradingAccountId,
+  requisitionId,
+}) {
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) return { error: 'unknown' };
+
+  const startTime = Date.now();
+  stopPolling = false;
+
+  async function getData(cb) {
+    if (stopPolling) {
+      return;
+    }
+
+    if (Date.now() - startTime >= 1000 * 60 * 10) {
+      cb('timeout');
+      return;
+    }
+
+    const data = await post(
+      getServer().GOCARDLESS_SERVER + '/get-accounts',
+      {
+        upgradingAccountId,
+        requisitionId,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+
+    if (data) {
+      if (data.error) {
+        cb('unknown');
+      } else {
+        cb(null, data);
+      }
+    } else {
+      setTimeout(() => getData(cb), 3000);
+    }
+  }
+
+  return new Promise(resolve => {
+    getData((error, data) => {
+      if (error) {
+        resolve({ error });
+      } else {
+        resolve({ data });
+      }
+    });
+  });
+};
+
+handlers['gocardless-status'] = async function () {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  return post(
+    getServer().GOCARDLESS_SERVER + '/status',
+    {},
+    {
+      'X-ACTUAL-TOKEN': userToken,
+    },
+  );
+};
+
+handlers['simplefin-status'] = async function () {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  return post(
+    getServer().SIMPLEFIN_SERVER + '/status',
+    {},
+    {
+      'X-ACTUAL-TOKEN': userToken,
+    },
+  );
+};
+
+handlers['simplefin-accounts'] = async function () {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  try {
+    return await post(
+      getServer().SIMPLEFIN_SERVER + '/accounts',
+      {},
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+      60000,
+    );
+  } catch (error) {
+    return { error_code: 'TIMED_OUT' };
+  }
+};
+
+handlers['gocardless-get-banks'] = async function (country) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  return post(
+    getServer().GOCARDLESS_SERVER + '/get-banks',
+    { country, showDemo: isNonProductionEnvironment() },
+    {
+      'X-ACTUAL-TOKEN': userToken,
+    },
+  );
+};
+
+handlers['gocardless-poll-web-token-stop'] = async function () {
+  stopPolling = true;
+  return 'ok';
+};
+
+handlers['gocardless-create-web-token'] = async function ({
+  upgradingAccountId,
+  institutionId,
+  accessValidForDays,
+}) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  try {
+    return await post(
+      getServer().GOCARDLESS_SERVER + '/create-web-token',
+      {
+        upgradingAccountId,
+        institutionId,
+        accessValidForDays,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
+};
+
+handlers['accounts-bank-sync'] = async function ({ id }) {
+  const [[, userId], [, userKey]] = await asyncStorage.multiGet([
+    'user-id',
+    'user-key',
+  ]);
+  const accounts = await db.runQuery(
+    `SELECT a.*, b.bank_id as bankId FROM accounts a
+         LEFT JOIN banks b ON a.bank = b.id
+         WHERE a.tombstone = 0 AND a.closed = 0 ${id ? 'AND a.id = ?' : ''}`,
+    id ? [id] : [],
+    true,
+  );
+
+  const errors = [];
+  let newTransactions = [];
+  let matchedTransactions = [];
+  let updatedAccounts = [];
+
+  for (let i = 0; i < accounts.length; i++) {
+    const acct = accounts[i];
+    if (acct.bankId) {
+      try {
+        console.group('Bank Sync operation for account:', acct.name);
+        const res = await bankSync.syncAccount(
+          userId,
+          userKey,
+          acct.id,
+          acct.account_id,
+          acct.bankId,
+        );
+        console.groupEnd();
+
+        const { added, updated } = res;
+
+        newTransactions = newTransactions.concat(added);
+        matchedTransactions = matchedTransactions.concat(updated);
+
+        if (added.length > 0 || updated.length > 0) {
+          updatedAccounts = updatedAccounts.concat(acct.id);
+        }
+      } catch (err) {
+        if (err.type === 'BankSyncError') {
+          errors.push({
+            type: 'SyncError',
+            accountId: acct.id,
+            message: 'Failed syncing account “' + acct.name + '.”',
+            category: err.category,
+            code: err.code,
+          });
+        } else if (err instanceof PostError && err.reason !== 'internal') {
+          errors.push({
+            accountId: acct.id,
+            message: err.reason
+              ? err.reason
+              : `Account “${acct.name}” is not linked properly. Please link it again.`,
+          });
+        } else {
+          errors.push({
+            accountId: acct.id,
+            message:
+              'There was an internal error. Please get in touch https://actualbudget.org/contact for support.',
+            internal: err.stack,
+          });
+
+          err.message = 'Failed syncing account: ' + err.message;
+
+          captureException(err);
+        }
+      }
+    }
+  }
+
+  if (updatedAccounts.length > 0) {
+    connection.send('sync-event', {
+      type: 'success',
+      tables: ['transactions'],
+    });
+  }
+
+  return { errors, newTransactions, matchedTransactions, updatedAccounts };
+};
+
+handlers['transactions-import'] = mutator(function ({
+  accountId,
+  transactions,
+  detectInstallments,
+  updateDetectInstallmentDate,
+  ignoreAlreadyDetectedInstallments,
+}) {
+  return withUndo(async () => {
+    if (typeof accountId !== 'string') {
+      throw APIError('transactions-import: accountId must be an id');
+    }
+
+    try {
+      const result = await bankSync.reconcileTransactions(
+        accountId,
+        transactions,
+      );
+
+      await Promise.all(
+        result.added?.map(async transaction => {
+          await bankSync.createScheduleForTransaction(
+            transaction,
+            detectInstallments,
+            updateDetectInstallmentDate,
+            ignoreAlreadyDetectedInstallments,
+          );
+        }),
+      );
+
+      return result;
+    } catch (err) {
+      if (err instanceof TransactionError) {
+        return { errors: [{ message: err.message }], added: [], updated: [] };
+      }
+
+      throw err;
+    }
+  });
+});
+
+handlers['account-unlink'] = mutator(async function ({ id }) {
+  const { bank: bankId } = await db.first(
+    'SELECT bank FROM accounts WHERE id = ?',
+    [id],
+  );
+
+  if (!bankId) {
+    return 'ok';
+  }
+
+  const accRow = await db.first('SELECT * FROM accounts WHERE id = ?', [id]);
+
+  const isGoCardless = accRow.account_sync_source === 'goCardless';
+
+  await db.updateAccount({
+    id,
+    account_id: null,
+    bank: null,
+    balance_current: null,
+    balance_available: null,
+    balance_limit: null,
+    account_sync_source: null,
+  });
+
+  if (isGoCardless === false) {
+    return;
+  }
+
+  const { count } = await db.first(
+    'SELECT COUNT(*) as count FROM accounts WHERE bank = ?',
+    [bankId],
+  );
+
+  // No more accounts are associated with this bank. We can remove
+  // it from GoCardless.
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) {
+    return 'ok';
+  }
+
+  if (count === 0) {
+    const { bank_id: requisitionId } = await db.first(
+      'SELECT bank_id FROM banks WHERE id = ?',
+      [bankId],
+    );
+    try {
+      await post(
+        getServer().GOCARDLESS_SERVER + '/remove-account',
+        {
+          requisitionId,
+        },
+        {
+          'X-ACTUAL-TOKEN': userToken,
+        },
+      );
+    } catch (error) {
+      console.log({ error });
+    }
+  }
+
+  return 'ok';
+});
+
+handlers['save-global-prefs'] = async function (prefs) {
+  if ('maxMonths' in prefs) {
+    await asyncStorage.setItem('max-months', '' + prefs.maxMonths);
+  }
+  if ('autoUpdate' in prefs) {
+    await asyncStorage.setItem('auto-update', '' + prefs.autoUpdate);
+    process.parentPort.postMessage({
+      type: 'shouldAutoUpdate',
+      flag: prefs.autoUpdate,
+    });
+  }
+  if ('documentDir' in prefs) {
+    if (await fs.exists(prefs.documentDir)) {
+      await asyncStorage.setItem('document-dir', prefs.documentDir);
+    }
+  }
+  if ('floatingSidebar' in prefs) {
+    await asyncStorage.setItem('floating-sidebar', '' + prefs.floatingSidebar);
+  }
+  if ('theme' in prefs) {
+    await asyncStorage.setItem('theme', prefs.theme);
+  }
+  return 'ok';
+};
+
+handlers['load-global-prefs'] = async function () {
+  const [
+    [, floatingSidebar],
+    [, maxMonths],
+    [, autoUpdate],
+    [, documentDir],
+    [, encryptKey],
+    [, theme],
+  ] = await asyncStorage.multiGet([
+    'floating-sidebar',
+    'max-months',
+    'auto-update',
+    'document-dir',
+    'encrypt-key',
+    'theme',
+  ]);
+  return {
+    floatingSidebar: floatingSidebar === 'true' ? true : false,
+    maxMonths: stringToInteger(maxMonths || ''),
+    autoUpdate: autoUpdate == null || autoUpdate === 'true' ? true : false,
+    documentDir: documentDir || getDefaultDocumentDir(),
+    keyId: encryptKey && JSON.parse(encryptKey).id,
+    theme:
+      theme === 'light' ||
+      theme === 'dark' ||
+      theme === 'auto' ||
+      theme === 'development' ||
+      theme === 'midnight'
+        ? theme
+        : 'auto',
+  };
+};
+
+handlers['save-prefs'] = async function (prefsToSet) {
+  const { cloudFileId } = prefs.getPrefs();
+
+  // Need to sync the budget name on the server as well
+  if (prefsToSet.budgetName && cloudFileId) {
+    const userToken = await asyncStorage.getItem('user-token');
+
+    await post(getServer().SYNC_SERVER + '/update-user-filename', {
+      token: userToken,
+      fileId: cloudFileId,
+      name: prefsToSet.budgetName,
+    });
+  }
+
+  await prefs.savePrefs(prefsToSet);
+  return 'ok';
+};
+
+handlers['load-prefs'] = async function () {
+  return prefs.getPrefs();
+};
+
+handlers['sync-reset'] = async function () {
+  return await resetSync();
+};
+
+handlers['sync-repair'] = async function () {
+  await repairSync();
+};
+
 // A user can only enable/change their key with the file loaded. This
 // will change in the future: during onboarding the user should be
 // able to enable encryption. (Imagine if they are importing data from
