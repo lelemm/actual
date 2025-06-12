@@ -9,6 +9,7 @@ import {
   SvgCreditCard,
   SvgReports,
   SvgStoreFront,
+  SvgTag,
   SvgTuning,
   SvgWallet,
 } from '@actual-app/components/icons/v1';
@@ -19,12 +20,16 @@ import { Item } from './Item';
 import { SecondaryItem } from './SecondaryItem';
 
 import { useSyncServerStatus } from '@desktop-client/hooks/useSyncServerStatus';
+import { useDispatch } from '@desktop-client/redux';
+import { pushModal } from '@desktop-client/modals/modalsSlice';
 
 export function PrimaryButtons() {
   const { t } = useTranslation();
   const [isOpen, setOpen] = useState(false);
   const onToggle = useCallback(() => setOpen(open => !open), []);
   const location = useLocation();
+
+  const dispatch = useDispatch();
 
   const syncServerStatus = useSyncServerStatus();
   const isUsingServer = syncServerStatus !== 'no-server';
@@ -77,6 +82,12 @@ export function PrimaryButtons() {
               indent={15}
             />
           )}
+          <SecondaryItem
+            title={t('Tags')}
+            Icon={SvgTag}
+            to="/tags"
+            indent={15}
+          />
           <SecondaryItem
             title={t('Settings')}
             Icon={SvgCog}

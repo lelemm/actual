@@ -45,6 +45,7 @@ import { useNavigate } from '@desktop-client/hooks/useNavigate';
 import { addNotification } from '@desktop-client/notifications/notificationsSlice';
 import { useSelector, useDispatch } from '@desktop-client/redux';
 import { getIsOutdated, getLatestVersion } from '@desktop-client/util/versions';
+import { ManageTagsPage } from './tags/ManageTagsPage';
 
 function NarrowNotSupported({
   redirectTo = '/budget',
@@ -257,6 +258,7 @@ export function FinancesApp() {
                 <Route path="/payees" element={<ManagePayeesPage />} />
                 <Route path="/rules" element={<ManageRulesPage />} />
                 <Route path="/bank-sync" element={<BankSync />} />
+                <Route path="/tags" element={<ManageTagsPage />} />
                 <Route path="/settings" element={<Settings />} />
 
                 <Route
