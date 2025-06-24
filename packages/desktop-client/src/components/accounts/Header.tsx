@@ -276,7 +276,7 @@ export function AccountHeader({
       <View style={{ ...styles.pageContent, paddingBottom: 10, flexShrink: 0 }}>
         <View
           style={{
-            flexDirection: 'column',
+            flexDirection: 'row',
             marginTop: 2,
             justifyContent: 'space-between',
             gap: 10,
@@ -324,8 +324,14 @@ export function AccountHeader({
             <NetWorthComponent
               hideNetWorth
               hideFilters
+              hideHeader
               accounts={selectedAccounts}
-              style={{ height: '30vh', minHeight: '250px', maxHeight: '400px' }}
+              style={{
+                height: '30vh',
+                minHeight: '250px',
+                maxHeight: '400px',
+                flexGrow: 0.8,
+              }}
             />
           )}
         </View>

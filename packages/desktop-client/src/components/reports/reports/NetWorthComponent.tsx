@@ -33,6 +33,7 @@ type NetWorthComponentProps = {
   style?: CSSProperties;
   hideNetWorth?: boolean;
   hideFilters?: boolean;
+  hideHeader?: boolean;
   filterConditions?: RuleConditionEntity[];
   filterConditionsOp?: 'and' | 'or';
   initialTimeFrame?: TimeFrame;
@@ -48,6 +49,7 @@ export function NetWorthComponent({
   style,
   hideNetWorth = false,
   hideFilters = false,
+  hideHeader = false,
   filterConditions,
   filterConditionsOp,
   initialTimeFrame,
@@ -141,32 +143,33 @@ export function NetWorthComponent({
         ...style,
       }}
     >
-      <Header
-        allMonths={allMonths}
-        start={start}
-        end={end}
-        earliestTransaction={earliestTransaction}
-        firstDayOfWeekIdx={firstDayOfWeekIdx}
-        mode={mode}
-        onChangeDates={onChangeDates}
-        filters={hideFilters ? undefined : conditions}
-        onApply={onApplyFilter}
-        onUpdateFilter={onUpdateFilter}
-        onDeleteFilter={onDeleteFilter}
-        conditionsOp={conditionsOp}
-        onConditionsOpChange={onConditionsOpChange}
-      >
-        {children?.({
-          conditions,
-          conditionsOp,
-          timeFrame: {
-            start,
-            end,
-            mode,
-          },
-        })}
-      </Header>
-
+      {!hideHeader && (
+        <Header
+          allMonths={allMonths}
+          start={start}
+          end={end}
+          earliestTransaction={earliestTransaction}
+          firstDayOfWeekIdx={firstDayOfWeekIdx}
+          mode={mode}
+          onChangeDates={onChangeDates}
+          filters={hideFilters ? undefined : conditions}
+          onApply={onApplyFilter}
+          onUpdateFilter={onUpdateFilter}
+          onDeleteFilter={onDeleteFilter}
+          conditionsOp={conditionsOp}
+          onConditionsOpChange={onConditionsOpChange}
+        >
+          {children?.({
+            conditions,
+            conditionsOp,
+            timeFrame: {
+              start,
+              end,
+              mode,
+            },
+          })}
+        </Header>
+      )}
       <View
         style={{
           backgroundColor: theme.tableBackground,
