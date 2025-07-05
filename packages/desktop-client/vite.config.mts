@@ -117,7 +117,7 @@ export default defineConfig(async ({ mode }) => {
       sourcemap: true,
       outDir: mode === 'desktop' ? 'build-electron' : 'build',
       assetsDir: 'static',
-      manifest: true,
+      manifest: false, // Disable Vite manifest since we're using PWA
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
@@ -162,6 +162,19 @@ export default defineConfig(async ({ mode }) => {
             strategies: 'injectManifest',
             srcDir: 'service-worker',
             filename: 'plugin-sw.js',
+            manifest: {
+              name: 'Actual',
+              short_name: 'Actual',
+              description: 'A local-first personal finance tool',
+              theme_color: '#8812E1',
+              background_color: '#8812E1',
+              display: 'standalone',
+              start_url: './',
+            },
+            injectManifest: {
+              maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
+              swSrc: 'service-worker/plugin-sw.js',
+            },
             devOptions: {
               enabled: true, // ✅ forces SW registration in dev
               type: 'module',
@@ -172,7 +185,7 @@ export default defineConfig(async ({ mode }) => {
               ],
               ignoreURLParametersMatching: [/^v$/],
               navigateFallback: '/index.html',
-              maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+              maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
               navigateFallbackDenylist: [
                 /^\/account\/.*$/,
                 /^\/admin\/.*$/,

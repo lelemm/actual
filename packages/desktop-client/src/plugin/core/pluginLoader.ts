@@ -459,26 +459,26 @@ async function injectIntoGlobalHook(pluginName: string, pluginEntry: string) {
   if (process.env.NODE_ENV === 'development') {
     try {
       // Get the plugin's base URL
-      const pluginBaseUrl = new URL(pluginEntry).origin;
-      const refreshUrl = `${pluginBaseUrl}/@react-refresh`;
+      // const pluginBaseUrl = new URL(pluginEntry).origin;
+      // const refreshUrl = `${pluginBaseUrl}/@react-refresh`;
       
-      // Load the plugin's React Refresh module
-      const refreshModule = await import(/* @vite-ignore */ refreshUrl);
+      // // Load the plugin's React Refresh module
+      // const refreshModule = await import(/* @vite-ignore */ refreshUrl);
       
-      if (refreshModule.injectIntoGlobalHook) {
-        // Inject the plugin's React Refresh into the global hook
-        refreshModule.injectIntoGlobalHook(window);
+      // if (refreshModule.injectIntoGlobalHook) {
+      //   // Inject the plugin's React Refresh into the global hook
+      //   refreshModule.injectIntoGlobalHook(window);
         
-        // Set up refresh globals if they don't exist
-        if (!(window as any).$RefreshReg$) {
-          (window as any).$RefreshReg$ = () => {};
-        }
-        if (!(window as any).$RefreshSig$) {
-          (window as any).$RefreshSig$ = () => (type: any) => type;
-        }
+      //   // Set up refresh globals if they don't exist
+      //   if (!(window as any).$RefreshReg$) {
+      //     (window as any).$RefreshReg$ = () => {};
+      //   }
+      //   if (!(window as any).$RefreshSig$) {
+      //     (window as any).$RefreshSig$ = () => (type: any) => type;
+      //   }
         
-        console.log(`🔥 React Refresh injected for plugin: ${pluginName}`);
-      }
+      //   console.log(`🔥 React Refresh injected for plugin: ${pluginName}`);
+      // }
     } catch (error) {
       console.warn(`Failed to inject React Refresh for ${pluginName}:`, error);
     }

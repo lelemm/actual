@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
   useEffect,
+  useMemo,
 } from 'react';
 
 import {
@@ -126,19 +127,41 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
     pluginName: string;
   }>>(new Map());
 
-  useEventDispatcher(
-    'payess',
-    state => ({ payess: state.queries.payees }),
-    events,
-  );
-  useEventDispatcher(
-    'categories',
-    state => ({
-      categories: state.queries.categories.list,
-      groups: state.queries.categories.grouped,
-    }),
-    events,
-  );
+  // Create memoized selectors that return stable references
+  const payeesSelector = useMemo(() => {
+    let lastPayees: any = null;
+    let lastResult: { payess: any } | null = null;
+    
+    return (state: any) => {
+      if (state.queries.payees !== lastPayees) {
+        lastPayees = state.queries.payees;
+        lastResult = { payess: state.queries.payees };
+      }
+      return lastResult!;
+    };
+  }, []);
+  
+  const categoriesSelector = useMemo(() => {
+    let lastCategories: any = null;
+    let lastGroups: any = null;
+    let lastResult: { categories: any; groups: any } | null = null;
+    
+    return (state: any) => {
+      if (state.queries.categories.list !== lastCategories || 
+          state.queries.categories.grouped !== lastGroups) {
+        lastCategories = state.queries.categories.list;
+        lastGroups = state.queries.categories.grouped;
+        lastResult = {
+          categories: state.queries.categories.list,
+          groups: state.queries.categories.grouped,
+        };
+      }
+      return lastResult!;
+    };
+  }, []);
+
+  useEventDispatcher('payess', payeesSelector, events);
+  useEventDispatcher('categories', categoriesSelector, events);
 
   // We store modules in memory if needed (original code had it, but not used outside loadPlugins)
   // If you want to keep that, do so:
@@ -378,7 +401,7 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
     [handleLoadPlugins, pluginsEnabled, initialized, setinitialized],
   );
 
-  // A function to refresh the plugin store from IndexedDB and reload if needed
+    // A function to refresh the plugin store from IndexedDB and reload if needed
   const refreshPluginStore = useCallback(
     async (devUrl?: string) => {
       if (!pluginsEnabled) return;

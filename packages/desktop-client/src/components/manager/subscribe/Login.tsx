@@ -68,6 +68,7 @@ function PasswordLogin({ setError, dispatch }) {
         onChangeValue={newValue => setPassword(newValue)}
         style={{ flex: 1 }}
         onEnter={onSubmitPassword}
+        data-testid="password-input"
       />
       <ButtonWithLoading
         variant="primary"
@@ -266,7 +267,7 @@ export function Login() {
   }
 
   return (
-    <View style={{ maxWidth: 450, marginTop: -30, color: theme.pageText }}>
+    <View style={{ maxWidth: 450, marginTop: -30, color: theme.pageText }} data-testid="login-page">
       <Title text={t('Sign in to this Actual instance')} />
 
       {loginMethods?.length > 1 && (

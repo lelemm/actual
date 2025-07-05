@@ -7,14 +7,15 @@ export default defineConfig({
     lib: {
       entry: 'src/index.ts',
       name: '@actual-app/plugins-core',
-      fileName: `index`,
-      formats: ['es'],
+      fileName: (format) => format === 'es' ? 'index.js' : 'index.cjs',
+      formats: ['es', 'cjs'],
     },
     rollupOptions: {
-      external: ['react'],
+      external: ['react', 'react-dom', '@actual-app/components'],
       output: {
         globals: {
-          react: 'react',
+          react: 'React',
+          'react-dom': 'ReactDOM',
         },
       },
     },
@@ -23,9 +24,10 @@ export default defineConfig({
     dts({
       insertTypesEntry: true,
       outDir: 'build',
-      include: ['src'],
-      rollupTypes: true,
-      copyDtsFiles: true,
+      include: ['src/**/*'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      rollupTypes: false,
+      copyDtsFiles: false,
     }),
   ],
 });

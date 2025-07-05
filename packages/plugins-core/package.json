@@ -1,23 +1,48 @@
 {
   "name": "@actual-app/plugins-core",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "0.1.0",
+  "description": "Core plugin system for Actual Budget",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "playwright test",
+    "test:all": "yarn test && yarn test:integration",
+    "lint": "eslint src/ tests/ --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:docker": "playwright test --config=playwright.docker.config.ts",
+    "test:install": "playwright install"
   },
   "devDependencies": {
     "@actual-app/components": "workspace:^",
+    "@playwright/test": "^1.45.0",
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.25",
+    "@vitest/ui": "^3.2.3",
+    "jsdom": "^23.0.1",
     "react": "^18.2.0",
     "react-aria-components": "^1.7.1",
+    "react-dom": "^18.2.0",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.18.1",
     "typescript-strict-plugin": "^2.4.4",
     "vite": "^6.2.0",
-    "vite-plugin-dts": "^4.5.3"
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^1.0.4"
   },
   "exports": {
     ".": {
@@ -29,5 +54,9 @@
       "types": "./build/BasicModalComponents.d.ts",
       "import": "./build/BasicModalComponents.js"
     }
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
   }
 }

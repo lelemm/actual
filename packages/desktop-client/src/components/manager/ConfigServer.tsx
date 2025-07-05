@@ -118,7 +118,7 @@ export function ConfigServer() {
   }
 
   return (
-    <View style={{ maxWidth: 500, marginTop: -30 }}>
+    <View style={{ maxWidth: 500, marginTop: -30 }} data-testid="config-server-page">
       <Title text={t('Where’s the server?')} />
 
       <Text
@@ -190,6 +190,7 @@ export function ConfigServer() {
           onChangeValue={setUrl}
           style={{ flex: 1, marginRight: 10 }}
           onEnter={onSubmit}
+          data-testid="server-url-input"
         />
         <ButtonWithLoading
           variant="primary"

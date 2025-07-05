@@ -14,7 +14,8 @@
   "license": "MIT",
   "workspaces": {
     "packages": [
-      "packages/*"
+      "packages/*",
+      "!packages/test-plugin"
     ]
   },
   "scripts": {
@@ -39,6 +40,12 @@
     "generate:release-notes": "ts-node ./bin/release-note-generator.ts",
     "test": "yarn workspaces foreach --all --parallel --verbose run test",
     "test:debug": "yarn workspaces foreach --all --verbose run test",
+    "test:plugin-e2e": "npm-run-all --parallel test:plugin-e2e:servers --race test:plugin-e2e:tests -- --kill-others-on-fail",
+    "test:plugin-e2e:servers": "npm-run-all --parallel test:plugin-e2e:server-dev test:plugin-e2e:test-plugin",
+    "test:plugin-e2e:server-dev": "yarn start:server-dev",
+    "test:plugin-e2e:test-plugin": "cd packages/test-plugin && yarn start",
+    "test:plugin-e2e:tests": "wait-on http://localhost:3000 http://localhost:2000 && yarn workspace @actual-app/plugins-core test:e2e",
+    "test:plugin-e2e:docker": "./bin/run-plugin-e2e",
     "e2e": "yarn workspaces foreach --all --parallel --verbose run e2e",
     "vrt": "yarn workspaces foreach --all --parallel --verbose run vrt",
     "vrt:docker": "./bin/run-vrt",
@@ -77,10 +84,12 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.26.1",
-    "typescript-strict-plugin": "^2.4.4"
+    "typescript-strict-plugin": "^2.4.4",
+    "wait-on": "^8.0.1"
   },
   "resolutions": {
-    "rollup": "4.9.4"
+    "rollup": "4.9.4",
+    "vite": "6.2.0"
   },
   "engines": {
     "node": ">=18.0.0"

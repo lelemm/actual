@@ -58,6 +58,7 @@ export function ConfirmPasswordForm({
         value={password1}
         onChangeValue={setPassword1}
         onEnter={onSubmit}
+        data-testid="password-input"
       />
       <BigInput
         placeholder={t('Confirm password')}
@@ -66,6 +67,7 @@ export function ConfirmPasswordForm({
         onChangeValue={setPassword2}
         style={{ marginTop: 10 }}
         onEnter={onSubmit}
+        data-testid="confirm-password-input"
       />
 
       <View
@@ -86,6 +88,7 @@ export function ConfirmPasswordForm({
           variant="primary"
           isLoading={loading}
           onPress={onSubmit}
+          data-testid="set-password-button"
         >
           <Trans>OK</Trans>
         </ButtonWithLoading>

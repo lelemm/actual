@@ -1,0 +1,25 @@
+{
+  "name": "@actual-app/test-plugin-backup",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "module": "build/test-plugin.es.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "start": "vite",
+    "preview": "vite build && vite preview"
+  },
+  "devDependencies": {
+    "@actual-app/plugins-core": "workspace:*",
+    "@module-federation/vite": "^1.4.1",
+    "@types/react": "^18.2.0",
+    "@vitejs/plugin-react-swc": "^3.10.2",
+    "archiver": "^7.0.1",
+    "react": "^18.2.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
+  },
+  "packageManager": "yarn@4.3.1"
+}

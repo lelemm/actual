@@ -1073,35 +1073,132 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
     return { success: true };
   }
 
+  console.log(`🔧 Starting plugin database creation for: ${pluginId}`);
+
   try {
-    // Use the documents directory pattern that Actual Budget uses for databases
-    // This automatically handles IndexedDB storage and symlinks to blocked filesystem
-    const dbPath = `/documents/plugin-${pluginId}.sqlite`;
-    
-    // Open/create the database using existing SQLite infrastructure
-    // This will automatically create the proper database file with correct structure
-    const db = await sqlite.openDatabase(dbPath);
-
-    // Initialize plugin infrastructure tables
-    await sqlite.execQuery(db, `
-      CREATE TABLE IF NOT EXISTS __plugin_migrations__ (
-        id TEXT PRIMARY KEY,
-        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+    // Step 1: Check filesystem readiness and wait for initialization
+    try {
+      console.log(`📁 Checking filesystem readiness for plugin: ${pluginId}`);
       
-      CREATE TABLE IF NOT EXISTS __plugin_metadata__ (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-    `);
+      // Wait for filesystem initialization to complete
+      let retries = 0;
+      const maxRetries = 10;
+      while (retries < maxRetries) {
+        try {
+          const documentsExists = await fs.exists('/documents');
+          if (!documentsExists) {
+            throw new Error('Filesystem not ready: /documents directory not found');
+          }
+          
+          // Additional check: try to create and remove a test file to ensure SQLiteFS is ready
+          const testPath = `/documents/test-${Date.now()}.tmp`;
+          await fs.writeFile(testPath, 'test');
+          await fs.removeFile(testPath);
+          
+          console.log(`✅ Filesystem check passed for plugin: ${pluginId}`);
+          break;
+        } catch (error) {
+          retries++;
+          console.log(`⏳ Filesystem not ready (attempt ${retries}/${maxRetries}), waiting...`);
+          if (retries >= maxRetries) {
+            console.error(`❌ Filesystem check failed after ${maxRetries} attempts for plugin ${pluginId}:`, error);
+            throw error;
+          }
+          // Wait 500ms before retrying
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Filesystem check failed for plugin ${pluginId}:`, error);
+      throw error;
+    }
 
-    // Store database reference
-    pluginDatabases.set(pluginId, db);
+    // Step 2: Generate database path
+    const dbPath = `/documents/plugin-${pluginId}.sqlite`;
+    console.log(`📍 Database path for plugin ${pluginId}: ${dbPath}`);
+
+    // Step 3: Wait for SQLiteFS backend to be ready
+    try {
+      console.log(`🗄️  Waiting for SQLiteFS backend to be ready for plugin: ${pluginId}`);
+      
+      // Wait for backend initialization by trying to create/access files in the blocked directory
+      let backendRetries = 0;
+      const maxBackendRetries = 20;
+      while (backendRetries < maxBackendRetries) {
+        try {
+          // Test that the SQLiteFS (/blocked) is mounted and working
+          const testDbPath = `/documents/test-backend-${Date.now()}.sqlite`;
+          const testDb = await sqlite.openDatabase(testDbPath);
+          await sqlite.closeDatabase(testDb);
+          await fs.removeFile(testDbPath);
+          console.log(`✅ SQLiteFS backend is ready for plugin: ${pluginId}`);
+          break;
+        } catch (error) {
+          backendRetries++;
+          console.log(`⏳ SQLiteFS backend not ready (attempt ${backendRetries}/${maxBackendRetries}), waiting...`, error.message);
+          if (backendRetries >= maxBackendRetries) {
+            console.error(`❌ SQLiteFS backend failed to initialize after ${maxBackendRetries} attempts for plugin ${pluginId}:`, error);
+            throw new Error(`SQLiteFS backend not ready: ${error.message}`);
+          }
+          // Wait 1000ms before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    } catch (error) {
+      console.error(`❌ SQLiteFS backend check failed for plugin ${pluginId}:`, error);
+      throw error;
+    }
+
+    // Step 4: Open/create the database
+    let db;
+    try {
+      console.log(`🗄️  Opening database for plugin: ${pluginId}`);
+      db = await sqlite.openDatabase(dbPath);
+      console.log(`✅ Database opened successfully for plugin: ${pluginId}`);
+    } catch (error) {
+      console.error(`❌ Database opening failed for plugin ${pluginId}:`, error);
+      throw error;
+    }
+
+    // Step 5: Create infrastructure tables
+    try {
+      console.log(`🏗️  Creating infrastructure tables for plugin: ${pluginId}`);
+      await sqlite.execQuery(db, `
+        CREATE TABLE IF NOT EXISTS __plugin_migrations__ (
+          id TEXT PRIMARY KEY,
+          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS __plugin_metadata__ (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `);
+      console.log(`✅ Infrastructure tables created for plugin: ${pluginId}`);
+    } catch (error) {
+      console.error(`❌ Infrastructure table creation failed for plugin ${pluginId}:`, error);
+      throw error;
+    }
+
+    // Step 6: Store database reference
+    try {
+      console.log(`💾 Storing database reference for plugin: ${pluginId}`);
+      pluginDatabases.set(pluginId, db);
+      console.log(`✅ Database reference stored for plugin: ${pluginId}`);
+    } catch (error) {
+      console.error(`❌ Database reference storage failed for plugin ${pluginId}:`, error);
+      throw error;
+    }
     
-    console.log(`✅ Plugin database created for: ${pluginId} at ${dbPath}`);
+    console.log(`🎉 Plugin database created successfully for: ${pluginId} at ${dbPath}`);
     return { success: true };
   } catch (error) {
-    console.error(`Failed to create plugin database for ${pluginId}:`, error);
+    console.error(`💥 Overall plugin database creation failed for ${pluginId}:`, error);
+    console.error(`💥 Error details:`, {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };

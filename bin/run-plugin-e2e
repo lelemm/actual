@@ -1,0 +1,91 @@
+#!/bin/sh
+
+# Plugin E2E Testing with Docker
+# This script builds the sync server container on the host, then runs Playwright tests against it
+# See here for more information: https://github.com/actualbudget/actual/tree/master/packages/plugins-core#docker-based-testing-recommended-for-cistable-results
+
+E2E_ARGS=""
+
+# Loop through all arguments
+while [ $# -gt 0 ]; do
+    E2E_ARGS="$E2E_ARGS $1"
+    shift
+done
+
+echo "Running Plugin E2E tests with Docker sync server..."
+echo "E2E_ARGS: $E2E_ARGS"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Build and start sync server container with embedded UI
+echo -e "${YELLOW}🔨 Building sync server with embedded UI...${NC}"
+docker build -f sync-server.Dockerfile -t actual-sync-server:test .
+
+# Clean up any existing container
+docker rm -f actual-sync-server-test 2>/dev/null || true
+
+# Start the sync server container with embedded UI
+echo -e "${YELLOW}🚀 Starting sync server container...${NC}"
+docker run -d --name actual-sync-server-test -p 5006:5006 actual-sync-server:test
+
+# Wait for sync server to be ready
+echo -n "Waiting for sync server (localhost:5006)..."
+timeout=120  # 2 minutes
+while [ $timeout -gt 0 ]; do
+    if curl -s http://localhost:5006 > /dev/null 2>&1; then
+        echo -e " ${GREEN}✅${NC}"
+        break
+    fi
+    echo -n "."
+    sleep 1
+    timeout=$((timeout - 1))
+done
+
+if [ $timeout -eq 0 ]; then
+    echo -e " ${RED}❌ Failed to start sync server${NC}"
+    echo "Sync server container logs:"
+    docker logs actual-sync-server-test 2>&1 | tail -50
+    docker rm -f actual-sync-server-test 2>/dev/null || true
+    exit 1
+fi
+
+# Function to cleanup 
+cleanup() {
+    echo -e "\n${YELLOW}🧹 Cleaning up...${NC}"
+    docker stop actual-sync-server-test 2>/dev/null || true
+    docker rm actual-sync-server-test 2>/dev/null || true
+    echo -e "${GREEN}✅ Cleanup completed${NC}"
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
+
+# Run Docker plugin e2e script which builds test plugin and runs Playwright tests
+echo -e "${BLUE}🧪 Running Docker plugin e2e script...${NC}"
+# Use host network mode so the container can access localhost:5006 and serve on localhost:2000
+MSYS_NO_PATHCONV=1 docker run --rm --network host -v "$(pwd)":/work/ -w /work/ -it mcr.microsoft.com/playwright:v1.53.0-jammy \
+  ./bin/docker-plugin-e2e $E2E_ARGS
+
+TEST_EXIT_CODE=$?
+
+# Copy trace files to host if they exist
+echo "Copying test artifacts..."
+if [ -d "packages/plugins-core/test-results" ]; then
+  echo "✅ Test results and traces available in packages/plugins-core/test-results/"
+fi
+if [ -d "packages/plugins-core/playwright-report" ]; then
+  echo "✅ HTML report available in packages/plugins-core/playwright-report/"
+fi
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    echo -e "${GREEN}🎉 All tests passed!${NC}"
+else
+    echo -e "${RED}❌ Some tests failed${NC}"
+fi
+
+exit $TEST_EXIT_CODE 

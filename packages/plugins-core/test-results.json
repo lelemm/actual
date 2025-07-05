@@ -1,0 +1,540 @@
+{
+  "config": {
+    "configFile": "/work/packages/plugins-core/playwright.docker.config.ts",
+    "rootDir": "/work/packages/plugins-core/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 300000,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/work/packages/plugins-core/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/work/packages/plugins-core/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.53.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "plugin-integration.spec.ts",
+      "file": "plugin-integration.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Plugin Integration Tests",
+          "file": "plugin-integration.spec.ts",
+          "line": 90,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should install plugin via module federation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "interrupted",
+                      "duration": 40340,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\u001b[22m\n\u001b[2m    2 × locator resolved to <div data-testid=\"installed-plugins\"></div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\u001b[22m\n\u001b[2m    2 × locator resolved to <div data-testid=\"installed-plugins\"></div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n    at /work/packages/plugins-core/tests/plugin-integration.spec.ts:126:31",
+                        "location": {
+                          "file": "/work/packages/plugins-core/tests/plugin-integration.spec.ts",
+                          "column": 31,
+                          "line": 126
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 124 |\u001b[39m     \u001b[90m// This could be the plugin appearing in the installed plugins list\u001b[39m\n \u001b[90m 125 |\u001b[39m     \u001b[36mconst\u001b[39m pluginsList \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'[data-testid=\"installed-plugins\"]'\u001b[39m)\u001b[33m.\u001b[39mor(page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=Test Plugin'\u001b[39m))\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 126 |\u001b[39m     \u001b[36mawait\u001b[39m expect(pluginsList)\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m5000\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 127 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m   test(\u001b[32m'should register and display dashboard widgets'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/work/packages/plugins-core/tests/plugin-integration.spec.ts",
+                            "column": 31,
+                            "line": 126
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid=\"installed-plugins\"]').or(locator('text=Test Plugin'))\u001b[22m\n\u001b[2m    2 × locator resolved to <div data-testid=\"installed-plugins\"></div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 124 |\u001b[39m     \u001b[90m// This could be the plugin appearing in the installed plugins list\u001b[39m\n \u001b[90m 125 |\u001b[39m     \u001b[36mconst\u001b[39m pluginsList \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'[data-testid=\"installed-plugins\"]'\u001b[39m)\u001b[33m.\u001b[39mor(page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=Test Plugin'\u001b[39m))\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 126 |\u001b[39m     \u001b[36mawait\u001b[39m expect(pluginsList)\u001b[33m.\u001b[39mtoBeVisible({ timeout\u001b[33m:\u001b[39m \u001b[35m5000\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 127 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m   test(\u001b[32m'should register and display dashboard widgets'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\u001b[0m\n\u001b[2m    at /work/packages/plugins-core/tests/plugin-integration.spec.ts:126:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "🔧 Setting up Actual Budget for plugin tests...\n"
+                        },
+                        {
+                          "text": "📍 Current URL: http://localhost:5006/bootstrap\n"
+                        },
+                        {
+                          "text": "ℹ️  No server config page found, checking other states...\n"
+                        },
+                        {
+                          "text": "📝 Bootstrapping - creating user and password...\n"
+                        },
+                        {
+                          "text": "🔐 Filling in password and signing in...\n"
+                        },
+                        {
+                          "text": "⏳ Waiting for login to complete and redirect...\n"
+                        },
+                        {
+                          "text": "📍 URL after login: http://localhost:5006/\n"
+                        },
+                        {
+                          "text": "⏳ Waiting for application to fully load after authentication...\n"
+                        },
+                        {
+                          "text": "🏠 Navigating to main page to check budget state...\n"
+                        },
+                        {
+                          "text": "💰 Creating budget file...\n"
+                        },
+                        {
+                          "text": "💰 Starting budget creation process...\n"
+                        },
+                        {
+                          "text": "📄 Found \"Start fresh\" button, creating new budget...\n"
+                        },
+                        {
+                          "text": "⏳ Waiting for budget to load...\n"
+                        },
+                        {
+                          "text": "✅ Budget created and loaded successfully\n"
+                        },
+                        {
+                          "text": "🔌 Enabling plugin features...\n"
+                        },
+                        {
+                          "text": "🔌 Enabling plugin features...\n"
+                        },
+                        {
+                          "text": "📝 Found \"Show advanced settings\", clicking...\n"
+                        },
+                        {
+                          "text": "🧪 Found experimental features section, clicking...\n"
+                        },
+                        {
+                          "text": "🔧 Found \"Client-Side plugins\" toggle, enabling...\n"
+                        },
+                        {
+                          "text": "✅ Client-Side plugins enabled\n"
+                        },
+                        {
+                          "text": "✅ Plugin features enabling attempt completed\n"
+                        },
+                        {
+                          "text": "✅ Setup complete!\n"
+                        },
+                        {
+                          "text": "🔌 Installing test plugin...\n"
+                        },
+                        {
+                          "text": "📍 Current URL: http://localhost:5006/plugins\n"
+                        },
+                        {
+                          "text": "📄 Plugins page content preview: \n    My FinancesBudgetReportsSchedulesMoreAll accounts0.00Add accountSyncServer onlineHelpA new version of Actual is available!Version v25.6.1 of Actual was recently released.Open changelogPluginsManage and configure plugins to enhance functionality and efficiency. Learn moreCheck for updatesUpload ...\n"
+                        },
+                        {
+                          "text": "✅ Plugins page loaded successfully\n"
+                        },
+                        {
+                          "text": "📝 Found dev plugin input, attempting to load plugin...\n"
+                        },
+                        {
+                          "text": "🔌 Clicking \"Enable Dev Plugin\" button...\n"
+                        },
+                        {
+                          "text": "[Browser LOG] 🔧 Starting plugin database creation for: dev-plugin\n"
+                        },
+                        {
+                          "text": "[Browser LOG] 📁 Checking filesystem readiness for plugin: dev-plugin\n"
+                        },
+                        {
+                          "text": "[Browser LOG] ✅ Filesystem check passed for plugin: dev-plugin\n"
+                        },
+                        {
+                          "text": "[Browser LOG] 📍 Database path for plugin dev-plugin: /documents/plugin-dev-plugin.sqlite\n"
+                        },
+                        {
+                          "text": "[Browser LOG] 🗄️  Waiting for SQLiteFS backend to be ready for plugin: dev-plugin\n"
+                        },
+                        {
+                          "text": "✅ Plugin load attempt completed\n"
+                        },
+                        {
+                          "text": "✅ Test plugin installation attempt completed\n"
+                        },
+                        {
+                          "text": "Uninstalling test plugin...\n"
+                        },
+                        {
+                          "text": "Test plugin uninstalled\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-06-12T03:38:06.119Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/work/packages/plugins-core/test-results/plugin-integration-Plugin--d97ec-lugin-via-module-federation-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/work/packages/plugins-core/test-results/plugin-integration-Plugin--d97ec-lugin-via-module-federation-chromium/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/work/packages/plugins-core/test-results/plugin-integration-Plugin--d97ec-lugin-via-module-federation-chromium/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/work/packages/plugins-core/tests/plugin-integration.spec.ts",
+                        "column": 31,
+                        "line": 126
+                      }
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-1f21210f07936b1ef435",
+              "file": "plugin-integration.spec.ts",
+              "line": 117,
+              "column": 7
+            },
+            {
+              "title": "should register and display dashboard widgets",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-5d29b45f9386c9291aa6",
+              "file": "plugin-integration.spec.ts",
+              "line": 129,
+              "column": 7
+            },
+            {
+              "title": "should register sidebar menu items",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-5f5674559c1704d6828a",
+              "file": "plugin-integration.spec.ts",
+              "line": 150,
+              "column": 7
+            },
+            {
+              "title": "should register custom routes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-05d7e5e4e62b4858bff7",
+              "file": "plugin-integration.spec.ts",
+              "line": 167,
+              "column": 7
+            },
+            {
+              "title": "should handle modal functionality",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-bbdd3fe17ecf1542f699",
+              "file": "plugin-integration.spec.ts",
+              "line": 179,
+              "column": 7
+            },
+            {
+              "title": "should access plugin database",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-de69ab2d36f0133ad47b",
+              "file": "plugin-integration.spec.ts",
+              "line": 203,
+              "column": 7
+            },
+            {
+              "title": "should register themes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-14958bd07a2ac124786b",
+              "file": "plugin-integration.spec.ts",
+              "line": 221,
+              "column": 7
+            },
+            {
+              "title": "should handle data queries and filters",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-1356c8eee032ffbb9caf",
+              "file": "plugin-integration.spec.ts",
+              "line": 238,
+              "column": 7
+            },
+            {
+              "title": "should handle spreadsheet integration",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-6e9f4705f30c58b9059e",
+              "file": "plugin-integration.spec.ts",
+              "line": 259,
+              "column": 7
+            },
+            {
+              "title": "should support plugin lifecycle events",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-7b6739488b3183dcbba0",
+              "file": "plugin-integration.spec.ts",
+              "line": 273,
+              "column": 7
+            },
+            {
+              "title": "should support plugin migration system",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-8efda2a2aca14cd6d2de",
+              "file": "plugin-integration.spec.ts",
+              "line": 306,
+              "column": 7
+            },
+            {
+              "title": "should handle navigation API",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-c85c29e5e64e4e59e3d1",
+              "file": "plugin-integration.spec.ts",
+              "line": 330,
+              "column": 7
+            },
+            {
+              "title": "should properly uninstall and cleanup",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-e388b79d06d74aa457a7",
+              "file": "plugin-integration.spec.ts",
+              "line": 351,
+              "column": 7
+            },
+            {
+              "title": "should handle plugin errors gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "a16f92d4c6ad57b9a118-0ce4b439c968878cbf91",
+              "file": "plugin-integration.spec.ts",
+              "line": 385,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-06-12T03:38:05.331Z",
+    "duration": 42124.989,
+    "expected": 0,
+    "skipped": 14,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

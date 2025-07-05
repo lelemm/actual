@@ -241,8 +241,113 @@ export function ManagePlugins() {
 
 function PluginList() {
   const { pluginStore, plugins } = useActualPlugins();
+  
+  // Check if there are any dev plugins running (plugins not in pluginStore)
+  const devPlugins = plugins.filter(p => 
+    !pluginStore.some(stored => stored.name === p.name)
+  );
+  
   return (
-    <>
+    <div data-testid="installed-plugins">
+      {/* Show dev plugins first */}
+      {devPlugins.map((devPlugin, index) => (
+        <Row
+          key={`dev-plugin-${index}`}
+          height="auto"
+          style={{
+            fontSize: 13,
+            backgroundColor: theme.tableBackground,
+            borderLeft: `4px solid ${theme.noticeTextLight}`,
+          }}
+          collapsed={true}
+        >
+          <Cell name="name" width={180} plain style={{ color: theme.tableText }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+              }}
+            >
+              {devPlugin.name || 'Dev Plugin'}
+              <span style={{ color: theme.noticeTextLight, fontSize: 11, marginLeft: 4 }}>(DEV)</span>
+            </View>
+          </Cell>
+          <Cell name="version" width={80} plain style={{ color: theme.tableText }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+              }}
+            >
+              {devPlugin.version || '0.0.0-dev'}
+            </View>
+          </Cell>
+          <Cell name="url" width="flex" plain style={{ color: theme.tableText }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+              }}
+            >
+              http://localhost:2000/mf-manifest.json
+            </View>
+          </Cell>
+          <Cell name="state" width={100} plain style={{ color: theme.tableText }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              Running <span style={{ color: theme.noticeTextLight }}>(DEV)</span>
+            </View>
+          </Cell>
+          <Cell
+            name="description"
+            width="flex"
+            plain
+            style={{ color: theme.tableText }}
+          >
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+              }}
+            >
+              Development plugin loaded from local server
+            </View>
+          </Cell>
+          <Cell name="actions" width={100} plain style={{ color: theme.tableText }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                margin: 5,
+                borderRadius: 4,
+                padding: '3px 5px',
+              }}
+            >
+              <span style={{ color: theme.noticeTextLight, fontSize: 11 }}>
+                Runtime only
+              </span>
+            </View>
+          </Cell>
+        </Row>
+      ))}
+      
+      {/* Show regular plugins */}
       {pluginStore.map(plugin => (
         <PluginRow
           key={`${plugin.name}-${plugin.version}`}
@@ -250,7 +355,7 @@ function PluginList() {
           enabled={plugin.enabled}
         />
       ))}
-    </>
+    </div>
   );
 }
 

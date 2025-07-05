@@ -1,0 +1,25 @@
+{
+  "name": "plugin-test-server",
+  "version": "1.0.0",
+  "description": "Test server for plugin integration testing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite build && vite preview"
+  },
+  "dependencies": {
+    "@module-federation/vite": "^1.4.1",
+    "@types/react": "^18.2.0",
+    "@vitejs/plugin-react-swc": "^3.10.2",
+    "react": "^18.2.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@actual-app/plugins-core": "file:../"
+  },
+  "packageManager": "yarn@4.3.1"
+} 
