@@ -22,19 +22,26 @@ const GoCardlessClient = nordigenNode.default;
 
 const clients = new Map();
 
-const getGocardlessClient = () => {
+const getGocardlessClient = (fileId = null) => {
   const secrets = {
-    secretId: secretsService.get(SecretName.gocardless_secretId),
-    secretKey: secretsService.get(SecretName.gocardless_secretKey),
+    secretId: secretsService.getWithFallback(
+      SecretName.gocardless_secretId,
+      fileId,
+    ),
+    secretKey: secretsService.getWithFallback(
+      SecretName.gocardless_secretKey,
+      fileId,
+    ),
   };
 
-  const hash = JSON.stringify(secrets);
+  // Create a unique key that includes fileId to separate client instances
+  const cacheKey = `${fileId || 'global'}_${JSON.stringify(secrets)}`;
 
-  if (!clients.has(hash)) {
-    clients.set(hash, new GoCardlessClient(secrets));
+  if (!clients.has(cacheKey)) {
+    clients.set(cacheKey, new GoCardlessClient(secrets));
   }
 
-  return clients.get(hash);
+  return clients.get(cacheKey);
 };
 
 export const handleGoCardlessError = error => {
@@ -65,19 +72,22 @@ export const handleGoCardlessError = error => {
 export const goCardlessService = {
   /**
    * Check if the GoCardless service is configured to be used.
+   * @param {string|null} fileId - Optional file ID for per-budget secrets.
    * @returns {boolean}
    */
-  isConfigured: () => {
-    return !!(
-      getGocardlessClient().secretId && getGocardlessClient().secretKey
-    );
+  isConfigured: (fileId = null) => {
+    const client = getGocardlessClient(fileId);
+    return !!(client.secretId && client.secretKey);
   },
 
   /**
    *
+   * @param {string|null} fileId - Optional file ID for per-budget secrets.
    * @returns {Promise<void>}
    */
-  setToken: async () => {
+  setToken: async (fileId = null) => {
+    const client = getGocardlessClient(fileId);
+
     const isExpiredJwtToken = token => {
       const decodedToken = jwt.decode(token);
       if (!decodedToken) {
@@ -88,7 +98,7 @@ export const goCardlessService = {
       return clockTimestamp >= payload.exp;
     };
 
-    if (isExpiredJwtToken(getGocardlessClient().token)) {
+    if (isExpiredJwtToken(client.token)) {
       // Generate new access token. Token is valid for 24 hours
       // Note: access_token is automatically injected to other requests after you successfully obtain it
       try {
@@ -309,10 +319,14 @@ export const goCardlessService = {
    * @throws {ServiceError}
    * @returns {Promise<{requisitionId, link}>}
    */
-  createRequisition: async ({ institutionId, host }) => {
-    await goCardlessService.setToken();
+  createRequisition: async ({ institutionId, host, fileId = null }) => {
+    await goCardlessService.setToken(fileId);
+    const client = getGocardlessClient(fileId);
 
-    const institution = await goCardlessService.getInstitution(institutionId);
+    const institution = await goCardlessService.getInstitution(
+      institutionId,
+      fileId,
+    );
     const accountSelection =
       institution.supported_features?.includes('account_selection') ?? false;
 

@@ -2,6 +2,7 @@ import express from 'express';
 
 import { handleError } from '../app-gocardless/util/handle-error.js';
 import { SecretName, secretsService } from '../services/secrets-service.js';
+import { extractFileIdMiddleware } from '../util/file-id-middleware.js';
 import { requestLoggerMiddleware } from '../util/middlewares.js';
 
 import { pluggyaiService } from './pluggyai-service.js';
@@ -10,17 +11,21 @@ const app = express();
 export { app as handlers };
 app.use(express.json());
 app.use(requestLoggerMiddleware);
+app.use(extractFileIdMiddleware);
 
 app.post(
   '/status',
   handleError(async (req, res) => {
-    const clientId = secretsService.get(SecretName.pluggyai_clientId);
-    const configured = clientId != null;
+    const fileId = req.locals?.fileId;
+    const configured = pluggyaiService.isConfigured(fileId);
 
     res.send({
       status: 'ok',
       data: {
         configured,
+        budgetSpecific: Boolean(
+          fileId && secretsService.get(SecretName.pluggyai_clientId, fileId),
+        ),
       },
     });
   }),
@@ -30,15 +35,27 @@ app.post(
   '/accounts',
   handleError(async (req, res) => {
     try {
-      const itemIds = secretsService
-        .get(SecretName.pluggyai_itemIds)
-        .split(',')
-        .map(item => item.trim());
+      const fileId = req.locals?.fileId;
+      const itemIdsStr = secretsService.getWithFallback(
+        SecretName.pluggyai_itemIds,
+        fileId,
+      );
+
+      if (!itemIdsStr) {
+        return res.send({
+          status: 'ok',
+          data: {
+            error: 'No Pluggy.ai item IDs configured for this budget',
+          },
+        });
+      }
+
+      const itemIds = itemIdsStr.split(',').map(item => item.trim());
 
       let accounts = [];
 
       for (const item of itemIds) {
-        const partial = await pluggyaiService.getAccountsByItemId(item);
+        const partial = await pluggyaiService.getAccountsByItemId(item, fileId);
         accounts = accounts.concat(partial.results);
       }
 
@@ -63,14 +80,16 @@ app.post(
   '/transactions',
   handleError(async (req, res) => {
     const { accountId, startDate } = req.body || {};
+    const fileId = req.locals?.fileId;
 
     try {
       const transactions = await pluggyaiService.getTransactions(
         accountId,
         startDate,
+        fileId,
       );
 
-      const account = await pluggyaiService.getAccountById(accountId);
+      const account = await pluggyaiService.getAccountById(accountId, fileId);
 
       let startingBalance = parseInt(
         Math.round(account.balance * 100).toString(),

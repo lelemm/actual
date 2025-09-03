@@ -24,6 +24,7 @@ import { aqlQuery } from '../aql';
 import * as db from '../db';
 import { runMutator } from '../mutators';
 import { post } from '../post';
+import { getPrefs as getMetadataPrefs } from '../prefs';
 import { getServer } from '../server-config';
 import { batchMessages } from '../sync';
 import { batchUpdateTransactions } from '../transactions';
@@ -38,6 +39,28 @@ import { title } from './title';
 
 function BankSyncError(type: string, code: string, details?: object) {
   return { type: 'BankSyncError', category: type, code, details };
+}
+
+// Helper function to create headers with fileId for bank sync requests
+async function getBankSyncHeaders(
+  fileId?: string | null,
+): Promise<Record<string, string>> {
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) {
+    throw new Error('User token not available');
+  }
+
+  const headers: Record<string, string> = {
+    'x-actual-token': userToken,
+  };
+
+  // If fileId is not provided, try to get it from current budget
+  const currentFileId = fileId ?? getMetadataPrefs()?.cloudFileId;
+  if (currentFileId) {
+    headers['X-ACTUAL-FILE-ID'] = currentFileId;
+  }
+
+  return headers;
 }
 
 function makeSplitTransaction(trans, subtransactions) {
@@ -114,7 +137,7 @@ export async function getGoCardlessAccounts(userId, userKey, id) {
       item_id: id,
     },
     {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     },
   );
 
@@ -151,7 +174,7 @@ async function downloadGoCardlessTransactions(
       includeBalance,
     },
     {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     },
   );
 
@@ -189,29 +212,29 @@ async function downloadGoCardlessTransactions(
 async function downloadSimpleFinTransactions(
   acctId: AccountEntity['id'] | AccountEntity['id'][],
   since: string | string[],
+  fileId?: string | null,
 ) {
-  const userToken = await asyncStorage.getItem('user-token');
-  if (!userToken) return;
-
   const batchSync = Array.isArray(acctId);
 
   console.log('Pulling transactions from SimpleFin');
 
   let res;
   try {
+    const headers = await getBankSyncHeaders(fileId);
     res = await post(
       getServer().SIMPLEFIN_SERVER + '/transactions',
       {
         accountId: acctId,
         startDate: since,
       },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
       // 5 minute timeout for batch sync, one minute for individual accounts
       Array.isArray(acctId) ? 300000 : 60000,
     );
   } catch (error) {
+    if (error.message === 'User token not available') {
+      return;
+    }
     console.error('Suspected timeout during bank sync:', error);
     throw BankSyncError('TIMED_OUT', 'TIMED_OUT');
   }
@@ -259,23 +282,28 @@ async function downloadSimpleFinTransactions(
 async function downloadPluggyAiTransactions(
   acctId: AccountEntity['id'],
   since: string,
+  fileId?: string | null,
 ) {
-  const userToken = await asyncStorage.getItem('user-token');
-  if (!userToken) return;
-
   console.log('Pulling transactions from Pluggy.ai');
 
-  const res = await post(
-    getServer().PLUGGYAI_SERVER + '/transactions',
-    {
-      accountId: acctId,
-      startDate: since,
-    },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-    60000,
-  );
+  let res;
+  try {
+    const headers = await getBankSyncHeaders(fileId);
+    res = await post(
+      getServer().PLUGGYAI_SERVER + '/transactions',
+      {
+        accountId: acctId,
+        startDate: since,
+      },
+      headers,
+      60000,
+    );
+  } catch (error) {
+    if (error.message === 'User token not available') {
+      return;
+    }
+    throw error;
+  }
 
   if (res.error_code) {
     throw BankSyncError(res.error_type, res.error_code);
@@ -970,6 +998,7 @@ export async function syncAccount(
   id: string,
   acctId: string,
   bankId: string,
+  fileId?: string | null,
 ) {
   const acctRow = await db.select('accounts', id);
 
@@ -979,9 +1008,17 @@ export async function syncAccount(
 
   let download;
   if (acctRow.account_sync_source === 'simpleFin') {
-    download = await downloadSimpleFinTransactions(acctId, syncStartDate);
+    download = await downloadSimpleFinTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
   } else if (acctRow.account_sync_source === 'pluggyai') {
-    download = await downloadPluggyAiTransactions(acctId, syncStartDate);
+    download = await downloadPluggyAiTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
   } else if (acctRow.account_sync_source === 'goCardless') {
     download = await downloadGoCardlessTransactions(
       userId,
@@ -1002,6 +1039,7 @@ export async function syncAccount(
 
 export async function simpleFinBatchSync(
   accounts: Array<Pick<AccountEntity, 'id' | 'account_id'>>,
+  fileId?: string | null,
 ) {
   const startDates = await Promise.all(
     accounts.map(async a => getAccountSyncStartDate(a.id)),
@@ -1010,6 +1048,7 @@ export async function simpleFinBatchSync(
   const res = await downloadSimpleFinTransactions(
     accounts.map(a => a.account_id),
     startDates,
+    fileId,
   );
 
   const promises = [];

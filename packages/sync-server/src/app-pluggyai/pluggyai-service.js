@@ -2,34 +2,54 @@ import { PluggyClient } from 'pluggy-sdk';
 
 import { SecretName, secretsService } from '../services/secrets-service.js';
 
-let pluggyClient = null;
+const pluggyClients = new Map();
 
-function getPluggyClient() {
-  if (!pluggyClient) {
-    const clientId = secretsService.get(SecretName.pluggyai_clientId);
-    const clientSecret = secretsService.get(SecretName.pluggyai_clientSecret);
+function getPluggyClient(fileId = null) {
+  const cacheKey = fileId || 'global';
 
-    pluggyClient = new PluggyClient({
+  if (!pluggyClients.has(cacheKey)) {
+    const clientId = secretsService.getWithFallback(
+      SecretName.pluggyai_clientId,
+      fileId,
+    );
+    const clientSecret = secretsService.getWithFallback(
+      SecretName.pluggyai_clientSecret,
+      fileId,
+    );
+
+    if (!clientId || !clientSecret) {
+      return null;
+    }
+
+    const client = new PluggyClient({
       clientId,
       clientSecret,
     });
+
+    pluggyClients.set(cacheKey, client);
   }
 
-  return pluggyClient;
+  return pluggyClients.get(cacheKey);
 }
 
 export const pluggyaiService = {
-  isConfigured: () => {
+  isConfigured: (fileId = null) => {
     return !!(
-      secretsService.get(SecretName.pluggyai_clientId) &&
-      secretsService.get(SecretName.pluggyai_clientSecret) &&
-      secretsService.get(SecretName.pluggyai_itemIds)
+      secretsService.getWithFallback(SecretName.pluggyai_clientId, fileId) &&
+      secretsService.getWithFallback(
+        SecretName.pluggyai_clientSecret,
+        fileId,
+      ) &&
+      secretsService.getWithFallback(SecretName.pluggyai_itemIds, fileId)
     );
   },
 
-  getAccountsByItemId: async itemId => {
+  getAccountsByItemId: async (itemId, fileId = null) => {
     try {
-      const client = getPluggyClient();
+      const client = getPluggyClient(fileId);
+      if (!client) {
+        throw new Error('Pluggy.ai client not configured for this budget');
+      }
       const { results, total, ...rest } = await client.fetchAccounts(itemId);
       return {
         results,
@@ -43,9 +63,12 @@ export const pluggyaiService = {
       throw error;
     }
   },
-  getAccountById: async accountId => {
+  getAccountById: async (accountId, fileId = null) => {
     try {
-      const client = getPluggyClient();
+      const client = getPluggyClient(fileId);
+      if (!client) {
+        throw new Error('Pluggy.ai client not configured for this budget');
+      }
       const account = await client.fetchAccount(accountId);
       return {
         ...account,
@@ -58,11 +81,20 @@ export const pluggyaiService = {
     }
   },
 
-  getTransactionsByAccountId: async (accountId, startDate, pageSize, page) => {
+  getTransactionsByAccountId: async (
+    accountId,
+    startDate,
+    pageSize,
+    page,
+    fileId = null,
+  ) => {
     try {
-      const client = getPluggyClient();
+      const client = getPluggyClient(fileId);
+      if (!client) {
+        throw new Error('Pluggy.ai client not configured for this budget');
+      }
 
-      const account = await pluggyaiService.getAccountById(accountId);
+      const account = await pluggyaiService.getAccountById(accountId, fileId);
 
       // the sandbox data doesn't move the dates automatically so the
       // transactions are often older than 90 days. The owner on one of the
@@ -95,13 +127,14 @@ export const pluggyaiService = {
       throw error;
     }
   },
-  getTransactions: async (accountId, startDate) => {
+  getTransactions: async (accountId, startDate, fileId = null) => {
     let transactions = [];
     let result = await pluggyaiService.getTransactionsByAccountId(
       accountId,
       startDate,
       500,
       1,
+      fileId,
     );
     transactions = transactions.concat(result.results);
     const totalPages = result.totalPages;
@@ -111,6 +144,7 @@ export const pluggyaiService = {
         startDate,
         500,
         result.page + 1,
+        fileId,
       );
       transactions = transactions.concat(result.results);
     }

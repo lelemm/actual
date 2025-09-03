@@ -4,6 +4,8 @@ import { inspect } from 'util';
 import { isAxiosError } from 'axios';
 import express from 'express';
 
+import { SecretName, secretsService } from '../services/secrets-service.js';
+import { extractFileIdMiddleware } from '../util/file-id-middleware.js';
 import { sha256String } from '../util/hash.js';
 import {
   requestLoggerMiddleware,
@@ -29,12 +31,18 @@ app.get('/link', function (req, res) {
 export { app as handlers };
 app.use(express.json());
 app.use(validateSessionMiddleware);
+app.use(extractFileIdMiddleware);
 
 app.post('/status', async (req, res) => {
+  const fileId = req.locals?.fileId;
+
   res.send({
     status: 'ok',
     data: {
-      configured: goCardlessService.isConfigured(),
+      configured: goCardlessService.isConfigured(fileId),
+      budgetSpecific: Boolean(
+        fileId && secretsService.get(SecretName.gocardless_secretId, fileId),
+      ),
     },
   });
 });

@@ -160,7 +160,7 @@ async function getUser() {
   try {
     const res = await get(serverConfig.SIGNUP_SERVER + '/validate', {
       headers: {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       },
     });
     let tokenExpired = false;
@@ -308,7 +308,7 @@ async function enableOpenId(openIdConfig: { openId: OpenIdConfig }) {
     }
 
     await post(serverConfig.BASE_SERVER + '/openid/enable', openIdConfig, {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     });
   } catch (err) {
     if (err instanceof PostError) {
@@ -335,7 +335,7 @@ async function getOpenIdConfig({ password }: { password: string }) {
       serverConfig.BASE_SERVER + '/openid/config',
       { password },
       {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       },
     );
 
@@ -369,7 +369,7 @@ async function enablePassword(passwordConfig: { password: string }) {
     }
 
     await post(serverConfig.BASE_SERVER + '/openid/disable', passwordConfig, {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     });
   } catch (err) {
     if (err instanceof PostError) {

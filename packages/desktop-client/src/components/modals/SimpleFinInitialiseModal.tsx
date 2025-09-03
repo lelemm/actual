@@ -5,6 +5,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { ButtonWithLoading } from '@actual-app/components/button';
 import { Input } from '@actual-app/components/input';
 import { Text } from '@actual-app/components/text';
+import { Toggle } from '@actual-app/components/toggle';
 import { View } from '@actual-app/components/view';
 
 import { send } from 'loot-core/platform/client/fetch';
@@ -28,12 +29,15 @@ type SimpleFinInitialiseModalProps = Extract<
 
 export const SimpleFinInitialiseModal = ({
   onSuccess,
+  scope = 'global',
+  fileId = null,
 }: SimpleFinInitialiseModalProps) => {
   const { t } = useTranslation();
   const [token, setToken] = useState('');
   const [isValid, setIsValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(t('It is required to provide a token.'));
+  const [isBudgetSpecific, setIsBudgetSpecific] = useState(scope === 'budget');
 
   const onSubmit = async (close: () => void) => {
     if (!token) {
@@ -47,6 +51,7 @@ export const SimpleFinInitialiseModal = ({
       (await send('secret-set', {
         name: 'simplefin_token',
         value: token,
+        fileId: isBudgetSpecific ? fileId : null,
       })) || {};
 
     if (error) {
@@ -83,6 +88,38 @@ export const SimpleFinInitialiseModal = ({
                 .
               </Trans>
             </Text>
+
+            <FormField>
+              <View
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Toggle
+                  id="budget-specific-toggle"
+                  isOn={isBudgetSpecific}
+                  onToggle={setIsBudgetSpecific}
+                />
+                <FormLabel
+                  title={t('Per budget')}
+                  htmlFor="budget-specific-toggle"
+                />
+              </View>
+              <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                {isBudgetSpecific ? (
+                  <Trans>
+                    This token will only be used for the current budget.
+                  </Trans>
+                ) : (
+                  <Trans>
+                    This token will be used globally for all budgets.
+                  </Trans>
+                )}
+              </Text>
+            </FormField>
 
             <FormField>
               <FormLabel title={t('Token:')} htmlFor="token-field" />

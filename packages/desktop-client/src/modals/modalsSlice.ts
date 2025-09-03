@@ -93,18 +93,24 @@ export type Modal =
       name: 'gocardless-init';
       options: {
         onSuccess: () => void;
+        scope?: 'global' | 'budget';
+        fileId?: string | null;
       };
     }
   | {
       name: 'simplefin-init';
       options: {
         onSuccess: () => void;
+        scope?: 'global' | 'budget';
+        fileId?: string | null;
       };
     }
   | {
       name: 'pluggyai-init';
       options: {
         onSuccess: () => void;
+        scope?: 'global' | 'budget';
+        fileId?: string | null;
       };
     }
   | {

@@ -663,7 +663,7 @@ async function _fullSync(
     getServer().SYNC_SERVER + '/sync',
     buffer,
     {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     },
   );
 

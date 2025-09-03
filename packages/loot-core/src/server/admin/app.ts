@@ -40,7 +40,7 @@ async function getUsers() {
   if (userToken) {
     const res = await get(getServer().BASE_SERVER + '/admin/users/', {
       headers: {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       },
     });
 
@@ -71,7 +71,7 @@ async function deleteAllUsers(
           ids,
         },
         {
-          'X-ACTUAL-TOKEN': userToken,
+          'x-actual-token': userToken,
         },
       );
 
@@ -94,7 +94,7 @@ async function addUser(
   if (userToken) {
     try {
       const res = await post(getServer().BASE_SERVER + '/admin/users/', user, {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       });
 
       return res as UserEntity;
@@ -114,7 +114,7 @@ async function updateUser(
   if (userToken) {
     try {
       const res = await patch(getServer().BASE_SERVER + '/admin/users/', user, {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       });
 
       return res as UserEntity;
@@ -134,7 +134,7 @@ async function addAccess(
   if (userToken) {
     try {
       await post(getServer().BASE_SERVER + '/admin/access/', access, {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       });
 
       return {};
@@ -187,7 +187,7 @@ async function accessGetAvailableUsers(
       `${getServer().BASE_SERVER + '/admin/access/users'}?fileId=${fileId}`,
       {
         headers: {
-          'X-ACTUAL-TOKEN': userToken,
+          'x-actual-token': userToken,
         },
       },
     );
@@ -219,7 +219,7 @@ async function transferOwnership({
         getServer().BASE_SERVER + '/admin/access/transfer-ownership/',
         { fileId, newUserId },
         {
-          'X-ACTUAL-TOKEN': userToken,
+          'x-actual-token': userToken,
         },
       );
     } catch (err) {

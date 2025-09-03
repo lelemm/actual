@@ -11,7 +11,6 @@ import * as undo from 'loot-core/platform/client/undo';
 
 import { UserAccessPage } from './admin/UserAccess/UserAccessPage';
 import { BankSync } from './banksync';
-import { BankSyncStatus } from './BankSyncStatus';
 import { CommandBar } from './CommandBar';
 import { GlobalKeys } from './GlobalKeys';
 import { MobileNavTabs } from './mobile/MobileNavTabs';
@@ -218,7 +217,6 @@ export function FinancesApp() {
                 }}
               />
               <Notifications />
-              <BankSyncStatus />
 
               <Routes>
                 <Route

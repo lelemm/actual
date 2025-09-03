@@ -28,7 +28,8 @@ import {
 } from '../errors';
 import { app as mainApp } from '../main-app';
 import { mutator } from '../mutators';
-import { get, post } from '../post';
+import { get, post, del } from '../post';
+import { getPrefs as getMetadataPrefs } from '../prefs';
 import { getServer } from '../server-config';
 import { batchMessages } from '../sync';
 import { undoable, withUndo } from '../undo';
@@ -51,6 +52,8 @@ export type AccountHandlers = {
   'account-move': typeof moveAccount;
   'secret-set': typeof setSecret;
   'secret-check': typeof checkSecret;
+  'secrets-list': typeof listSecrets;
+  'secret-delete': typeof deleteSecret;
   'gocardless-poll-web-token': typeof pollGoCardlessWebToken;
   'gocardless-poll-web-token-stop': typeof stopGoCardlessWebTokenPolling;
   'gocardless-status': typeof goCardlessStatus;
@@ -487,9 +490,11 @@ async function moveAccount({
 async function setSecret({
   name,
   value,
+  fileId,
 }: {
   name: string;
   value: string | null;
+  fileId?: string | null;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
 
@@ -503,15 +508,21 @@ async function setSecret({
   }
 
   try {
+    const headers: Record<string, string> = {
+      'x-actual-token': userToken,
+    };
+
+    if (fileId) {
+      headers['x-actual-file-id'] = fileId;
+    }
+
     return await post(
       serverConfig.BASE_SERVER + '/secret',
       {
         name,
         value,
       },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
     );
   } catch (error) {
     return {
@@ -534,8 +545,74 @@ async function checkSecret(name: string) {
 
   try {
     return await get(serverConfig.BASE_SERVER + '/secret/' + name, {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
     });
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
+}
+
+async function listSecrets(fileId?: string | null) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  const serverConfig = getServer();
+  if (!serverConfig) {
+    throw new Error('Failed to get server config.');
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      'x-actual-token': userToken,
+    };
+
+    if (fileId) {
+      headers['x-actual-file-id'] = fileId;
+    }
+
+    return JSON.parse(
+      await get(serverConfig.BASE_SERVER + '/secret/', {
+        headers,
+      }),
+    );
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
+}
+
+async function deleteSecret({
+  name,
+  fileId,
+}: {
+  name: string;
+  fileId?: string | null;
+}) {
+  const userToken = await asyncStorage.getItem('user-token');
+
+  if (!userToken) {
+    return { error: 'unauthorized' };
+  }
+
+  const serverConfig = getServer();
+  if (!serverConfig) {
+    throw new Error('Failed to get server config.');
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      'x-actual-token': userToken,
+    };
+
+    if (fileId) {
+      headers['x-actual-file-id'] = fileId;
+    }
+
+    return await del(serverConfig.BASE_SERVER + '/secret/' + name, {}, headers);
   } catch (error) {
     console.error(error);
     return { error: 'failed' };
@@ -583,7 +660,7 @@ async function pollGoCardlessWebToken({
         requisitionId,
       },
       {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       },
     );
 
@@ -624,172 +701,171 @@ async function stopGoCardlessWebTokenPolling() {
   return 'ok';
 }
 
-async function goCardlessStatus() {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
-  return post(
-    serverConfig.GOCARDLESS_SERVER + '/status',
-    {},
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-  );
-}
-
-async function simpleFinStatus() {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
-  return post(
-    serverConfig.SIMPLEFIN_SERVER + '/status',
-    {},
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-  );
-}
-
-async function pluggyAiStatus() {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
-  return post(
-    serverConfig.PLUGGYAI_SERVER + '/status',
-    {},
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-  );
-}
-
-async function simpleFinAccounts() {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
+async function goCardlessStatus(fileId?: string | null) {
   try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
+    return post(serverConfig.GOCARDLESS_SERVER + '/status', {}, headers);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
+    throw error;
+  }
+}
+
+async function simpleFinStatus(fileId?: string | null) {
+  try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
+    return post(serverConfig.SIMPLEFIN_SERVER + '/status', {}, headers);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
+    throw error;
+  }
+}
+
+async function pluggyAiStatus(fileId?: string | null) {
+  try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
+    return post(serverConfig.PLUGGYAI_SERVER + '/status', {}, headers);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
+    throw error;
+  }
+}
+
+async function simpleFinAccounts(fileId?: string | null) {
+  try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
     return await post(
       serverConfig.SIMPLEFIN_SERVER + '/accounts',
       {},
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
       60000,
     );
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
     return { error_code: 'TIMED_OUT' };
   }
 }
 
-async function pluggyAiAccounts() {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
+async function pluggyAiAccounts(fileId?: string | null) {
   try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
     return await post(
       serverConfig.PLUGGYAI_SERVER + '/accounts',
       {},
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
       60000,
     );
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
     return { error_code: 'TIMED_OUT' };
   }
 }
 
-async function getGoCardlessBanks(country: string) {
-  const userToken = await asyncStorage.getItem('user-token');
+async function getGoCardlessBanks(country: string, fileId?: string | null) {
+  try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
 
-  if (!userToken) {
-    return { error: 'unauthorized' };
+    return post(
+      serverConfig.GOCARDLESS_SERVER + '/get-banks',
+      { country, showDemo: isNonProductionEnvironment() },
+      headers,
+    );
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
+    throw error;
   }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
-  return post(
-    serverConfig.GOCARDLESS_SERVER + '/get-banks',
-    { country, showDemo: isNonProductionEnvironment() },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-  );
 }
 
 async function createGoCardlessWebToken({
   institutionId,
   accessValidForDays,
+  fileId,
 }: {
   institutionId: string;
   accessValidForDays: number;
+  fileId?: string | null;
 }) {
-  const userToken = await asyncStorage.getItem('user-token');
-
-  if (!userToken) {
-    return { error: 'unauthorized' };
-  }
-
-  const serverConfig = getServer();
-  if (!serverConfig) {
-    throw new Error('Failed to get server config.');
-  }
-
   try {
+    const headers = await getBankSyncHeaders(fileId);
+    const serverConfig = getServer();
+    if (!serverConfig) {
+      throw new Error('Failed to get server config.');
+    }
+
     return await post(
       serverConfig.GOCARDLESS_SERVER + '/create-web-token',
       {
         institutionId,
         accessValidForDays,
       },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
     );
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User token not available'
+    ) {
+      return { error: 'unauthorized' };
+    }
     console.error(error);
     return { error: 'failed' };
   }
@@ -962,8 +1038,10 @@ async function accountsBankSync({
 
 async function simpleFinBatchSync({
   ids = [],
+  fileId,
 }: {
   ids: Array<AccountEntity['id']>;
+  fileId?: string | null;
 }): Promise<
   Array<{ accountId: AccountEntity['id']; res: SyncResponseWithErrors }>
 > {
@@ -1007,6 +1085,7 @@ async function simpleFinBatchSync({
         id: a.id,
         account_id: a.account_id || null,
       })),
+      fileId,
     );
     for (const syncResponse of syncResponses) {
       const account = accounts.find(a => a.id === syncResponse.accountId);
@@ -1199,7 +1278,7 @@ async function unlinkAccount({ id }: { id: AccountEntity['id'] }) {
           requisitionId,
         },
         {
-          'X-ACTUAL-TOKEN': userToken,
+          'x-actual-token': userToken,
         },
       );
     } catch (error) {
@@ -1208,6 +1287,28 @@ async function unlinkAccount({ id }: { id: AccountEntity['id'] }) {
   }
 
   return 'ok';
+}
+
+// Helper function to create headers with fileId for bank sync requests
+async function getBankSyncHeaders(
+  fileId?: string | null,
+): Promise<Record<string, string>> {
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) {
+    throw new Error('User token not available');
+  }
+
+  const headers: Record<string, string> = {
+    'x-actual-token': userToken,
+  };
+
+  // If fileId is not provided, try to get it from current budget
+  const currentFileId = fileId ?? getMetadataPrefs()?.cloudFileId;
+  if (currentFileId) {
+    headers['x-actual-file-id'] = currentFileId;
+  }
+
+  return headers;
 }
 
 export const app = createApp<AccountHandlers>();
@@ -1225,6 +1326,8 @@ app.method('account-reopen', mutator(undoable(reopenAccount)));
 app.method('account-move', mutator(undoable(moveAccount)));
 app.method('secret-set', setSecret);
 app.method('secret-check', checkSecret);
+app.method('secrets-list', listSecrets);
+app.method('secret-delete', deleteSecret);
 app.method('gocardless-poll-web-token', pollGoCardlessWebToken);
 app.method('gocardless-poll-web-token-stop', stopGoCardlessWebTokenPolling);
 app.method('gocardless-status', goCardlessStatus);

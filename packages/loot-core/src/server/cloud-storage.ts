@@ -296,7 +296,7 @@ export async function upload() {
       headers: {
         'Content-Length': uploadContent.length,
         'Content-Type': 'application/encrypted-file',
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
         'X-ACTUAL-FILE-ID': cloudFileId,
         'X-ACTUAL-NAME': encodeURIComponent(budgetName),
         'X-ACTUAL-FORMAT': 2,
@@ -378,7 +378,7 @@ export async function listRemoteFiles(): Promise<RemoteFile[]> {
   try {
     res = await fetchJSON(getServer().SYNC_SERVER + '/list-user-files', {
       headers: {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
       },
     });
   } catch (e) {
@@ -411,7 +411,7 @@ export async function getRemoteFile(
   try {
     res = await fetchJSON(getServer().SYNC_SERVER + '/get-user-file-info', {
       headers: {
-        'X-ACTUAL-TOKEN': userToken,
+        'x-actual-token': userToken,
         'X-ACTUAL-FILE-ID': fileId,
       },
     });
@@ -437,7 +437,7 @@ export async function download(cloudFileId) {
 
   const userFileFetch = fetch(`${syncServer}/download-user-file`, {
     headers: {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
       'X-ACTUAL-FILE-ID': cloudFileId,
     },
   })
@@ -455,7 +455,7 @@ export async function download(cloudFileId) {
 
   const userFileInfoFetch = fetchJSON(`${syncServer}/get-user-file-info`, {
     headers: {
-      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-token': userToken,
       'X-ACTUAL-FILE-ID': cloudFileId,
     },
   }).catch(err => {

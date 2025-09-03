@@ -4,23 +4,32 @@ import express from 'express';
 
 import { handleError } from '../app-gocardless/util/handle-error.js';
 import { SecretName, secretsService } from '../services/secrets-service.js';
+import { extractFileIdMiddleware } from '../util/file-id-middleware.js';
 import { requestLoggerMiddleware } from '../util/middlewares.js';
 
 const app = express();
 export { app as handlers };
 app.use(express.json());
 app.use(requestLoggerMiddleware);
+app.use(extractFileIdMiddleware);
 
 app.post(
   '/status',
   handleError(async (req, res) => {
-    const token = secretsService.get(SecretName.simplefin_token);
+    const fileId = req.locals?.fileId;
+    const token = secretsService.getWithFallback(
+      SecretName.simplefin_token,
+      fileId,
+    );
     const configured = token != null && token !== 'Forbidden';
 
     res.send({
       status: 'ok',
       data: {
         configured,
+        budgetSpecific: Boolean(
+          fileId && secretsService.get(SecretName.simplefin_token, fileId),
+        ),
       },
     });
   }),
@@ -29,16 +38,23 @@ app.post(
 app.post(
   '/accounts',
   handleError(async (req, res) => {
-    let accessKey = secretsService.get(SecretName.simplefin_accessKey);
+    const fileId = req.locals?.fileId;
+    let accessKey = secretsService.getWithFallback(
+      SecretName.simplefin_accessKey,
+      fileId,
+    );
 
     try {
       if (accessKey == null || accessKey === 'Forbidden') {
-        const token = secretsService.get(SecretName.simplefin_token);
+        const token = secretsService.getWithFallback(
+          SecretName.simplefin_token,
+          fileId,
+        );
         if (token == null || token === 'Forbidden') {
           throw new Error('No token');
         } else {
           accessKey = await getAccessKey(token);
-          secretsService.set(SecretName.simplefin_accessKey, accessKey);
+          secretsService.set(SecretName.simplefin_accessKey, accessKey, fileId);
           if (accessKey == null || accessKey === 'Forbidden') {
             throw new Error('No access key');
           }
@@ -69,8 +85,12 @@ app.post(
   '/transactions',
   handleError(async (req, res) => {
     const { accountId, startDate } = req.body || {};
+    const fileId = req.locals?.fileId;
 
-    const accessKey = secretsService.get(SecretName.simplefin_accessKey);
+    const accessKey = secretsService.getWithFallback(
+      SecretName.simplefin_accessKey,
+      fileId,
+    );
 
     if (accessKey == null || accessKey === 'Forbidden') {
       invalidToken(res);

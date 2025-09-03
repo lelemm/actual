@@ -6,6 +6,7 @@ import { ButtonWithLoading } from '@actual-app/components/button';
 import { InitialFocus } from '@actual-app/components/initial-focus';
 import { Input } from '@actual-app/components/input';
 import { Text } from '@actual-app/components/text';
+import { Toggle } from '@actual-app/components/toggle';
 import { View } from '@actual-app/components/view';
 
 import { send } from 'loot-core/platform/client/fetch';
@@ -29,6 +30,8 @@ type PluggyAiInitialiseProps = Extract<
 
 export const PluggyAiInitialiseModal = ({
   onSuccess,
+  scope = 'global',
+  fileId = null,
 }: PluggyAiInitialiseProps) => {
   const { t } = useTranslation();
   const [clientId, setClientId] = useState('');
@@ -41,6 +44,7 @@ export const PluggyAiInitialiseModal = ({
       'It is required to provide both the client id, client secret and at least one item id.',
     ),
   );
+  const [isBudgetSpecific, setIsBudgetSpecific] = useState(scope === 'budget');
 
   const onSubmit = async (close: () => void) => {
     if (!clientId || !clientSecret || !itemIds) {
@@ -59,6 +63,7 @@ export const PluggyAiInitialiseModal = ({
       (await send('secret-set', {
         name: 'pluggyai_clientId',
         value: clientId,
+        fileId: isBudgetSpecific ? fileId : null,
       })) || {};
 
     if (error) {
@@ -71,6 +76,7 @@ export const PluggyAiInitialiseModal = ({
         (await send('secret-set', {
           name: 'pluggyai_clientSecret',
           value: clientSecret,
+          fileId: isBudgetSpecific ? fileId : null,
         })) || {});
       if (error) {
         setIsLoading(false);
@@ -82,6 +88,7 @@ export const PluggyAiInitialiseModal = ({
           (await send('secret-set', {
             name: 'pluggyai_itemIds',
             value: itemIds,
+            fileId: isBudgetSpecific ? fileId : null,
           })) || {});
 
         if (error) {
@@ -123,6 +130,38 @@ export const PluggyAiInitialiseModal = ({
                 .
               </Trans>
             </Text>
+
+            <FormField>
+              <View
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Toggle
+                  id="budget-specific-toggle"
+                  isOn={isBudgetSpecific}
+                  onToggle={setIsBudgetSpecific}
+                />
+                <FormLabel
+                  title={t('Per budget')}
+                  htmlFor="budget-specific-toggle"
+                />
+              </View>
+              <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                {isBudgetSpecific ? (
+                  <Trans>
+                    These credentials will only be used for the current budget.
+                  </Trans>
+                ) : (
+                  <Trans>
+                    These credentials will be used globally for all budgets.
+                  </Trans>
+                )}
+              </Text>
+            </FormField>
 
             <FormField>
               <FormLabel title={t('Client ID:')} htmlFor="client-id-field" />

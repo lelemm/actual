@@ -1,13 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Dialog, DialogTrigger } from 'react-aria-components';
+import React, { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button, ButtonWithLoading } from '@actual-app/components/button';
-import { SvgDotsHorizontalTriple } from '@actual-app/components/icons/v1';
 import { InitialFocus } from '@actual-app/components/initial-focus';
-import { Menu } from '@actual-app/components/menu';
 import { Paragraph } from '@actual-app/components/paragraph';
-import { Popover } from '@actual-app/components/popover';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -48,20 +44,12 @@ export function CreateAccountModal({
 
   const syncServerStatus = useSyncServerStatus();
   const dispatch = useDispatch();
-  const [isGoCardlessSetupComplete, setIsGoCardlessSetupComplete] = useState<
-    boolean | null
-  >(null);
-  const [isSimpleFinSetupComplete, setIsSimpleFinSetupComplete] = useState<
-    boolean | null
-  >(null);
-  const [isPluggyAiSetupComplete, setIsPluggyAiSetupComplete] = useState<
-    boolean | null
-  >(null);
+
   const { hasPermission } = useAuth();
   const multiuserEnabled = useMultiuserEnabled();
 
   const onConnectGoCardless = () => {
-    if (!isGoCardlessSetupComplete) {
+    if (!configuredGoCardless) {
       onGoCardlessInit();
       return;
     }
@@ -74,7 +62,7 @@ export function CreateAccountModal({
   };
 
   const onConnectSimpleFin = async () => {
-    if (!isSimpleFinSetupComplete) {
+    if (!configuredSimpleFin) {
       onSimpleFinInit();
       return;
     }
@@ -133,7 +121,7 @@ export function CreateAccountModal({
           modal: {
             name: 'simplefin-init',
             options: {
-              onSuccess: () => setIsSimpleFinSetupComplete(true),
+              onSuccess: () => {},
             },
           },
         }),
@@ -144,7 +132,7 @@ export function CreateAccountModal({
   };
 
   const onConnectPluggyAi = async () => {
-    if (!isPluggyAiSetupComplete) {
+    if (!configuredPluggyAi) {
       onPluggyAiInit();
       return;
     }
@@ -211,7 +199,7 @@ export function CreateAccountModal({
           modal: {
             name: 'pluggyai-init',
             options: {
-              onSuccess: () => setIsPluggyAiSetupComplete(true),
+              onSuccess: () => {},
             },
           },
         }),
@@ -225,7 +213,7 @@ export function CreateAccountModal({
         modal: {
           name: 'gocardless-init',
           options: {
-            onSuccess: () => setIsGoCardlessSetupComplete(true),
+            onSuccess: () => {},
           },
         },
       }),
@@ -238,7 +226,7 @@ export function CreateAccountModal({
         modal: {
           name: 'simplefin-init',
           options: {
-            onSuccess: () => setIsSimpleFinSetupComplete(true),
+            onSuccess: () => {},
           },
         },
       }),
@@ -251,58 +239,11 @@ export function CreateAccountModal({
         modal: {
           name: 'pluggyai-init',
           options: {
-            onSuccess: () => setIsPluggyAiSetupComplete(true),
+            onSuccess: () => {},
           },
         },
       }),
     );
-  };
-
-  const onGoCardlessReset = () => {
-    send('secret-set', {
-      name: 'gocardless_secretId',
-      value: null,
-    }).then(() => {
-      send('secret-set', {
-        name: 'gocardless_secretKey',
-        value: null,
-      }).then(() => {
-        setIsGoCardlessSetupComplete(false);
-      });
-    });
-  };
-
-  const onSimpleFinReset = () => {
-    send('secret-set', {
-      name: 'simplefin_token',
-      value: null,
-    }).then(() => {
-      send('secret-set', {
-        name: 'simplefin_accessKey',
-        value: null,
-      }).then(() => {
-        setIsSimpleFinSetupComplete(false);
-      });
-    });
-  };
-
-  const onPluggyAiReset = () => {
-    send('secret-set', {
-      name: 'pluggyai_clientId',
-      value: null,
-    }).then(() => {
-      send('secret-set', {
-        name: 'pluggyai_clientSecret',
-        value: null,
-      }).then(() => {
-        send('secret-set', {
-          name: 'pluggyai_itemIds',
-          value: null,
-        }).then(() => {
-          setIsPluggyAiSetupComplete(false);
-        });
-      });
-    });
   };
 
   const onCreateLocalAccount = () => {
@@ -310,19 +251,8 @@ export function CreateAccountModal({
   };
 
   const { configuredGoCardless } = useGoCardlessStatus();
-  useEffect(() => {
-    setIsGoCardlessSetupComplete(configuredGoCardless);
-  }, [configuredGoCardless]);
-
   const { configuredSimpleFin } = useSimpleFinStatus();
-  useEffect(() => {
-    setIsSimpleFinSetupComplete(configuredSimpleFin);
-  }, [configuredSimpleFin]);
-
   const { configuredPluggyAi } = usePluggyAiStatus();
-  useEffect(() => {
-    setIsPluggyAiSetupComplete(configuredPluggyAi);
-  }, [configuredPluggyAi]);
 
   let title = t('Add account');
   const [loadingSimpleFinAccounts, setLoadingSimpleFinAccounts] =
@@ -399,42 +329,10 @@ export function CreateAccountModal({
                           }}
                           onPress={onConnectGoCardless}
                         >
-                          {isGoCardlessSetupComplete
+                          {configuredGoCardless
                             ? t('Link bank account with GoCardless')
                             : t('Set up GoCardless for bank sync')}
                         </ButtonWithLoading>
-                        {isGoCardlessSetupComplete && (
-                          <DialogTrigger>
-                            <Button
-                              variant="bare"
-                              aria-label={t('GoCardless menu')}
-                            >
-                              <SvgDotsHorizontalTriple
-                                width={15}
-                                height={15}
-                                style={{ transform: 'rotateZ(90deg)' }}
-                              />
-                            </Button>
-
-                            <Popover>
-                              <Dialog>
-                                <Menu
-                                  onMenuSelect={item => {
-                                    if (item === 'reconfigure') {
-                                      onGoCardlessReset();
-                                    }
-                                  }}
-                                  items={[
-                                    {
-                                      name: 'reconfigure',
-                                      text: t('Reset GoCardless credentials'),
-                                    },
-                                  ]}
-                                />
-                              </Dialog>
-                            </Popover>
-                          </DialogTrigger>
-                        )}
                       </View>
                       <Text style={{ lineHeight: '1.4em', fontSize: 15 }}>
                         <Trans>
@@ -465,41 +363,10 @@ export function CreateAccountModal({
                           }}
                           onPress={onConnectSimpleFin}
                         >
-                          {isSimpleFinSetupComplete
+                          {configuredSimpleFin
                             ? t('Link bank account with SimpleFIN')
                             : t('Set up SimpleFIN for bank sync')}
                         </ButtonWithLoading>
-                        {isSimpleFinSetupComplete && (
-                          <DialogTrigger>
-                            <Button
-                              variant="bare"
-                              aria-label={t('SimpleFIN menu')}
-                            >
-                              <SvgDotsHorizontalTriple
-                                width={15}
-                                height={15}
-                                style={{ transform: 'rotateZ(90deg)' }}
-                              />
-                            </Button>
-                            <Popover>
-                              <Dialog>
-                                <Menu
-                                  onMenuSelect={item => {
-                                    if (item === 'reconfigure') {
-                                      onSimpleFinReset();
-                                    }
-                                  }}
-                                  items={[
-                                    {
-                                      name: 'reconfigure',
-                                      text: t('Reset SimpleFIN credentials'),
-                                    },
-                                  ]}
-                                />
-                              </Dialog>
-                            </Popover>
-                          </DialogTrigger>
-                        )}
                       </View>
                       <Text style={{ lineHeight: '1.4em', fontSize: 15 }}>
                         <Trans>
@@ -529,42 +396,10 @@ export function CreateAccountModal({
                           }}
                           onPress={onConnectPluggyAi}
                         >
-                          {isPluggyAiSetupComplete
+                          {configuredPluggyAi
                             ? t('Link bank account with Pluggy.ai')
                             : t('Set up Pluggy.ai for bank sync')}
                         </ButtonWithLoading>
-                        {isPluggyAiSetupComplete && (
-                          <DialogTrigger>
-                            <Button
-                              variant="bare"
-                              aria-label={t('Pluggy.ai menu')}
-                            >
-                              <SvgDotsHorizontalTriple
-                                width={15}
-                                height={15}
-                                style={{ transform: 'rotateZ(90deg)' }}
-                              />
-                            </Button>
-
-                            <Popover>
-                              <Dialog>
-                                <Menu
-                                  onMenuSelect={item => {
-                                    if (item === 'reconfigure') {
-                                      onPluggyAiReset();
-                                    }
-                                  }}
-                                  items={[
-                                    {
-                                      name: 'reconfigure',
-                                      text: t('Reset Pluggy.ai credentials'),
-                                    },
-                                  ]}
-                                />
-                              </Dialog>
-                            </Popover>
-                          </DialogTrigger>
-                        )}
                       </View>
                       <Text style={{ lineHeight: '1.4em', fontSize: 15 }}>
                         <Trans>
@@ -579,9 +414,9 @@ export function CreateAccountModal({
                     </>
                   )}
 
-                  {(!isGoCardlessSetupComplete ||
-                    !isSimpleFinSetupComplete ||
-                    !isPluggyAiSetupComplete) &&
+                  {(!configuredGoCardless ||
+                    !configuredSimpleFin ||
+                    !configuredPluggyAi) &&
                     !canSetSecrets && (
                       <Warning>
                         <Trans>
@@ -589,9 +424,9 @@ export function CreateAccountModal({
                           secrets. Please contact an Admin to configure
                         </Trans>{' '}
                         {[
-                          isGoCardlessSetupComplete ? '' : 'GoCardless',
-                          isSimpleFinSetupComplete ? '' : 'SimpleFin',
-                          isPluggyAiSetupComplete ? '' : 'Pluggy.ai',
+                          configuredGoCardless ? '' : 'GoCardless',
+                          configuredSimpleFin ? '' : 'SimpleFin',
+                          configuredPluggyAi ? '' : 'Pluggy.ai',
                         ]
                           .filter(Boolean)
                           .join(' or ')}
