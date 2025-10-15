@@ -9,7 +9,6 @@ import {
   createInstance,
   getInstance,
 } from '@module-federation/enhanced/runtime';
-
 import {
   type ActualPluginEntry,
   type ActualPluginInitialized,
@@ -49,11 +48,13 @@ export type PluginModalModel = {
   modal: HTMLElement;
 };
 
-export type PluginSlotRegistrationFn = (container: HTMLDivElement) => void;
+export type PluginSlotRegistrationFn = (
+  container: HTMLDivElement,
+) => void | (() => void);
 
 export type PluginRouteFn = {
   path: string;
-  parameter: (container: HTMLDivElement) => void;
+  parameter: (container: HTMLDivElement) => void | (() => void);
 };
 
 export async function loadPlugins({
@@ -76,9 +77,7 @@ export async function loadPlugins({
   modalMap: MutableRefObject<Map<string, PluginModalModel>>;
   setPluginsRoutes: ReactDispatch<SetStateAction<Map<string, PluginRouteFn>>>;
   setSlotItems: ReactDispatch<
-    SetStateAction<
-      Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>
-    >
+    SetStateAction<Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>>
   >;
   setPluginRegisteredWidgets: ReactDispatch<
     SetStateAction<Map<string, PluginDashboardWidget>>
@@ -203,9 +202,7 @@ function generateContext(
   modalMap: MutableRefObject<Map<string, PluginModalModel>>,
   setPluginsRoutes: ReactDispatch<SetStateAction<Map<string, PluginRouteFn>>>,
   setSlotItems: ReactDispatch<
-    SetStateAction<
-      Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>
-    >
+    SetStateAction<Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>>
   >,
   setPluginRegisteredWidgets: ReactDispatch<
     SetStateAction<Map<string, PluginDashboardWidget>>
@@ -237,7 +234,7 @@ function generateContext(
   return {
     registerRoute: (
       path: string,
-      routeElement: (container: HTMLDivElement) => void,
+      routeElement: (container: HTMLDivElement) => void | (() => void),
     ) => {
       const id = uuidv4();
       const url = joinRelativePaths('/custom', path);
@@ -305,7 +302,7 @@ function generateContext(
       }));
     },
     pushModal(
-      parameter: (container: HTMLDivElement) => void,
+      parameter: (container: HTMLDivElement) => void | (() => void),
       modalProps: BasicModalProps,
     ) {
       dispatch(
@@ -344,7 +341,7 @@ function generateContext(
     registerDashboardWidget: (
       widgetType: string,
       displayName: string,
-      renderWidget: (container: HTMLDivElement) => void,
+      renderWidget: (container: HTMLDivElement) => void | (() => void),
       options?: {
         defaultWidth?: number;
         defaultHeight?: number;

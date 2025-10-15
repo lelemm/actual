@@ -10,6 +10,7 @@ import React, {
   type MutableRefObject,
 } from 'react';
 
+import { type CategoryViews } from '@actual-app/shared-types';
 import { createInstance } from '@module-federation/enhanced/runtime';
 import {
   type ActualPluginEntry,
@@ -40,7 +41,6 @@ import { useGlobalPref } from '@desktop-client/hooks/useGlobalPref';
 import { useNavigate } from '@desktop-client/hooks/useNavigate';
 import { useDispatch, useSelector } from '@desktop-client/redux';
 import { store } from '@desktop-client/redux/store';
-import { CategoryViews } from '@actual-app/shared-types';
 
 // Move stable refs to module scope to prevent recreation
 const modalMap = new Map<string, PluginModalModel>();
@@ -50,7 +50,7 @@ export type PluginDashboardWidget = {
   pluginId: string;
   widgetType: string;
   displayName: string;
-  renderWidget: (container: HTMLDivElement) => void;
+  renderWidget: (container: HTMLDivElement) => void | (() => void);
   defaultWidth?: number;
   defaultHeight?: number;
   minWidth?: number;
@@ -66,10 +66,7 @@ export type ActualPluginsContextType = {
   ) => Promise<void>;
   modalMap: MutableRefObject<Map<string, PluginModalModel>>;
   pluginsRoutes: Map<string, PluginRouteFn>;
-  slotItems: Record<
-    SlotLocations,
-    Map<string, PluginSlotRegistrationFn>
-  >;
+  slotItems: Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>;
   pluginRegisteredWidgets: Map<string, PluginDashboardWidget>;
   // Theme management
   pluginThemes: Map<

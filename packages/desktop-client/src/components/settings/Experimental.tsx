@@ -12,7 +12,6 @@ import { Setting } from './UI';
 import { Link } from '@desktop-client/components/common/Link';
 import { Checkbox } from '@desktop-client/components/forms';
 import { useFeatureFlag } from '@desktop-client/hooks/useFeatureFlag';
-import { useGlobalPref } from '@desktop-client/hooks/useGlobalPref';
 import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 
 type FeatureToggleProps = {

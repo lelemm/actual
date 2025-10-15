@@ -16,12 +16,23 @@ export function RenderPluginsComponent({
   useEffect(() => {
     if (!pluginsEnabled) return;
 
+    const cleanups: Array<void | (() => void)> = [];
+
     [...toRender.values()].forEach((plugin, index) => {
       const pluginRef = pluginRefs.current[index];
       if (pluginRef) {
-        plugin(pluginRef);
+        const cleanup = plugin(pluginRef);
+        cleanups.push(cleanup);
       }
     });
+
+    return () => {
+      cleanups.forEach(cleanup => {
+        if (typeof cleanup === 'function') {
+          cleanup();
+        }
+      });
+    };
   }, [toRender, pluginsEnabled]);
 
   return (

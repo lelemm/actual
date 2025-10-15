@@ -327,9 +327,9 @@ export function App() {
                         <AppInner />
                       </ErrorBoundary>
                       <ThemeStyle />
-                    <ErrorBoundary FallbackComponent={FatalError}>
+                      <ErrorBoundary FallbackComponent={FatalError}>
                         <Modals />
-                    </ErrorBoundary>
+                      </ErrorBoundary>
                       <UpdateNotification />
                     </View>
                     <div id="plugin-sidebar-root" />

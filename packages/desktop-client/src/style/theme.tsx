@@ -133,9 +133,7 @@ function ThemeStyleWithPlugins() {
       const isBuiltInTheme = activeTheme in builtInThemes;
 
       if (isBuiltInTheme) {
-        baseColors =
-          builtInThemes[activeTheme as ThemeKey]?.colors ||
-          {};
+        baseColors = builtInThemes[activeTheme as ThemeKey]?.colors || {};
         setThemeColors(getThemeColors(activeTheme, baseColors));
       } else {
         // This is a plugin theme - first try to use saved colors
@@ -145,8 +143,8 @@ function ThemeStyleWithPlugins() {
           // Apply saved colors immediately
           const savedBaseTheme = savedTheme.baseTheme || 'light';
           const baseThemeColors =
-            builtInThemes[savedBaseTheme as ThemeKey]
-              ?.colors || builtInThemes.light.colors;
+            builtInThemes[savedBaseTheme as ThemeKey]?.colors ||
+            builtInThemes.light.colors;
           baseColors = { ...baseThemeColors, ...savedTheme.colors };
           setThemeColors(baseColors);
         } else {

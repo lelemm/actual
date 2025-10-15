@@ -463,13 +463,15 @@ export interface HostContext {
 
   registerRoute: (
     path: string,
-    routeElement: (container: HTMLDivElement) => void | (() => void),
-  ) => () => void;
+    routeElement: (container: HTMLDivElement) => void,
+  ) => string;
+  unregisterRoute: (id: string) => void;
 
   registerSlotContent: (
     location: SlotLocations,
-    parameter: (container: HTMLDivElement) => void | (() => void),
-  ) => () => void;
+    parameter: (container: HTMLDivElement) => void,
+  ) => string;
+  unregisterSlotContent: (id: string) => void;
 
   on: <K extends keyof ContextEvent>(
     eventType: K,

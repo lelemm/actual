@@ -564,7 +564,7 @@ export type Modal =
   | {
       name: 'plugin-modal';
       options: {
-        parameter: (container: HTMLDivElement) => void;
+        parameter: (container: HTMLDivElement) => void | (() => void);
         modalProps?: BasicModalProps;
       };
     };

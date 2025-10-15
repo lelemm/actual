@@ -4,7 +4,7 @@ import { Modal } from '@desktop-client/components/common/Modal';
 import { RenderPluginsComponent } from '@desktop-client/components/plugins/RenderPluginsComponent';
 
 type PluginModalProps = {
-  parameter: (container: HTMLDivElement) => void;
+  parameter: (container: HTMLDivElement) => void | (() => void);
   modalProps: BasicModalProps;
 };
 

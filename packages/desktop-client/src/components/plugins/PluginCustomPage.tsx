@@ -1,7 +1,7 @@
 import { RenderPluginsComponent } from './RenderPluginsComponent';
 
 type PluginCustomPageProps = {
-  parameter: (container: HTMLDivElement) => void;
+  parameter: (container: HTMLDivElement) => void | (() => void);
 };
 
 export function PluginCustomPage({ parameter }: PluginCustomPageProps) {

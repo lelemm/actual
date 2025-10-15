@@ -1,5 +1,6 @@
 import * as asyncStorage from '../../platform/server/asyncStorage';
 import { fetch } from '../../platform/server/fetch';
+import { logger } from '../../platform/server/log';
 import { createApp } from '../app';
 import { getServer } from '../server-config';
 
@@ -72,8 +73,8 @@ async function corsProxy({
 
     const contentType = response.headers.get('content-type');
 
-    console.log('contentType', contentType);
-    console.log('url', url.toString());
+    logger.log('contentType', contentType);
+    logger.log('url', url.toString());
     // Try to detect if this might be JSON content based on URL or content-type
     const isLikelyJson =
       contentType?.includes('application/json') ||
@@ -102,7 +103,7 @@ async function corsProxy({
       };
     }
   } catch (error) {
-    console.error('CORS proxy error:', error);
+    logger.error('CORS proxy error:', error);
     return {
       error: 'network-failure',
       details: error instanceof Error ? error.message : String(error),

@@ -16,8 +16,8 @@ import { type Database } from '@jlongster/sql.js';
 import * as asyncStorage from '../platform/server/asyncStorage';
 import * as connection from '../platform/server/connection';
 import * as fs from '../platform/server/fs';
-import { logger, setVerboseMode } from '../platform/server/log';
 import * as idb from '../platform/server/indexeddb';
+import { logger, setVerboseMode } from '../platform/server/log';
 import * as sqlite from '../platform/server/sqlite';
 import { q, Query } from '../shared/query';
 import { amountToInteger, integerToAmount } from '../shared/util';
@@ -195,7 +195,7 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
     try {
       db = await sqlite.openDatabase(dbPath);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Database opening failed for plugin ${pluginId}:`,
         error,
       );
@@ -219,7 +219,7 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
       `,
       );
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Infrastructure table creation failed for plugin ${pluginId}:`,
         error,
       );
@@ -230,7 +230,7 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
     try {
       pluginDatabases.set(pluginId, db);
     } catch (error) {
-      console.error(
+      logger.error(
         `❌ Database reference storage failed for plugin ${pluginId}:`,
         error,
       );
@@ -239,11 +239,11 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
 
     return { success: true };
   } catch (error) {
-    console.error(
+    logger.error(
       `💥 Overall plugin database creation failed for ${pluginId}:`,
       error,
     );
-    console.error(`💥 Error details:`, {
+    logger.error(`💥 Error details:`, {
       name: error.name,
       message: error.message,
       stack: error.stack,
@@ -291,7 +291,7 @@ handlers['plugin-database-query'] = async function ({
       ) as DatabaseQueryResult;
     }
   } catch (error) {
-    console.error(`Plugin ${pluginId} database query error:`, error);
+    logger.error(`Plugin ${pluginId} database query error:`, error);
     throw error;
   }
 };
@@ -306,7 +306,7 @@ handlers['plugin-database-exec'] = async function ({ pluginId, sql }) {
     sqlite.execQuery(db, sql);
     return { success: true };
   } catch (error) {
-    console.error(`Plugin ${pluginId} database exec error:`, error);
+    logger.error(`Plugin ${pluginId} database exec error:`, error);
     throw error;
   }
 };
@@ -343,7 +343,7 @@ handlers['plugin-database-transaction'] = async function ({
 
     return results;
   } catch (error) {
-    console.error(`Plugin ${pluginId} database transaction error:`, error);
+    logger.error(`Plugin ${pluginId} database transaction error:`, error);
     throw error;
   }
 };
@@ -395,7 +395,7 @@ handlers['plugin-run-migrations'] = async function ({ pluginId, migrations }) {
 
         results.push({ migrationId, status: 'applied' });
       } catch (error) {
-        console.error(
+        logger.error(
           `Plugin ${pluginId} migration ${migrationId} failed:`,
           error,
         );
@@ -407,7 +407,7 @@ handlers['plugin-run-migrations'] = async function ({ pluginId, migrations }) {
 
     return { success: true, results };
   } catch (error) {
-    console.error(`Plugin ${pluginId} migrations failed:`, error);
+    logger.error(`Plugin ${pluginId} migrations failed:`, error);
     throw error;
   }
 };
@@ -427,7 +427,7 @@ handlers['plugin-database-get-migrations'] = async function ({ pluginId }) {
     ) as { id: string }[];
     return rows.map(row => row.id);
   } catch (error) {
-    console.error(`Plugin ${pluginId} getMigrationState error:`, error);
+    logger.error(`Plugin ${pluginId} getMigrationState error:`, error);
     throw error;
   }
 };
@@ -451,7 +451,7 @@ handlers['plugin-database-set-metadata'] = async function ({
     );
     return { success: true };
   } catch (error) {
-    console.error(`Plugin ${pluginId} setMetadata error:`, error);
+    logger.error(`Plugin ${pluginId} setMetadata error:`, error);
     throw error;
   }
 };
@@ -471,7 +471,7 @@ handlers['plugin-database-get-metadata'] = async function ({ pluginId, key }) {
     ) as unknown as { value: string } | null;
     return row ? JSON.parse(row.value) : null;
   } catch (error) {
-    console.error(`Plugin ${pluginId} getMetadata error:`, error);
+    logger.error(`Plugin ${pluginId} getMetadata error:`, error);
     throw error;
   }
 };
@@ -544,7 +544,7 @@ async function introspectPluginSchema(pluginId: string): Promise<PluginSchema> {
     pluginSchemas.set(pluginId, schema);
     return schema;
   } catch (error) {
-    console.error(`Plugin ${pluginId} schema introspection error:`, error);
+    logger.error(`Plugin ${pluginId} schema introspection error:`, error);
     throw error;
   }
 }
@@ -694,7 +694,7 @@ handlers['plugin-aql-query'] = async function ({
 
       return { data, dependencies: state.dependencies } as AQLQueryResult;
     } catch (error) {
-      console.error(`Plugin ${pluginId} AQL query error:`, error);
+      logger.error(`Plugin ${pluginId} AQL query error:`, error);
       throw error;
     }
   }

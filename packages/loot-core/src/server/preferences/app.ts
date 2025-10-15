@@ -140,7 +140,7 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
     syncServerConfig,
     notifyWhenUpdateIsAvailable,
     plugins,
-//    'plugin-themes': pluginThemes,
+    //    'plugin-themes': pluginThemes,
   } = await asyncStorage.multiGet([
     'floating-sidebar',
     'category-expanded-state',
@@ -154,7 +154,7 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
     'syncServerConfig',
     'notifyWhenUpdateIsAvailable',
     'plugins',
-//    'plugin-themes',
+    //    'plugin-themes',
   ] as const);
   return {
     floatingSidebar: floatingSidebar === 'true',

@@ -314,7 +314,7 @@ function PluginList() {
                 padding: '3px 5px',
               }}
             >
-              {devPlugin.name || 'Dev Plugin'}
+              {devPlugin.name || t('Dev Plugin')}
               <span
                 style={{
                   color: theme.noticeTextLight,
@@ -502,7 +502,7 @@ function PluginRow({ plugin, enabled }: PluginRowProps) {
             overflow: 'hidden',
           }}
         >
-          {enabled ? 'Running' : ''}
+          {enabled ? t('Running') : ''}
         </View>
       </Cell>
       <Cell
