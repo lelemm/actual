@@ -68,7 +68,7 @@ export function Sidebar() {
     setSidebarWidth(rect.width);
   });
 
-  const { sidebarItems } = useActualPlugins();
+  const { slotItems } = useActualPlugins();
 
   return (
     <Resizable
@@ -125,7 +125,7 @@ export function Sidebar() {
         >
           <PrimaryButtons />
 
-          <RenderPluginsComponent toRender={sidebarItems['before-accounts']} />
+          <RenderPluginsComponent toRender={slotItems['before-accounts']} />
 
           <Accounts />
 
@@ -135,7 +135,7 @@ export function Sidebar() {
             ]}
           />
 
-          <RenderPluginsComponent toRender={sidebarItems['after-accounts']} />
+          <RenderPluginsComponent toRender={slotItems['after-accounts']} />
         </View>
       </View>
     </Resizable>

@@ -57,7 +57,7 @@ export function LoggedInUser({
   ) as (SyncedLocalFile | RemoteFile)[];
   const currentFile = remoteFiles.find(f => f.cloudFileId === cloudFileId);
   const hasSyncedPrefs = useSelector(state => state.prefs.synced);
-  const { sidebarItems } = useActualPlugins();
+  const { slotItems } = useActualPlugins();
 
   const initializeUserData = async () => {
     try {
@@ -225,7 +225,7 @@ export function LoggedInUser({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', ...style }}>
-      <RenderPluginsComponent toRender={sidebarItems['topbar']} />
+      <RenderPluginsComponent toRender={slotItems['topbar']} />
 
       <Button
         ref={triggerRef}

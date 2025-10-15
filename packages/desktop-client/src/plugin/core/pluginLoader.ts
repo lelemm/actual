@@ -9,6 +9,7 @@ import {
   createInstance,
   getInstance,
 } from '@module-federation/enhanced/runtime';
+
 import {
   type ActualPluginEntry,
   type ActualPluginInitialized,
@@ -23,7 +24,7 @@ import {
 } from 'plugins-core/index';
 import {
   type ContextEvent,
-  type SidebarLocations,
+  type SlotLocations,
   type ThemeColorOverrides,
   type HostContext,
 } from 'plugins-core/types/actualPlugin';
@@ -48,7 +49,7 @@ export type PluginModalModel = {
   modal: HTMLElement;
 };
 
-export type PluginSidebarRegistrationFn = (container: HTMLDivElement) => void;
+export type PluginSlotRegistrationFn = (container: HTMLDivElement) => void;
 
 export type PluginRouteFn = {
   path: string;
@@ -61,7 +62,7 @@ export async function loadPlugins({
   setPlugins,
   modalMap,
   setPluginsRoutes,
-  setSidebarItems,
+  setSlotItems,
   setPluginRegisteredWidgets,
   navigateBase,
   setEvents,
@@ -74,9 +75,9 @@ export async function loadPlugins({
   setPlugins: ReactDispatch<SetStateAction<ActualPluginInitialized[]>>;
   modalMap: MutableRefObject<Map<string, PluginModalModel>>;
   setPluginsRoutes: ReactDispatch<SetStateAction<Map<string, PluginRouteFn>>>;
-  setSidebarItems: ReactDispatch<
+  setSlotItems: ReactDispatch<
     SetStateAction<
-      Record<SidebarLocations, Map<string, PluginSidebarRegistrationFn>>
+      Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>
     >
   >;
   setPluginRegisteredWidgets: ReactDispatch<
@@ -126,7 +127,7 @@ export async function loadPlugins({
       const hostContext = generateContext(
         modalMap,
         setPluginsRoutes,
-        setSidebarItems,
+        setSlotItems,
         setPluginRegisteredWidgets,
         dispatch,
         pluginId,
@@ -201,9 +202,9 @@ export async function loadPlugins({
 function generateContext(
   modalMap: MutableRefObject<Map<string, PluginModalModel>>,
   setPluginsRoutes: ReactDispatch<SetStateAction<Map<string, PluginRouteFn>>>,
-  setSidebarItems: ReactDispatch<
+  setSlotItems: ReactDispatch<
     SetStateAction<
-      Record<SidebarLocations, Map<string, PluginSidebarRegistrationFn>>
+      Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>
     >
   >,
   setPluginRegisteredWidgets: ReactDispatch<
@@ -257,12 +258,12 @@ function generateContext(
         return newMap;
       });
     },
-    registerMenu: (
-      position: SidebarLocations,
-      param: PluginSidebarRegistrationFn,
+    registerSlotContent: (
+      position: SlotLocations,
+      param: PluginSlotRegistrationFn,
     ) => {
       const id = uuidv4();
-      setSidebarItems(prev => {
+      setSlotItems(prev => {
         const updated = new Map(prev[position]);
         updated.set(id, param);
 
@@ -273,16 +274,16 @@ function generateContext(
       });
       return id;
     },
-    unregisterMenu: (id: string) => {
-      setSidebarItems(prev => {
+    unregisterSlotContent: (id: string) => {
+      setSlotItems(prev => {
         const updated: Record<
-          SidebarLocations,
-          Map<string, PluginSidebarRegistrationFn>
+          SlotLocations,
+          Map<string, PluginSlotRegistrationFn>
         > = {
           ...prev,
         };
 
-        (Object.keys(prev) as SidebarLocations[]).forEach(location => {
+        (Object.keys(prev) as SlotLocations[]).forEach(location => {
           const currentMap = prev[location];
           if (currentMap.has(id)) {
             const newMap = new Map(currentMap);

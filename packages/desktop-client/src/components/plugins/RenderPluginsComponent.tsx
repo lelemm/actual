@@ -1,10 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 
 import { useGlobalPref } from '@desktop-client/hooks/useGlobalPref';
-import { type PluginSidebarRegistrationFn } from '@desktop-client/plugin/core/pluginLoader';
+import { type PluginSlotRegistrationFn } from '@desktop-client/plugin/core/pluginLoader';
 
 type RenderPluginsComponentProps = {
-  toRender: Map<string, PluginSidebarRegistrationFn>;
+  toRender: Map<string, PluginSlotRegistrationFn>;
 };
 
 export function RenderPluginsComponent({

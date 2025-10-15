@@ -81,14 +81,14 @@ __metadata:
 
 "@actual-app/plugins-core@file:../plugins-core::locator=%40actual-app%2Ftest-plugin%40workspace%3Apackages%2Ftest-plugin":
   version: 0.1.0
-  resolution: "@actual-app/plugins-core@file:../plugins-core#../plugins-core::hash=c9295f&locator=%40actual-app%2Ftest-plugin%40workspace%3Apackages%2Ftest-plugin"
+  resolution: "@actual-app/plugins-core@file:../plugins-core#../plugins-core::hash=2739bd&locator=%40actual-app%2Ftest-plugin%40workspace%3Apackages%2Ftest-plugin"
   peerDependencies:
     i18next: ^25.2.1
     react: 19.2.0
     react-aria-components: ^1.7.1
     react-dom: 19.2.0
     react-i18next: ^16.0.0
-  checksum: 10/ae23fcf74b617af796b3cfe8e663788d24bacdcb9923abb875377da081b9f82aec3097d2a4f73ae94168497189d9b03464b70df1bb5c43c834ec6d8d13d253e8
+  checksum: 10/694e4fde94d3fc5eb92e4f32223e58e328a6f3b09e66396f8e8bcb5668160d915cca57fe6be18f8623f2cf76b1c3e61883f17e09d9d14464fa6f639e1cd7a5fd
   languageName: node
   linkType: hard
 
@@ -184,7 +184,7 @@ __metadata:
     "@module-federation/vite": "npm:^1.4.1"
     "@types/archiver": "npm:^6.0.3"
     "@types/eslint-plugin-jsx-a11y": "npm:^6"
-    "@types/react": "npm:^19.1.4"
+    "@types/react": "npm:^19.2.2"
     "@typescript-eslint/parser": "npm:^8.42.0"
     "@vitejs/plugin-react-swc": "npm:^3.10.2"
     archiver: "npm:^7.0.1"
@@ -7081,7 +7081,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:*, @types/react@npm:^19.1.4, @types/react@npm:^19.2.2":
+"@types/react@npm:*, @types/react@npm:^19.2.2":
   version: 19.2.2
   resolution: "@types/react@npm:19.2.2"
   dependencies:

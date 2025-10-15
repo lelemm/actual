@@ -17,13 +17,12 @@ import {
   type PayeeEntity,
   type CategoryEntity,
   type CategoryGroupEntity,
-  type CategoryViews,
   type AccountEntity,
 } from 'plugins-core/index';
 import {
   type ThemeColorOverrides,
   type ContextEvent,
-  type SidebarLocations,
+  type SlotLocations,
 } from 'plugins-core/types/actualPlugin';
 
 import { type ActualPluginStored } from 'loot-core/types/models/actual-plugin-stored';
@@ -33,7 +32,7 @@ import {
   loadPluginsScript,
   type PluginRouteFn,
   type PluginModalModel,
-  type PluginSidebarRegistrationFn,
+  type PluginSlotRegistrationFn,
 } from './core/pluginLoader';
 import { getAllPlugins } from './core/pluginStore';
 
@@ -41,6 +40,7 @@ import { useGlobalPref } from '@desktop-client/hooks/useGlobalPref';
 import { useNavigate } from '@desktop-client/hooks/useNavigate';
 import { useDispatch, useSelector } from '@desktop-client/redux';
 import { store } from '@desktop-client/redux/store';
+import { CategoryViews } from '@actual-app/shared-types';
 
 // Move stable refs to module scope to prevent recreation
 const modalMap = new Map<string, PluginModalModel>();
@@ -66,9 +66,9 @@ export type ActualPluginsContextType = {
   ) => Promise<void>;
   modalMap: MutableRefObject<Map<string, PluginModalModel>>;
   pluginsRoutes: Map<string, PluginRouteFn>;
-  sidebarItems: Record<
-    SidebarLocations,
-    Map<string, PluginSidebarRegistrationFn>
+  slotItems: Record<
+    SlotLocations,
+    Map<string, PluginSlotRegistrationFn>
   >;
   pluginRegisteredWidgets: Map<string, PluginDashboardWidget>;
   // Theme management
@@ -120,7 +120,7 @@ const defaultContextValue: ActualPluginsContextType = {
   refreshPluginStore: () => Promise.resolve(),
   modalMap: { current: new Map() },
   pluginsRoutes: new Map(),
-  sidebarItems: {
+  slotItems: {
     'main-menu': new Map(),
     'more-menu': new Map(),
     'before-accounts': new Map(),
@@ -187,13 +187,13 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
   // Create memoized selectors that return stable references
   const payeesSelector = useMemo(() => {
     let lastPayees: PayeeEntity[] | null = null;
-    let lastResult: { payess: PayeeEntity[] } | null = null;
+    let lastResult: { payees: PayeeEntity[] } | null = null;
 
     return (state: ReturnType<typeof store.getState>) => {
       if (state.payees.payees !== lastPayees) {
         lastPayees = state.payees.payees;
         lastResult = {
-          payess: Array.isArray(state.payees.payees)
+          payees: Array.isArray(state.payees.payees)
             ? (state.payees.payees as PayeeEntity[])
             : [],
         };
@@ -238,7 +238,7 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEventDispatcher('payess', payeesSelector, events);
+  useEventDispatcher('payees', payeesSelector, events);
   useEventDispatcher('categories', categoriesSelector, events);
   useEventDispatcher('accounts', accountsSelector, events);
 
@@ -306,8 +306,8 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
   const [pluginsRoutes, setPluginsRoutes] = useState<
     Map<string, PluginRouteFn>
   >(new Map());
-  const [sidebarItems, setSidebarItems] = useState<
-    Record<SidebarLocations, Map<string, PluginSidebarRegistrationFn>>
+  const [slotItems, setSlotItems] = useState<
+    Record<SlotLocations, Map<string, PluginSlotRegistrationFn>>
   >({
     'main-menu': new Map(),
     'more-menu': new Map(),
@@ -519,7 +519,7 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
         setPlugins,
         modalMap: { current: modalMap },
         setPluginsRoutes,
-        setSidebarItems,
+        setSlotItems,
         setPluginRegisteredWidgets,
         navigateBase,
         setEvents,
@@ -529,8 +529,8 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
       });
 
       const state = store.getState();
-      dispatchEvent('payess', events, {
-        payess: Array.isArray(state.payees.payees) ? state.payees.payees : [],
+      dispatchEvent('payees', events, {
+        payees: Array.isArray(state.payees.payees) ? state.payees.payees : [],
       });
       dispatchEvent('categories', events, {
         categories: Array.isArray(state.budget.categories)
@@ -605,7 +605,7 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
     refreshPluginStore,
     modalMap: { current: modalMap },
     pluginsRoutes,
-    sidebarItems,
+    slotItems,
     pluginRegisteredWidgets,
     pluginThemes: runtimePluginThemes,
     themeOverrides,

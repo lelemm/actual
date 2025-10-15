@@ -35,7 +35,7 @@ export function PrimaryButtons() {
   const syncServerStatus = useSyncServerStatus();
   const isUsingServer = syncServerStatus !== 'no-server';
 
-  const { sidebarItems } = useActualPlugins();
+  const { slotItems } = useActualPlugins();
 
   const isActive = [
     '/payees',
@@ -64,7 +64,7 @@ export function PrimaryButtons() {
         forceActive={!isOpen && isActive}
       />
 
-      <RenderPluginsComponent toRender={sidebarItems['main-menu']} />
+      <RenderPluginsComponent toRender={slotItems['main-menu']} />
 
       {isOpen && (
         <>
@@ -103,7 +103,7 @@ export function PrimaryButtons() {
             />
           )}
 
-          <RenderPluginsComponent toRender={sidebarItems['more-menu']} />
+          <RenderPluginsComponent toRender={slotItems['more-menu']} />
 
           <SecondaryItem
             title={t('Settings')}
