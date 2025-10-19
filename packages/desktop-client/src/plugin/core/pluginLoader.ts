@@ -24,7 +24,7 @@ import {
 import {
   type ContextEvent,
   type SlotLocations,
-  type ThemeColorOverrides,
+  type ThemeColorTypes,
   type HostContext,
 } from 'plugins-core/types/actualPlugin';
 import type { Dispatch } from 'redux';
@@ -67,8 +67,7 @@ export async function loadPlugins({
   setPluginRegisteredWidgets,
   navigateBase,
   setEvents,
-  addPluginTheme,
-  overrideTheme,
+  registerTheme,
   removePluginThemes,
 }: {
   pluginsEntries: Map<string, ActualPluginEntry>;
@@ -88,21 +87,16 @@ export async function loadPlugins({
       [K in keyof ContextEvent]?: Array<(data: ContextEvent[K]) => void>;
     }>
   >;
-  addPluginTheme: (
+  registerTheme: (
     pluginName: string,
     themeId: string,
     displayName: string,
-    colorOverrides: ThemeColorOverrides,
+    colorOverrides: ThemeColorTypes,
     options?: {
       baseTheme?: 'light' | 'dark' | 'midnight';
       description?: string;
     },
-  ) => void;
-  overrideTheme: (
-    pluginName: string,
-    themeId: 'light' | 'dark' | 'midnight' | string,
-    colorOverrides: ThemeColorOverrides,
-  ) => void;
+  ) => () => void;
   removePluginThemes: (pluginName: string) => void;
 }) {
   const loadedList: ActualPluginInitialized[] = [];
@@ -132,9 +126,7 @@ export async function loadPlugins({
         pluginId,
         navigateBase,
         setEvents,
-        addPluginTheme,
-        overrideTheme,
-        // removePluginThemes,
+        registerTheme,
       );
 
       // Create database for the plugin
@@ -215,21 +207,16 @@ function generateContext(
       [K in keyof ContextEvent]?: Array<(data: ContextEvent[K]) => void>;
     }>
   >,
-  addPluginTheme: (
+  registerTheme: (
     pluginName: string,
     themeId: string,
     displayName: string,
-    colorOverrides: ThemeColorOverrides,
+    colorOverrides: ThemeColorTypes,
     options?: {
       baseTheme?: 'light' | 'dark' | 'midnight';
       description?: string;
     },
-  ) => void,
-  overrideTheme: (
-    pluginName: string,
-    themeId: 'light' | 'dark' | 'midnight' | string,
-    colorOverrides: ThemeColorOverrides,
-  ) => void,
+  ) => () => void,
 ) {
   return {
     registerRoute: (
@@ -246,14 +233,13 @@ function generateContext(
         });
         return newMap;
       });
-      return id;
-    },
-    unregisterRoute: (id: string) => {
-      setPluginsRoutes(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(id);
-        return newMap;
-      });
+      return () => {
+        setPluginsRoutes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(id);
+          return newMap;
+        });
+      };
     },
     registerSlotContent: (
       position: SlotLocations,
@@ -269,28 +255,16 @@ function generateContext(
           [position]: updated,
         };
       });
-      return id;
-    },
-    unregisterSlotContent: (id: string) => {
-      setSlotItems(prev => {
-        const updated: Record<
-          SlotLocations,
-          Map<string, PluginSlotRegistrationFn>
-        > = {
-          ...prev,
-        };
-
-        (Object.keys(prev) as SlotLocations[]).forEach(location => {
-          const currentMap = prev[location];
-          if (currentMap.has(id)) {
-            const newMap = new Map(currentMap);
-            newMap.delete(id);
-            updated[location] = newMap;
-          }
+      return () => {
+        setSlotItems(prev => {
+          const updated = new Map(prev[position]);
+          updated.delete(id);
+          return {
+            ...prev,
+            [position]: updated,
+          };
         });
-
-        return updated;
-      });
+      };
     },
     on: <K extends keyof ContextEvent>(
       eventType: K,
@@ -324,20 +298,15 @@ function generateContext(
       navigateBase(path);
     },
     q: q as QueryBuilder,
-    addTheme: (
+    registerTheme: (
       themeId: string,
       displayName: string,
-      colorOverrides: ThemeColorOverrides,
+      colorOverrides: ThemeColorTypes,
       options?: {
         baseTheme?: 'light' | 'dark' | 'midnight';
         description?: string;
       },
-    ) =>
-      addPluginTheme(pluginId, themeId, displayName, colorOverrides, options),
-    overrideTheme: (
-      themeId: 'light' | 'dark' | 'midnight' | string,
-      colorOverrides: ThemeColorOverrides,
-    ) => overrideTheme(pluginId, themeId, colorOverrides),
+    ) => registerTheme(pluginId, themeId, displayName, colorOverrides, options),
     registerDashboardWidget: (
       widgetType: string,
       displayName: string,
@@ -364,14 +333,13 @@ function generateContext(
         });
         return newMap;
       });
-      return id;
-    },
-    unregisterDashboardWidget: (id: string) => {
-      setPluginRegisteredWidgets(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(id);
-        return newMap;
-      });
+      return () => {
+        setPluginRegisteredWidgets(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(id);
+          return newMap;
+        });
+      };
     },
     makeFilters: async (
       conditions: Array<PluginFilterCondition>,

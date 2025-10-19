@@ -196,18 +196,14 @@ interface PluginContext {
   unregisterDashboardWidget: (id: string) => void;
 
   // Theming
-  addTheme: (
+  registerTheme: (
     themeId: string,
     displayName: string,
-    colorOverrides: ThemeColorOverrides,
+    colorOverrides: ThemeColorTypes,
     options?: {
       baseTheme?: 'light' | 'dark' | 'midnight';
       description?: string;
     },
-  ) => void;
-  overrideTheme: (
-    themeId: 'light' | 'dark' | 'midnight' | string,
-    colorOverrides: ThemeColorOverrides,
   ) => void;
 
   // Data Access
@@ -661,7 +657,7 @@ activate: (context) => {
 ```typescript
 activate: context => {
   // Add a new theme
-  context.addTheme(
+  context.registerTheme(
     'my-dark-theme',
     'My Dark Theme',
     {
@@ -679,19 +675,9 @@ activate: context => {
 };
 ```
 
-### Override Existing Themes
-
-```typescript
-// Modify existing theme colors
-context.overrideTheme('light', {
-  buttonPrimaryBackground: '#ff6b6b',
-  buttonPrimaryBackgroundHover: '#ff5252',
-});
-```
-
 ### Available Theme Colors
 
-The `ThemeColorOverrides` type includes 200+ customizable colors covering:
+The `ThemeColorTypes` type includes 200+ customizable colors covering:
 
 - Page colors (`pageBackground`, `pageText`, etc.)
 - Card colors (`cardBackground`, `cardBorder`, etc.)
@@ -1368,9 +1354,9 @@ function SettingsModal({ context }: SettingsModalProps) {
 ### Custom Theme
 
 ```typescript
-import type { ThemeColorOverrides } from '@actual-app/plugins-core';
+import type { ThemeColorTypes } from '@actual-app/plugins-core';
 
-const oceanBlueTheme: ThemeColorOverrides = {
+const oceanBlueTheme: ThemeColorTypes = {
   pageBackground: '#f0f8ff',
   pageText: '#2c3e50',
   cardBackground: '#ffffff',
@@ -1392,7 +1378,7 @@ const oceanBlueTheme: ThemeColorOverrides = {
 };
 
 activate: (context: PluginContext) => {
-  context.addTheme('ocean-blue', 'Ocean Blue', oceanBlueTheme, {
+  context.registerTheme('ocean-blue', 'Ocean Blue', oceanBlueTheme, {
     baseTheme: 'light',
     description: 'A calming ocean-inspired theme perfect for budgeting',
   });

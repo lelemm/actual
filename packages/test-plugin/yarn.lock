@@ -7,14 +7,14 @@ __metadata:
 
 "@actual-app/plugins-core@file:../plugins-core::locator=%40actual-app%2Ftest-plugin%40workspace%3A.":
   version: 0.1.0
-  resolution: "@actual-app/plugins-core@file:../plugins-core#../plugins-core::hash=821e9a&locator=%40actual-app%2Ftest-plugin%40workspace%3A."
+  resolution: "@actual-app/plugins-core@file:../plugins-core#../plugins-core::hash=1945a5&locator=%40actual-app%2Ftest-plugin%40workspace%3A."
   peerDependencies:
     i18next: ^25.2.1
     react: 19.2.0
     react-aria-components: ^1.7.1
     react-dom: 19.2.0
     react-i18next: ^16.0.0
-  checksum: 10/c0f3d0b43d6f38573ec1fa60c462ceb240b65a13460eae33b8c5a9cb7eea6444ad055967151c778bb336a440059353c9dba78d6539154beb1821818015734655
+  checksum: 10/415335c41c4f38e9444d02e8bd6aa820602c8e2ce8d0b978ce4808325218130ef386f6d454965b7c129be8909ff7a55fb18367d715695f26d2435796589c98c3
   languageName: node
   linkType: hard
 

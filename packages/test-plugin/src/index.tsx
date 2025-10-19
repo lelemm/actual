@@ -38,11 +38,16 @@ const pluginEntry: ActualPluginEntry = () => {
       );
 
       // Add sepia themed style
-      context.addTheme('sepia-vintage', 'Sepia Vintage', sepiaVintageTheme, {
-        baseTheme: 'light',
-        description:
-          'A warm, vintage sepia-toned theme that evokes the classic look of old photographs',
-      });
+      context.registerTheme(
+        'sepia-vintage',
+        'Sepia Vintage',
+        sepiaVintageTheme,
+        {
+          baseTheme: 'light',
+          description:
+            'A warm, vintage sepia-toned theme that evokes the classic look of old photographs',
+        },
+      );
 
       // Register dashboard widget
       context.registerDashboardWidget(
@@ -84,7 +89,7 @@ const pluginEntry: ActualPluginEntry = () => {
         'before-accounts',
         <ClickMeButton context={pluginContext} />,
       );
-      context.registerSlotContent(
+      const unregisterSlotContent = context.registerSlotContent(
         'after-accounts',
         <I18nWrapper>
           <Button

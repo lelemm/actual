@@ -29,11 +29,11 @@ export function ThemeSettings() {
   const [darkTheme, switchDarkTheme] = usePreferredDarkTheme();
 
   // Get saved plugin themes
-  const [savedPluginThemes] = useGlobalPref('pluginThemes');
+  const [savedThemes] = useGlobalPref('themes');
 
   // Get theme options including plugin themes
   const [themeOptions, setThemeOptions] = useState(() =>
-    getThemeOptions(undefined, savedPluginThemes),
+    getThemeOptions(undefined, savedThemes),
   );
 
   // Get plugin context for dynamic updates - gracefully handles case when context is not available
@@ -41,25 +41,16 @@ export function ThemeSettings() {
 
   // Update theme options when plugins change or saved themes change
   useEffect(() => {
-    if (plugins.plugins.length > 0 || plugins.pluginThemes.size > 0) {
+    if (plugins.plugins.length > 0 || plugins.themes.size > 0) {
       // Plugins are loaded, use their theme functions
-      const options = getThemeOptions(
-        plugins.getPluginThemes,
-        savedPluginThemes,
-      );
+      const options = getThemeOptions(plugins.getThemes, savedThemes);
       setThemeOptions(options);
     } else {
       // No plugins loaded, use saved themes only
-      const options = getThemeOptions(undefined, savedPluginThemes);
+      const options = getThemeOptions(undefined, savedThemes);
       setThemeOptions(options);
     }
-  }, [
-    plugins.plugins,
-    plugins.pluginThemes,
-    plugins.themeOverrides,
-    plugins.getPluginThemes,
-    savedPluginThemes,
-  ]);
+  }, [plugins.plugins, plugins.themes, plugins.getThemes, savedThemes]);
 
   return (
     <Setting

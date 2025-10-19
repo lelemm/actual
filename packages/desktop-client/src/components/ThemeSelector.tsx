@@ -30,13 +30,13 @@ export function ThemeSelector({ style }: ThemeSelectorProps) {
   const { t } = useTranslation();
 
   // Get saved plugin themes
-  const [savedPluginThemes] = useGlobalPref('pluginThemes');
+  const [savedThemes] = useGlobalPref('themes');
 
   // Get theme options including plugin themes
-  let themeOptions = getThemeOptions(undefined, savedPluginThemes);
+  let themeOptions = getThemeOptions(undefined, savedThemes);
   try {
     const plugins = useActualPlugins();
-    themeOptions = getThemeOptions(plugins.getPluginThemes, savedPluginThemes);
+    themeOptions = getThemeOptions(plugins.getThemes, savedThemes);
   } catch {}
 
   const themeIcons = {

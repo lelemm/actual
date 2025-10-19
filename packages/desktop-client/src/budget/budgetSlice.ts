@@ -1,10 +1,10 @@
+import { type CategoryViews } from '@actual-app/shared-types';
 import { createSlice } from '@reduxjs/toolkit';
 import { t } from 'i18next';
 import memoizeOne from 'memoize-one';
 import {
   type CategoryEntity,
   type CategoryGroupEntity,
-  type CategoryViews,
 } from 'plugins-core/index';
 
 import { send } from 'loot-core/platform/client/fetch';

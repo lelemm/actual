@@ -195,10 +195,7 @@ handlers['plugin-create-database'] = async function ({ pluginId }) {
     try {
       db = await sqlite.openDatabase(dbPath);
     } catch (error) {
-      logger.error(
-        `❌ Database opening failed for plugin ${pluginId}:`,
-        error,
-      );
+      logger.error(`❌ Database opening failed for plugin ${pluginId}:`, error);
       throw error;
     }
 

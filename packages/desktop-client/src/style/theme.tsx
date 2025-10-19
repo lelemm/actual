@@ -83,10 +83,10 @@ function ThemeStyleWithPlugins() {
   >(undefined);
 
   const plugins = useActualPlugins();
-  const { getThemeColors, pluginThemes, themeOverrides } = plugins;
+  const { getThemeColors, themes } = plugins;
 
   // Get saved plugin themes from global preferences as fallback
-  const [savedPluginThemes] = useGlobalPref('pluginThemes');
+  const [savedThemes] = useGlobalPref('themes');
 
   useEffect(() => {
     let baseColors: Record<string, string>;
@@ -137,7 +137,7 @@ function ThemeStyleWithPlugins() {
         setThemeColors(getThemeColors(activeTheme, baseColors));
       } else {
         // This is a plugin theme - first try to use saved colors
-        const savedTheme = savedPluginThemes?.[activeTheme];
+        const savedTheme = savedThemes?.[activeTheme];
 
         if (savedTheme) {
           // Apply saved colors immediately
@@ -154,18 +154,12 @@ function ThemeStyleWithPlugins() {
         }
       }
     }
-  }, [
-    activeTheme,
-    darkThemePreference,
-    getThemeColors,
-    pluginThemes,
-    savedPluginThemes,
-  ]);
+  }, [activeTheme, darkThemePreference, getThemeColors, themes, savedThemes]);
 
   // Listen for plugin theme changes - only override if plugin theme is actually loaded
   useEffect(() => {
     const isBuiltInTheme = activeTheme in builtInThemes;
-    const hasLoadedPluginTheme = pluginThemes.get(activeTheme);
+    const hasLoadedPluginTheme = themes.get(activeTheme);
 
     // Only use getThemeColors if it's a built-in theme or if the plugin theme is actually loaded
     if (isBuiltInTheme || hasLoadedPluginTheme) {
@@ -174,7 +168,7 @@ function ThemeStyleWithPlugins() {
       setThemeColors(getThemeColors(activeTheme, baseColors));
     }
     // For plugin themes that aren't loaded yet, we keep using the saved colors from the first useEffect
-  }, [pluginThemes, themeOverrides, activeTheme, getThemeColors]);
+  }, [themes, activeTheme, getThemeColors]);
 
   if (!themeColors) return null;
 
@@ -192,7 +186,7 @@ function ThemeStyleWithoutPlugins() {
   >(undefined);
 
   // Get saved plugin themes from global preferences
-  const [savedPluginThemes] = useGlobalPref('pluginThemes');
+  const [savedThemes] = useGlobalPref('themes');
 
   useEffect(() => {
     let baseColors: Record<string, string>;
@@ -245,7 +239,7 @@ function ThemeStyleWithoutPlugins() {
         setThemeColors(baseColors);
       } else {
         // This is a plugin theme - check if we have saved theme data
-        const savedTheme = savedPluginThemes?.[activeTheme];
+        const savedTheme = savedThemes?.[activeTheme];
         if (savedTheme) {
           // Use saved theme with proper base theme
           const savedBaseTheme = savedTheme.baseTheme || 'light';
@@ -261,7 +255,7 @@ function ThemeStyleWithoutPlugins() {
         }
       }
     }
-  }, [activeTheme, darkThemePreference, savedPluginThemes]);
+  }, [activeTheme, darkThemePreference, savedThemes]);
 
   if (!themeColors) return null;
 

@@ -1,6 +1,6 @@
-import type { ThemeColorOverrides } from '@actual-app/plugins-core';
+import type { ThemeColorTypes } from '@actual-app/plugins-core';
 
-export const sepiaVintageTheme: ThemeColorOverrides = {
+export const sepiaVintageTheme: ThemeColorTypes = {
   // Page colors - warm sepia tones
   pageBackground: '#f7f3e9',
   pageBackgroundModalActive: '#f4f0e6',
