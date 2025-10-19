@@ -324,7 +324,7 @@ export function ActualPluginsProvider({ children }: { children: ReactNode }) {
       setSavedThemes(updatedSavedThemes);
     }
   }, []);
-  
+
   const registerTheme = useCallback(
     (
       pluginName: string,

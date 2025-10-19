@@ -136,13 +136,13 @@ export function ModalHelloWorld({ text, context }: ModalHelloWorldProps) {
                   <Input
                     value={newItemName}
                     onChange={e => setNewItemName(e.target.value)}
-                    placeholder="Enter item name"
+                    placeholder={t('Enter item name')}
                   />
 
                   <Input
                     value={newItemDescription}
                     onChange={e => setNewItemDescription(e.target.value)}
-                    placeholder="Enter description"
+                    placeholder={t('Enter description')}
                   />
 
                   <Input

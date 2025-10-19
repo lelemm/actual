@@ -26,8 +26,10 @@ const pluginEntry: ActualPluginEntry = () => {
   const plugin: ActualPlugin = {
     name: manifest.name,
     version: manifest.version,
+    install: () => {},
     uninstall: () => {},
     migrations: () => migrations,
+    deactivate: () => {},
     activate: (context: PluginContext) => {
       pluginContext = context;
 
@@ -86,18 +88,18 @@ const pluginEntry: ActualPluginEntry = () => {
         </I18nWrapper>,
       );
       context.registerSlotContent(
-        'before-accounts',
+        'sidebar-before-accounts',
         <ClickMeButton context={pluginContext} />,
       );
-      const unregisterSlotContent = context.registerSlotContent(
-        'after-accounts',
+      /*const unregisterSlotContent =*/ context.registerSlotContent(
+        'sidebar-after-accounts',
         <I18nWrapper>
           <Button
             onPress={() => {
               context.pushModal(
                 <I18nWrapper>
                   <ModalHelloWorld
-                    text="Database Demo"
+                    text={t('Database Demo')}
                     context={pluginContext}
                   />
                 </I18nWrapper>,
@@ -110,7 +112,7 @@ const pluginEntry: ActualPluginEntry = () => {
         </I18nWrapper>,
       );
       context.registerSlotContent(
-        'after-accounts',
+        'sidebar-after-accounts',
         <I18nWrapper>
           <Button
             onPress={() => {

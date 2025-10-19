@@ -41,7 +41,7 @@ export function ModalSchedules({ context }: ModalSchedulesProps) {
 
   return (
     <>
-      <ModalHeader title="Schedules from Host App" />
+      <ModalHeader title={t('Schedules from Host App')} />
       <View style={{ padding: 20, minWidth: 600 }}>
         <View>
           <Text style={{ marginBottom: 15 }}>
