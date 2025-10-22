@@ -2,6 +2,8 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router';
 
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
+
 import { send } from 'loot-core/platform/client/fetch';
 import * as monthUtils from 'loot-core/shared/months';
 
@@ -51,6 +53,7 @@ import { ImportYNAB4Modal } from './modals/manager/ImportYNAB4Modal';
 import { ImportYNAB5Modal } from './modals/manager/ImportYNAB5Modal';
 import { ManageRulesModal } from './modals/ManageRulesModal';
 import { MergeUnusedPayeesModal } from './modals/MergeUnusedPayeesModal';
+import { MobileSelectLinkedAccountsModal } from './modals/MobileSelectLinkedAccountsModal';
 import { NewCategoryGroupModal } from './modals/NewCategoryGroupModal';
 import { NewCategoryModal } from './modals/NewCategoryModal';
 import { NotesModal } from './modals/NotesModal';
@@ -81,6 +84,16 @@ import { useModalState } from '@desktop-client/hooks/useModalState';
 import { SheetNameProvider } from '@desktop-client/hooks/useSheetName';
 import { closeModal } from '@desktop-client/modals/modalsSlice';
 import { useDispatch } from '@desktop-client/redux';
+
+function SelectLinkedAccountsModalWrapper(props: any) {
+  const { isNarrowWidth } = useResponsive();
+
+  if (isNarrowWidth) {
+    return <MobileSelectLinkedAccountsModal {...props} />;
+  }
+
+  return <SelectLinkedAccountsModal {...props} />;
+}
 
 export function Modals() {
   const location = useLocation();
@@ -129,7 +142,9 @@ export function Modals() {
           return <CloseAccountModal key={key} {...modal.options} />;
 
         case 'select-linked-accounts':
-          return <SelectLinkedAccountsModal key={key} {...modal.options} />;
+          return (
+            <SelectLinkedAccountsModalWrapper key={key} {...modal.options} />
+          );
 
         case 'confirm-category-delete':
           return <ConfirmCategoryDeleteModal key={key} {...modal.options} />;
