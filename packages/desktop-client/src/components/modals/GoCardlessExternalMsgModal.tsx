@@ -24,14 +24,14 @@ import {
 } from '@desktop-client/components/common/Modal';
 import { FormField, FormLabel } from '@desktop-client/components/forms';
 import { COUNTRY_OPTIONS } from '@desktop-client/components/util/countries';
-import { useGoCardlessStatus } from '@desktop-client/hooks/useGoCardlessStatus';
+import { useBankSyncStatus } from '@desktop-client/hooks/useBankSyncStatus';
 import {
   type Modal as ModalType,
   pushModal,
 } from '@desktop-client/modals/modalsSlice';
 import { useDispatch } from '@desktop-client/redux';
 
-function useAvailableBanks(country: string) {
+function useAvailableBanks(country: string, { fileId }: { fileId?: string }) {
   const [banks, setBanks] = useState<GoCardlessInstitution[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -48,20 +48,33 @@ function useAvailableBanks(country: string) {
 
       setIsLoading(true);
 
-      const { data, error } = await sendCatch('gocardless-get-banks', country);
+      try {
+        const response = await sendCatch('bank-sync-plugin-call', {
+          providerSlug: 'gocardless-bank-sync',
+          path: 'banks',
+          method: 'POST',
+          body: { country, showDemo: true },
+          ...(fileId ? { fileId } : {}),
+        });
 
-      if (error || !Array.isArray(data)) {
+        if (response.error || !response.data || response.data.status === 'error') {
+          setIsError(true);
+          setBanks([]);
+        } else {
+          // Response should be { status: 'ok', data: [...banks] }
+          const banksData = Array.isArray(response.data.data) ? response.data.data : response.data;
+          setBanks(Array.isArray(banksData) ? banksData : []);
+        }
+      } catch (error) {
         setIsError(true);
         setBanks([]);
-      } else {
-        setBanks(data);
       }
 
       setIsLoading(false);
     }
 
     fetch();
-  }, [setBanks, setIsLoading, country]);
+  }, [setBanks, setIsLoading, country, fileId]);
 
   return {
     data: banks,
@@ -95,6 +108,8 @@ export function GoCardlessExternalMsgModal({
   onMoveExternal,
   onSuccess,
   onClose,
+  fileId,
+  syncScope,
 }: GoCardlessExternalMsgModalProps) {
   const { t } = useTranslation();
 
@@ -117,11 +132,13 @@ export function GoCardlessExternalMsgModal({
     data: bankOptions,
     isLoading: isBankOptionsLoading,
     isError: isBankOptionError,
-  } = useAvailableBanks(country);
-  const {
-    configuredGoCardless: isConfigured,
-    isLoading: isConfigurationLoading,
-  } = useGoCardlessStatus();
+  } = useAvailableBanks(country, { fileId: syncScope === 'file' ? fileId : undefined });
+
+  const GOCARDLESS_PLUGIN_SLUG = 'gocardless-bank-sync';
+  const { configured: isConfigured, isLoading: isConfigurationLoading } =
+    useBankSyncStatus(GOCARDLESS_PLUGIN_SLUG, {
+      fileId: syncScope === 'file' ? fileId : undefined,
+    });
 
   async function onJump() {
     setError(null);

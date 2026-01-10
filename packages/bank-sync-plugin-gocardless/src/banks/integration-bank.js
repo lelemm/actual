@@ -1,6 +1,6 @@
 import * as d from 'date-fns';
 
-import { formatPayeeName } from '../../util/payee-name.js';
+import { formatPayeeName } from '../util/payee-name.js';
 import {
   amountToInteger,
   printIban,

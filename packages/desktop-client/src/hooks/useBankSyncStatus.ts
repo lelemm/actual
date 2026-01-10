@@ -9,7 +9,10 @@ type ProviderStatus = {
   error?: string;
 };
 
-export function useBankSyncStatus(providerSlug: string) {
+export function useBankSyncStatus(
+  providerSlug: string,
+  { fileId }: { fileId?: string } = {},
+) {
   const [status, setStatus] = useState<ProviderStatus>({
     configured: false,
   });
@@ -32,6 +35,7 @@ export function useBankSyncStatus(providerSlug: string) {
       try {
         const result = await send('bank-sync-status', {
           providerSlug,
+          ...(fileId ? { fileId } : {}),
         });
 
         if (result && typeof result === 'object') {
@@ -64,7 +68,7 @@ export function useBankSyncStatus(providerSlug: string) {
     if (syncServerStatus === 'online') {
       fetchStatus();
     }
-  }, [providerSlug, syncServerStatus, refetchTrigger]);
+  }, [providerSlug, fileId, syncServerStatus, refetchTrigger]);
 
   return {
     configured: status.configured,

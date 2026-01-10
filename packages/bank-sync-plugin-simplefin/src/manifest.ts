@@ -10,7 +10,7 @@ export const manifest: PluginManifest = {
   routes: [
     {
       path: '/status',
-      methods: ['POST'],
+      methods: ['POST', 'GET'],
       auth: 'authenticated',
       description: 'Check SimpleFIN configuration status',
     },

@@ -1,5 +1,24 @@
 import { Request } from 'express';
 
+function getFileIdFromReq(req: Request): string | undefined {
+  const header = req.headers['x-actual-file-id'];
+  if (typeof header === 'string') {
+    return header;
+  }
+  if (Array.isArray(header) && typeof header[0] === 'string') {
+    return header[0];
+  }
+
+  // Optional fallback if callers pass it as query string
+  const maybeQueryFileId = (req.query as unknown as { fileId?: unknown })
+    ?.fileId;
+  if (typeof maybeQueryFileId === 'string') {
+    return maybeQueryFileId;
+  }
+
+  return undefined;
+}
+
 /**
  * Helper to send IPC message to parent (sync-server)
  */
@@ -51,6 +70,7 @@ export async function saveSecret(
   value: string,
 ): Promise<{ success: boolean; error?: string }> {
   const pluginSlug = (req as unknown as { pluginSlug?: string }).pluginSlug;
+  const fileId = getFileIdFromReq(req);
 
   if (!pluginSlug) {
     return { success: false, error: 'Plugin slug not found' };
@@ -63,6 +83,7 @@ export async function saveSecret(
       type: 'secret-set',
       name: secretName,
       value,
+      ...(fileId ? { fileId } : {}),
       user: (req as unknown as { user?: unknown }).user,
     });
 
@@ -84,6 +105,7 @@ export async function getSecret(
   key: string,
 ): Promise<{ value?: string; error?: string }> {
   const pluginSlug = (req as unknown as { pluginSlug?: string }).pluginSlug;
+  const fileId = getFileIdFromReq(req);
 
   if (!pluginSlug) {
     return { error: 'Plugin slug not found' };
@@ -95,6 +117,7 @@ export async function getSecret(
     const result = await sendIPC({
       type: 'secret-get',
       name: secretName,
+      ...(fileId ? { fileId } : {}),
       user: (req as unknown as { user?: unknown }).user,
     });
 

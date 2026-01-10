@@ -15,9 +15,6 @@ import {
 } from 'loot-core/types/models';
 
 import {
-  linkAccount,
-  linkAccountPluggyAi,
-  linkAccountSimpleFin,
   linkAccountPlugin,
   unlinkAccount,
 } from '@desktop-client/accounts/accountsSlice';
@@ -86,30 +83,40 @@ export type SelectLinkedAccountsModalProps =
       onClose?: () => void;
     }
   | {
-      requisitionId?: undefined;
+      requisitionId?: string;
       externalAccounts: Array<{
         account_id: string;
         name: string;
         institution: string;
         balance: number;
-        [key: string]: string | number;
+        [key: string]: any;
       }>;
       syncSource: 'plugin';
       providerSlug: string;
+      syncScope?: 'global' | 'file';
       upgradingAccountId?: AccountEntity['id'];
       onSuccess?: (account: AccountEntity) => void;
       onClose?: () => void;
     };
 
-export function SelectLinkedAccountsModal({
-  requisitionId = undefined,
-  externalAccounts,
-  syncSource,
-  providerSlug,
-  upgradingAccountId,
-  onSuccess,
-  onClose,
-}: SelectLinkedAccountsModalProps) {
+type PluginExternalAccount = Extract<
+  SelectLinkedAccountsModalProps,
+  { syncSource: 'plugin' }
+>['externalAccounts'][number];
+
+export function SelectLinkedAccountsModal(props: SelectLinkedAccountsModalProps) {
+  const {
+    requisitionId = undefined,
+    externalAccounts,
+    syncSource,
+    providerSlug,
+    upgradingAccountId,
+    onSuccess,
+    onClose,
+  } = props;
+
+  const syncScope =
+    syncSource === 'plugin' ? props.syncScope ?? 'global' : 'global';
   const propsWithSortedExternalAccounts = useMemo(() => {
     const toSort = externalAccounts ? [...externalAccounts] : [];
     toSort.sort(
@@ -132,12 +139,13 @@ export function SelectLinkedAccountsModal({
         return {
           syncSource: 'plugin',
           providerSlug: providerSlug as string,
+          syncScope,
           externalAccounts: toSort as Array<{
             account_id: string;
             name: string;
             institution: string;
             balance: number;
-            [key: string]: string | number;
+            [key: string]: any;
           }>,
           upgradingAccountId,
           onSuccess,
@@ -155,6 +163,7 @@ export function SelectLinkedAccountsModal({
     syncSource,
     requisitionId,
     providerSlug,
+    syncScope,
     upgradingAccountId,
     onSuccess,
     onClose,
@@ -202,12 +211,19 @@ export function SelectLinkedAccountsModal({
 
         // Finally link the matched account
         if (propsWithSortedExternalAccounts.syncSource === 'simpleFin') {
+          const externalAccount =
+            propsWithSortedExternalAccounts.externalAccounts[externalAccountIndex];
           dispatch(
-            linkAccountSimpleFin({
-              externalAccount:
-                propsWithSortedExternalAccounts.externalAccounts[
-                  externalAccountIndex
-                ],
+            linkAccountPlugin({
+              accountId: externalAccount.account_id,
+              externalAccount: {
+                ...externalAccount,
+                institution: getInstitutionName(externalAccount) || '',
+                balance: (externalAccount as any).balance ?? 0,
+              },
+              syncSource: 'plugin',
+              providerSlug: 'simplefin-bank-sync',
+              syncScope: 'global',
               upgradingId:
                 chosenLocalAccountId !== addOnBudgetAccountOption.id &&
                 chosenLocalAccountId !== addOffBudgetAccountOption.id
@@ -217,12 +233,19 @@ export function SelectLinkedAccountsModal({
             }),
           );
         } else if (propsWithSortedExternalAccounts.syncSource === 'pluggyai') {
+          const externalAccount =
+            propsWithSortedExternalAccounts.externalAccounts[externalAccountIndex];
           dispatch(
-            linkAccountPluggyAi({
-              externalAccount:
-                propsWithSortedExternalAccounts.externalAccounts[
-                  externalAccountIndex
-                ],
+            linkAccountPlugin({
+              accountId: externalAccount.account_id,
+              externalAccount: {
+                ...externalAccount,
+                institution: getInstitutionName(externalAccount) || '',
+                balance: (externalAccount as any).balance ?? 0,
+              },
+              syncSource: 'plugin',
+              providerSlug: 'pluggy-bank-sync',
+              syncScope: 'global',
               upgradingId:
                 chosenLocalAccountId !== addOnBudgetAccountOption.id &&
                 chosenLocalAccountId !== addOffBudgetAccountOption.id
@@ -245,6 +268,8 @@ export function SelectLinkedAccountsModal({
                 ],
               syncSource: 'plugin',
               providerSlug: pluginProps.providerSlug,
+              bankId: pluginProps.requisitionId, // Pass requisitionId as bankId for GoCardless
+              syncScope: pluginProps.syncScope ?? 'global',
               upgradingId:
                 chosenLocalAccountId !== addOnBudgetAccountOption.id &&
                 chosenLocalAccountId !== addOffBudgetAccountOption.id
@@ -253,13 +278,21 @@ export function SelectLinkedAccountsModal({
             }),
           );
         } else {
+          const externalAccount =
+            propsWithSortedExternalAccounts.externalAccounts[externalAccountIndex];
+          const institutionName = getInstitutionName(externalAccount);
           dispatch(
-            linkAccount({
-              requisitionId: propsWithSortedExternalAccounts.requisitionId,
-              account:
-                propsWithSortedExternalAccounts.externalAccounts[
-                  externalAccountIndex
-                ],
+            linkAccountPlugin({
+              accountId: externalAccount.account_id,
+              externalAccount: {
+                ...externalAccount,
+                institution: institutionName,
+                balance: (externalAccount as any).balance ?? 0,
+              },
+              syncSource: 'plugin',
+              providerSlug: 'gocardless-bank-sync',
+              bankId: propsWithSortedExternalAccounts.requisitionId,
+              syncScope: 'global',
               upgradingId:
                 chosenLocalAccountId !== addOnBudgetAccountOption.id &&
                 chosenLocalAccountId !== addOffBudgetAccountOption.id
@@ -283,7 +316,8 @@ export function SelectLinkedAccountsModal({
     externalAccount:
       | SyncServerGoCardlessAccount
       | SyncServerSimpleFinAccount
-      | SyncServerPluggyAiAccount,
+      | SyncServerPluggyAiAccount
+      | PluginExternalAccount,
     localAccountId: string | null | undefined,
   ) {
     setChosenAccounts(accounts => {
@@ -392,12 +426,11 @@ function getInstitutionName(
   externalAccount:
     | SyncServerGoCardlessAccount
     | SyncServerSimpleFinAccount
-    | SyncServerPluggyAiAccount,
+    | SyncServerPluggyAiAccount
+    | PluginExternalAccount,
 ) {
   if (typeof externalAccount?.institution === 'string') {
     return externalAccount?.institution ?? '';
-  } else if (typeof externalAccount.institution?.name === 'string') {
-    return externalAccount?.institution?.name ?? '';
   }
   return '';
 }
@@ -406,14 +439,16 @@ type TableRowProps = {
   externalAccount:
     | SyncServerGoCardlessAccount
     | SyncServerSimpleFinAccount
-    | SyncServerPluggyAiAccount;
+    | SyncServerPluggyAiAccount
+    | PluginExternalAccount;
   chosenAccount: { id: string; name: string } | undefined;
   unlinkedAccounts: AccountEntity[];
   onSetLinkedAccount: (
     externalAccount:
       | SyncServerGoCardlessAccount
       | SyncServerSimpleFinAccount
-      | SyncServerPluggyAiAccount,
+      | SyncServerPluggyAiAccount
+      | PluginExternalAccount,
     localAccountId: string | null | undefined,
   ) => void;
 };

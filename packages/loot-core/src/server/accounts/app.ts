@@ -43,30 +43,32 @@ export type AccountHandlers = {
   'accounts-get': typeof getAccounts;
   'account-balance': typeof getAccountBalance;
   'account-properties': typeof getAccountProperties;
-  'gocardless-accounts-link': typeof linkGoCardlessAccount;
-  'simplefin-accounts-link': typeof linkSimpleFinAccount;
-  'pluggyai-accounts-link': typeof linkPluggyAiAccount;
+  // Legacy built-in bank sync methods removed
+  // 'gocardless-accounts-link': typeof linkGoCardlessAccount;
+  // 'simplefin-accounts-link': typeof linkSimpleFinAccount;
+  // 'pluggyai-accounts-link': typeof linkPluggyAiAccount;
   'account-create': typeof createAccount;
   'account-close': typeof closeAccount;
   'account-reopen': typeof reopenAccount;
   'account-move': typeof moveAccount;
   'secret-set': typeof setSecret;
   'secret-check': typeof checkSecret;
-  'gocardless-poll-web-token': typeof pollGoCardlessWebToken;
-  'gocardless-poll-web-token-stop': typeof stopGoCardlessWebTokenPolling;
-  'gocardless-status': typeof goCardlessStatus;
-  'simplefin-status': typeof simpleFinStatus;
-  'pluggyai-status': typeof pluggyAiStatus;
-  'simplefin-accounts': typeof simpleFinAccounts;
-  'pluggyai-accounts': typeof pluggyAiAccounts;
-  'gocardless-get-banks': typeof getGoCardlessBanks;
-  'gocardless-create-web-token': typeof createGoCardlessWebToken;
+  // 'gocardless-poll-web-token': typeof pollGoCardlessWebToken;
+  // 'gocardless-poll-web-token-stop': typeof stopGoCardlessWebTokenPolling;
+  // 'gocardless-status': typeof goCardlessStatus;
+  // 'simplefin-status': typeof simpleFinStatus;
+  // 'pluggyai-status': typeof pluggyAiStatus;
+  // 'simplefin-accounts': typeof simpleFinAccounts;
+  // 'pluggyai-accounts': typeof pluggyAiAccounts;
+  // 'gocardless-get-banks': typeof getGoCardlessBanks;
+  // 'gocardless-create-web-token': typeof createGoCardlessWebToken;
   'accounts-bank-sync': typeof accountsBankSync;
-  'simplefin-batch-sync': typeof simpleFinBatchSync;
+  // 'simplefin-batch-sync': typeof simpleFinBatchSync;
   'bank-sync-providers-list': typeof getPluginProviders;
   'bank-sync-status': typeof getPluginStatus;
   'bank-sync-accounts': typeof getPluginAccounts;
   'bank-sync-accounts-link': typeof linkPluginAccount;
+  'bank-sync-plugin-call': typeof callPluginRoute;
   'transactions-import': typeof importTransactions;
   'account-unlink': typeof unlinkAccount;
 };
@@ -327,8 +329,10 @@ async function linkPluggyAiAccount({
 async function linkPluginAccount({
   providerSlug,
   externalAccount,
+  bankId,
   upgradingId,
   offBudget = false,
+  syncScope = 'global',
 }: {
   providerSlug: string;
   externalAccount: {
@@ -338,8 +342,10 @@ async function linkPluginAccount({
     balance: number;
     [key: string]: string | number;
   };
+  bankId?: string;
   upgradingId?: AccountEntity['id'];
   offBudget?: boolean;
+  syncScope?: 'global' | 'file';
 }) {
   let id;
   // For plugin accounts, we'll use a generic bank entry or create one based on the provider
@@ -348,9 +354,12 @@ async function linkPluginAccount({
       ? externalAccount.institution
       : (externalAccount.institution as any)?.name || providerSlug;
 
+  // Use bankId if provided (e.g., requisitionId for GoCardless), otherwise use providerSlug
+  const bankIdentifier = bankId || providerSlug;
+
   const bank = await link.findOrCreateBank(
     { name: providerName },
-    providerSlug, // Use providerSlug as the bank identifier
+    bankIdentifier,
   );
 
   if (upgradingId) {
@@ -369,6 +378,7 @@ async function linkPluginAccount({
       account_id: externalAccount.account_id,
       bank: bank.id,
       account_sync_source: providerSlug,
+      account_sync_scope: syncScope,
     });
   } else {
     id = uuidv4();
@@ -380,6 +390,7 @@ async function linkPluginAccount({
       bank: bank.id,
       offbudget: offBudget ? 1 : 0,
       account_sync_source: providerSlug,
+      account_sync_scope: syncScope,
     });
     await db.insertPayee({
       name: '',
@@ -406,9 +417,11 @@ async function linkPluginAccount({
 async function getPluginAccounts({
   providerSlug,
   credentials,
+  fileId,
 }: {
   providerSlug: string;
   credentials?: Record<string, string>;
+  fileId?: string;
 }) {
   const server = getServer();
   if (!server) {
@@ -430,6 +443,7 @@ async function getPluginAccounts({
       credentials,
       {
         'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'x-actual-file-id': fileId } : {}),
       },
       null,
       {
@@ -485,7 +499,13 @@ async function getPluginProviders() {
 
 export { getPluginProviders };
 
-async function getPluginStatus({ providerSlug }: { providerSlug: string }) {
+async function getPluginStatus({
+  providerSlug,
+  fileId,
+}: {
+  providerSlug: string;
+  fileId?: string;
+}) {
   const server = getServer();
   if (!server) {
     throw new Error('No server configured');
@@ -502,7 +522,10 @@ async function getPluginStatus({ providerSlug }: { providerSlug: string }) {
     }
 
     const response = await get(pluginUrl, {
-      headers: { 'X-ACTUAL-TOKEN': userToken },
+      headers: {
+        'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'x-actual-file-id': fileId } : {}),
+      },
       redirect: 'follow',
     });
 
@@ -525,6 +548,73 @@ async function getPluginStatus({ providerSlug }: { providerSlug: string }) {
       configured: false,
       error: String(error),
     };
+  }
+}
+
+async function callPluginRoute({
+  providerSlug,
+  path,
+  method = 'POST',
+  body,
+  fileId,
+}: {
+  providerSlug: string;
+  path: string;
+  method?: 'GET' | 'POST';
+  body?: Record<string, unknown>;
+  fileId?: string;
+}) {
+  const server = getServer();
+  if (!server) {
+    throw new Error('No server configured');
+  }
+
+  try {
+    const pluginUrl = `${server.BASE_SERVER}/plugins-api/bank-sync/${providerSlug}/${path}`;
+
+    // Get user token for authentication
+    const userToken = await asyncStorage.getItem('user-token');
+    if (!userToken) {
+      throw new Error('User not authenticated');
+    }
+
+    let response;
+    if (method === 'GET') {
+      response = await get(pluginUrl, {
+        headers: {
+          'X-ACTUAL-TOKEN': userToken,
+          ...(fileId ? { 'x-actual-file-id': fileId } : {}),
+        },
+        redirect: 'follow',
+      });
+    } else {
+      response = await post(
+        pluginUrl,
+        body,
+        {
+          'X-ACTUAL-TOKEN': userToken,
+          ...(fileId ? { 'x-actual-file-id': fileId } : {}),
+        },
+        60000,
+        {
+          redirect: 'follow',
+        },
+      );
+    }
+
+    // If response is a string, parse it
+    if (typeof response === 'string') {
+      const data = JSON.parse(response);
+      return data;
+    }
+
+    return response;
+  } catch (error) {
+    logger.error(
+      `Error calling plugin route ${providerSlug}/${path}:`,
+      error,
+    );
+    throw error;
   }
 }
 
@@ -696,9 +786,11 @@ async function moveAccount({
 async function setSecret({
   name,
   value,
+  fileId,
 }: {
   name: string;
   value: string | null;
+  fileId?: string;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
 
@@ -717,6 +809,7 @@ async function setSecret({
       {
         name,
         value,
+        ...(fileId ? { fileId } : {}),
       },
       {
         'X-ACTUAL-TOKEN': userToken,
@@ -729,7 +822,7 @@ async function setSecret({
     };
   }
 }
-async function checkSecret(name: string) {
+async function checkSecret(arg: string | { name: string; fileId?: string }) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -741,9 +834,21 @@ async function checkSecret(name: string) {
     throw new Error('Failed to get server config.');
   }
 
+  const { name, fileId } =
+    typeof arg === 'string' ? { name: arg, fileId: undefined } : arg;
+
+  const url =
+    serverConfig.BASE_SERVER +
+    '/secret/' +
+    encodeURIComponent(name) +
+    (fileId ? `?fileId=${encodeURIComponent(fileId)}` : '');
+
   try {
-    return await get(serverConfig.BASE_SERVER + '/secret/' + name, {
-      'X-ACTUAL-TOKEN': userToken,
+    return await get(url, {
+      headers: {
+        'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'x-actual-file-id': fileId } : {}),
+      },
     });
   } catch (error) {
     logger.error(error);
@@ -1429,29 +1534,31 @@ app.method('account-update', mutator(undoable(updateAccount)));
 app.method('accounts-get', getAccounts);
 app.method('account-balance', getAccountBalance);
 app.method('account-properties', getAccountProperties);
-app.method('gocardless-accounts-link', linkGoCardlessAccount);
-app.method('simplefin-accounts-link', linkSimpleFinAccount);
-app.method('pluggyai-accounts-link', linkPluggyAiAccount);
+// Legacy built-in bank sync methods removed - now handled by plugins
+// app.method('gocardless-accounts-link', linkGoCardlessAccount);
+// app.method('simplefin-accounts-link', linkSimpleFinAccount);
+// app.method('pluggyai-accounts-link', linkPluggyAiAccount);
 app.method('bank-sync-providers-list', getPluginProviders);
 app.method('bank-sync-status', getPluginStatus);
 app.method('bank-sync-accounts', getPluginAccounts);
 app.method('bank-sync-accounts-link', linkPluginAccount);
+app.method('bank-sync-plugin-call', callPluginRoute);
 app.method('account-create', mutator(undoable(createAccount)));
 app.method('account-close', mutator(closeAccount));
 app.method('account-reopen', mutator(undoable(reopenAccount)));
 app.method('account-move', mutator(undoable(moveAccount)));
 app.method('secret-set', setSecret);
 app.method('secret-check', checkSecret);
-app.method('gocardless-poll-web-token', pollGoCardlessWebToken);
-app.method('gocardless-poll-web-token-stop', stopGoCardlessWebTokenPolling);
-app.method('gocardless-status', goCardlessStatus);
-app.method('simplefin-status', simpleFinStatus);
-app.method('pluggyai-status', pluggyAiStatus);
-app.method('simplefin-accounts', simpleFinAccounts);
-app.method('pluggyai-accounts', pluggyAiAccounts);
-app.method('gocardless-get-banks', getGoCardlessBanks);
-app.method('gocardless-create-web-token', createGoCardlessWebToken);
+// app.method('gocardless-poll-web-token', pollGoCardlessWebToken);
+// app.method('gocardless-poll-web-token-stop', stopGoCardlessWebTokenPolling);
+// app.method('gocardless-status', goCardlessStatus);
+// app.method('simplefin-status', simpleFinStatus);
+// app.method('pluggyai-status', pluggyAiStatus);
+// app.method('simplefin-accounts', simpleFinAccounts);
+// app.method('pluggyai-accounts', pluggyAiAccounts);
+// app.method('gocardless-get-banks', getGoCardlessBanks);
+// app.method('gocardless-create-web-token', createGoCardlessWebToken);
 app.method('accounts-bank-sync', accountsBankSync);
-app.method('simplefin-batch-sync', simpleFinBatchSync);
+// app.method('simplefin-batch-sync', simpleFinBatchSync);
 app.method('transactions-import', mutator(undoable(importTransactions)));
 app.method('account-unlink', mutator(unlinkAccount));

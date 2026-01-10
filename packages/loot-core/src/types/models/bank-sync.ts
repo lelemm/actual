@@ -20,4 +20,6 @@ export type BankSyncResponse = {
   error_code: string;
 };
 
-export type BankSyncProviders = 'goCardless' | 'simpleFin' | 'pluggyai';
+// Legacy built-in providers removed - all bank sync is now plugin-based
+// BankSyncProviders is now just a string representing the plugin slug
+export type BankSyncProviders = string;

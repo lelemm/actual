@@ -118,6 +118,8 @@ export type Modal =
           | { error: 'unknown'; message?: string }
           | { data: GoCardlessToken }
         >;
+        fileId?: string;
+        syncScope?: 'global' | 'file';
         onClose?: (() => void) | undefined;
         onSuccess: (data: GoCardlessToken) => Promise<void>;
       };

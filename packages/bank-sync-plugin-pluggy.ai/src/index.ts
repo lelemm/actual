@@ -71,11 +71,26 @@ async function getPluggyClient(req: Request): Promise<PluggyClient> {
 }
 
 /**
- * GET /status
+ * GET/POST /status
  * Check if Pluggy.ai is configured
  */
-app.get('/status', async (req: Request, res: Response): Promise<void> => {
+async function statusHandler(req: Request, res: Response): Promise<void> {
   try {
+    const { clientId, clientSecret, itemIds } = req.body ?? {};
+
+    // Allow configuration via POST by supplying credentials
+    if (clientId && clientSecret) {
+      await saveSecret(req, 'clientId', clientId);
+      await saveSecret(req, 'clientSecret', clientSecret);
+    }
+    if (itemIds) {
+      if (typeof itemIds === 'string') {
+        await saveSecret(req, 'itemIds', itemIds);
+      } else if (Array.isArray(itemIds)) {
+        await saveSecret(req, 'itemIds', itemIds.join(','));
+      }
+    }
+
     const clientIdResult = await getSecret(req, 'clientId');
     const configured = clientIdResult.value != null;
 
@@ -91,7 +106,10 @@ app.get('/status', async (req: Request, res: Response): Promise<void> => {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}
+
+app.get('/status', statusHandler);
+app.post('/status', statusHandler);
 
 /**
  * POST /accounts

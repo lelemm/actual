@@ -62,8 +62,15 @@ attachPluginMiddleware(app);
  * POST /status
  * Check if SimpleFIN is configured
  */
-app.post('/status', async (req: Request, res: Response): Promise<void> => {
+async function statusHandler(req: Request, res: Response): Promise<void> {
   try {
+    const { token } = (req.body ?? {}) as { token?: string };
+
+    // Allow configuration via POST by supplying token
+    if (token) {
+      await saveSecret(req, 'simplefin_token', token);
+    }
+
     const tokenResult = await getSecret(req, 'simplefin_token');
     const configured = tokenResult.value != null && tokenResult.value !== 'Forbidden';
 
@@ -79,7 +86,10 @@ app.post('/status', async (req: Request, res: Response): Promise<void> => {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}
+
+app.get('/status', statusHandler);
+app.post('/status', statusHandler);
 
 /**
  * POST /accounts

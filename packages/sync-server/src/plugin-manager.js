@@ -311,12 +311,13 @@ class PluginManager {
       return;
     }
 
-    const { messageId, type, name, value } = message;
+    const { messageId, type, name, value, fileId } = message;
+    const options = fileId ? { fileId } : {};
 
     try {
       if (type === 'secret-set') {
         // Use the secrets service for proper persistence
-        secretsService.set(name, value);
+        secretsService.set(name, value, options);
 
         plugin.process.send({
           type: 'secret-response',
@@ -325,8 +326,8 @@ class PluginManager {
         });
       } else if (type === 'secret-get') {
         // Get secret from the secrets service
-        const exists = secretsService.exists(name);
-        const secretValue = exists ? secretsService.get(name) : undefined;
+        const exists = secretsService.exists(name, options);
+        const secretValue = exists ? secretsService.get(name, options) : undefined;
 
         plugin.process.send({
           type: 'secret-response',

@@ -245,73 +245,8 @@ export const unlinkAccount = createAppAsyncThunk(
   },
 );
 
-type LinkAccountPayload = {
-  requisitionId: string;
-  account: SyncServerGoCardlessAccount;
-  upgradingId?: AccountEntity['id'] | undefined;
-  offBudget?: boolean | undefined;
-};
-
-export const linkAccount = createAppAsyncThunk(
-  `${sliceName}/linkAccount`,
-  async (
-    { requisitionId, account, upgradingId, offBudget }: LinkAccountPayload,
-    { dispatch },
-  ) => {
-    await send('gocardless-accounts-link', {
-      requisitionId,
-      account,
-      upgradingId,
-      offBudget,
-    });
-    dispatch(markPayeesDirty());
-    dispatch(markAccountsDirty());
-  },
-);
-
-type LinkAccountSimpleFinPayload = {
-  externalAccount: SyncServerSimpleFinAccount;
-  upgradingId?: AccountEntity['id'] | undefined;
-  offBudget?: boolean | undefined;
-};
-
-export const linkAccountSimpleFin = createAppAsyncThunk(
-  `${sliceName}/linkAccountSimpleFin`,
-  async (
-    { externalAccount, upgradingId, offBudget }: LinkAccountSimpleFinPayload,
-    { dispatch },
-  ) => {
-    await send('simplefin-accounts-link', {
-      externalAccount,
-      upgradingId,
-      offBudget,
-    });
-    dispatch(markPayeesDirty());
-    dispatch(markAccountsDirty());
-  },
-);
-
-type LinkAccountPluggyAiPayload = {
-  externalAccount: SyncServerPluggyAiAccount;
-  upgradingId?: AccountEntity['id'];
-  offBudget?: boolean;
-};
-
-export const linkAccountPluggyAi = createAppAsyncThunk(
-  `${sliceName}/linkAccountPluggyAi`,
-  async (
-    { externalAccount, upgradingId, offBudget }: LinkAccountPluggyAiPayload,
-    { dispatch },
-  ) => {
-    await send('pluggyai-accounts-link', {
-      externalAccount,
-      upgradingId,
-      offBudget,
-    });
-    dispatch(markPayeesDirty());
-    dispatch(markAccountsDirty());
-  },
-);
+// Legacy bank-sync link thunks removed in favor of plugin-based linking via
+// `bank-sync-accounts-link` (see `linkAccountPlugin` below).
 
 type LinkAccountPluginPayload = {
   accountId: string;
@@ -324,7 +259,10 @@ type LinkAccountPluginPayload = {
   };
   syncSource: 'plugin';
   providerSlug: string;
+  bankId?: string; // Optional bankId (e.g., requisitionId for GoCardless)
   upgradingId?: AccountEntity['id'] | undefined;
+  syncScope?: 'global' | 'file';
+  offBudget?: boolean;
 };
 
 export const linkAccountPlugin = createAppAsyncThunk(
@@ -334,14 +272,20 @@ export const linkAccountPlugin = createAppAsyncThunk(
       accountId: _accountId,
       externalAccount,
       providerSlug,
+      bankId,
       upgradingId,
+      syncScope = 'global',
+      offBudget = false,
     }: LinkAccountPluginPayload,
     { dispatch },
   ) => {
     await send('bank-sync-accounts-link', {
       providerSlug,
       externalAccount,
+      bankId,
       upgradingId,
+      syncScope,
+      offBudget,
     });
     dispatch(markPayeesDirty());
     dispatch(markAccountsDirty());
@@ -460,45 +404,10 @@ export const syncAccounts = createAppAsyncThunk(
 
     dispatch(setAccountsSyncing({ ids: accountIdsToSync }));
 
-    // TODO: Force cast to AccountEntity.
-    // Server is currently returning the DB model it should return the entity model instead.
-    const accountsData = (await send(
-      'accounts-get',
-    )) as unknown as AccountEntity[];
-    const simpleFinAccounts = accountsData.filter(
-      a =>
-        a.account_sync_source === 'simpleFin' &&
-        accountIdsToSync.includes(a.id),
-    );
-
     let isSyncSuccess = false;
     const newTransactions: Array<TransactionEntity['id']> = [];
     const matchedTransactions: Array<TransactionEntity['id']> = [];
     const updatedAccounts: Array<AccountEntity['id']> = [];
-
-    if (simpleFinAccounts.length > 0) {
-      console.log('Using SimpleFin batch sync');
-
-      const res = await send('simplefin-batch-sync', {
-        ids: simpleFinAccounts.map(a => a.id),
-      });
-
-      for (const account of res) {
-        const success = handleSyncResponse(
-          account.accountId,
-          account.res,
-          dispatch,
-          newTransactions,
-          matchedTransactions,
-          updatedAccounts,
-        );
-        if (success) isSyncSuccess = true;
-      }
-
-      accountIdsToSync = accountIdsToSync.filter(
-        id => !simpleFinAccounts.find(sfa => sfa.id === id),
-      );
-    }
 
     // Loop through the accounts and perform sync operation.. one by one
     for (let idx = 0; idx < accountIdsToSync.length; idx++) {
@@ -659,9 +568,6 @@ export const actions = {
   reloadAccounts,
   closeAccount,
   reopenAccount,
-  linkAccount,
-  linkAccountSimpleFin,
-  linkAccountPluggyAi,
   moveAccount,
   unlinkAccount,
   syncAccounts,

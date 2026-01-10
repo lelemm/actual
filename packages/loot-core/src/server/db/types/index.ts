@@ -21,7 +21,10 @@ export type DbAccount = {
   type?: string | null;
   subtype?: string | null;
   bank?: string | null;
-  account_sync_source?: 'simpleFin' | 'goCardless' | null;
+  // Plugin-based bank sync uses provider slugs (string). Legacy values may also exist.
+  account_sync_source?: string | null;
+  // 'global' => use global secrets scope; 'file' => use file-scoped secrets for this budget file.
+  account_sync_scope?: 'global' | 'file' | null;
 };
 
 export type DbBank = {

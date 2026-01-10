@@ -25,6 +25,7 @@ import { aqlQuery } from '../aql';
 import * as db from '../db';
 import { runMutator } from '../mutators';
 import { post } from '../post';
+import * as prefs from '../prefs';
 import { getServer } from '../server-config';
 import { batchMessages } from '../sync';
 import { batchUpdateTransactions } from '../transactions';
@@ -305,21 +306,28 @@ async function downloadPluggyAiTransactions(
 async function downloadPluginTransactions(
   providerSlug: string,
   acctId: AccountEntity['id'],
+  bankId: string,
   since: string,
+  syncScope: 'global' | 'file' = 'global',
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
 
   logger.log(`Pulling transactions from plugin ${providerSlug}`);
 
+  const fileId = syncScope === 'file' ? prefs.getPrefs()?.id : undefined;
+
   const res = await post(
     `${getServer().BASE_SERVER}/plugins-api/bank-sync/${providerSlug}/transactions`,
     {
       accountId: acctId,
+      requisitionId: bankId, // For GoCardless compatibility
+      bankId, // Generic field for other plugins
       startDate: since,
     },
     {
       'X-ACTUAL-TOKEN': userToken,
+      ...(fileId ? { 'x-actual-file-id': fileId } : {}),
     },
     60000,
     {
@@ -950,23 +958,8 @@ async function processBankSyncDownload(
     const { transactions } = download;
     let balanceToUse = currentBalance;
 
-    if (acctRow.account_sync_source === 'simpleFin') {
-      const previousBalance = transactions.reduce((total, trans) => {
-        return (
-          total - parseInt(trans.transactionAmount.amount.replace('.', ''))
-        );
-      }, currentBalance);
-      balanceToUse = previousBalance;
-    }
-
-    if (acctRow.account_sync_source === 'pluggyai') {
-      const currentBalance = download.startingBalance;
-      const previousBalance = transactions.reduce(
-        (total, trans) => total - trans.transactionAmount.amount * 100,
-        currentBalance,
-      );
-      balanceToUse = Math.round(previousBalance);
-    }
+    // Legacy built-in provider balance calculations removed
+    // All plugins should now provide startingBalance directly
 
     const oldestTransaction = transactions[transactions.length - 1];
 
@@ -1036,38 +1029,24 @@ export async function syncAccount(
   const newAccount = oldestTransaction == null;
 
   let download;
-  if (acctRow.account_sync_source === 'simpleFin') {
-    download = await downloadSimpleFinTransactions(acctId, syncStartDate);
-  } else if (acctRow.account_sync_source === 'pluggyai') {
-    download = await downloadPluggyAiTransactions(acctId, syncStartDate);
-  } else if (acctRow.account_sync_source === 'goCardless') {
-    download = await downloadGoCardlessTransactions(
-      userId,
-      userKey,
+  // All bank sync is now handled by plugins
+  const pluginProviders = await getPluginProviders();
+  const isValidPlugin = pluginProviders.providers.some(
+    provider => provider.slug === acctRow.account_sync_source,
+  );
+
+  if (isValidPlugin) {
+    download = await downloadPluginTransactions(
+      acctRow.account_sync_source,
       acctId,
       bankId,
       syncStartDate,
-      newAccount,
+      acctRow.account_sync_scope === 'file' ? 'file' : 'global',
     );
   } else {
-    debugger;
-    // Check if it's a plugin provider
-    const pluginProviders = await getPluginProviders();
-    const isValidPlugin = pluginProviders.providers.some(
-      provider => provider.slug === acctRow.account_sync_source,
+    throw new Error(
+      `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,
     );
-
-    if (isValidPlugin) {
-      download = await downloadPluginTransactions(
-        acctRow.account_sync_source,
-        acctId,
-        syncStartDate,
-      );
-    } else {
-      throw new Error(
-        `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,
-      );
-    }
   }
 
   return processBankSyncDownload(download, id, acctRow, newAccount);

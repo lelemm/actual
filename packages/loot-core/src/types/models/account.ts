@@ -19,7 +19,11 @@ export type _SyncFields<T> = {
   balance_available: T extends true ? number : null;
   balance_limit: T extends true ? number : null;
   account_sync_source: T extends true ? AccountSyncSource : null;
+  account_sync_scope: T extends true ? AccountSyncScope : null;
   last_sync: T extends true ? string : null;
 };
 
-export type AccountSyncSource = 'simpleFin' | 'goCardless' | 'pluggyai';
+// Plugin-based bank sync uses provider slugs (string). Legacy values may also exist.
+export type AccountSyncSource = string;
+
+export type AccountSyncScope = 'global' | 'file';
