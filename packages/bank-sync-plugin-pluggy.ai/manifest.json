@@ -9,7 +9,8 @@
     {
       "path": "/status",
       "methods": [
-        "POST"
+        "POST",
+        "GET"
       ],
       "auth": "authenticated",
       "description": "Check Pluggy.ai configuration status"

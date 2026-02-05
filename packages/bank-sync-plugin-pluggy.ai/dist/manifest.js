@@ -8,7 +8,7 @@ export const manifest = {
     routes: [
         {
             path: '/status',
-            methods: ['POST'],
+            methods: ['POST', 'GET'],
             auth: 'authenticated',
             description: 'Check Pluggy.ai configuration status',
         },

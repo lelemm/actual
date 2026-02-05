@@ -181,6 +181,20 @@ var require_secrets = __commonJS({
     exports.getSecret = getSecret2;
     exports.saveSecrets = saveSecrets;
     exports.getSecrets = getSecrets;
+    function getFileIdFromReq(req) {
+      const header = req.headers["x-actual-file-id"];
+      if (typeof header === "string") {
+        return header;
+      }
+      if (Array.isArray(header) && typeof header[0] === "string") {
+        return header[0];
+      }
+      const maybeQueryFileId = req.query?.fileId;
+      if (typeof maybeQueryFileId === "string") {
+        return maybeQueryFileId;
+      }
+      return void 0;
+    }
     function sendIPC(message) {
       if (!process.send) {
         throw new Error("Not running as a forked process");
@@ -207,6 +221,7 @@ var require_secrets = __commonJS({
     }
     async function saveSecret2(req, key, value) {
       const pluginSlug = req.pluginSlug;
+      const fileId = getFileIdFromReq(req);
       if (!pluginSlug) {
         return { success: false, error: "Plugin slug not found" };
       }
@@ -216,6 +231,7 @@ var require_secrets = __commonJS({
           type: "secret-set",
           name: secretName,
           value,
+          ...fileId ? { fileId } : {},
           user: req.user
         });
         return { success: true };
@@ -228,6 +244,7 @@ var require_secrets = __commonJS({
     }
     async function getSecret2(req, key) {
       const pluginSlug = req.pluginSlug;
+      const fileId = getFileIdFromReq(req);
       if (!pluginSlug) {
         return { error: "Plugin slug not found" };
       }
@@ -236,6 +253,7 @@ var require_secrets = __commonJS({
         const result = await sendIPC({
           type: "secret-get",
           name: secretName,
+          ...fileId ? { fileId } : {},
           user: req.user
         });
         return { value: result.value };
@@ -35623,9 +35641,9 @@ var require_ecdsa_sig_formatter = __commonJS({
   }
 });
 
-// ../../node_modules/jwa/index.js
+// ../../node_modules/jsonwebtoken/node_modules/jwa/index.js
 var require_jwa = __commonJS({
-  "../../node_modules/jwa/index.js"(exports, module) {
+  "../../node_modules/jsonwebtoken/node_modules/jwa/index.js"(exports, module) {
     var bufferEqual = require_buffer_equal_constant_time();
     var Buffer2 = require_safe_buffer().Buffer;
     var crypto = __require("crypto");
@@ -40119,8 +40137,20 @@ async function getPluggyClient(req) {
   }
   return pluggyClient;
 }
-app.get("/status", async (req, res) => {
+async function statusHandler(req, res) {
   try {
+    const { clientId, clientSecret, itemIds } = req.body ?? {};
+    if (clientId && clientSecret) {
+      await (0, import_plugins_core_sync_server.saveSecret)(req, "clientId", clientId);
+      await (0, import_plugins_core_sync_server.saveSecret)(req, "clientSecret", clientSecret);
+    }
+    if (itemIds) {
+      if (typeof itemIds === "string") {
+        await (0, import_plugins_core_sync_server.saveSecret)(req, "itemIds", itemIds);
+      } else if (Array.isArray(itemIds)) {
+        await (0, import_plugins_core_sync_server.saveSecret)(req, "itemIds", itemIds.join(","));
+      }
+    }
     const clientIdResult = await (0, import_plugins_core_sync_server.getSecret)(req, "clientId");
     const configured = clientIdResult.value != null;
     res.json({
@@ -40135,7 +40165,9 @@ app.get("/status", async (req, res) => {
       error: error instanceof Error ? error.message : "Unknown error"
     });
   }
-});
+}
+app.get("/status", statusHandler);
+app.post("/status", statusHandler);
 app.post("/accounts", async (req, res) => {
   try {
     const { itemIds, clientId, clientSecret } = req.body;

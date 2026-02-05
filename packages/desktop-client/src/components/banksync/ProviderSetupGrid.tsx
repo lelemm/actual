@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { Text } from '@actual-app/components/text';
+import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import { type ProviderStatusMap } from './useProviderStatusMap';
@@ -29,70 +30,81 @@ export function ProviderSetupGrid({
   }
 
   return (
-    <View style={{ gap: 8 }}>
+    <View
+      style={{
+        borderRadius: 6,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header row */}
       <View
         style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr',
           gap: 10,
           alignItems: 'center',
-          padding: '6px 10px',
+          padding: '8px 10px',
+          backgroundColor: theme.tableHeaderBackground,
+          color: theme.tableHeaderText,
         }}
       >
-        <Text style={{ fontWeight: 600 }}>{t('Provider')}</Text>
-        <Text style={{ fontWeight: 600 }}>{t('Global')}</Text>
-        <Text style={{ fontWeight: 600 }}>{t('Scoped')}</Text>
+        <Text style={{ fontWeight: 500 }}>{t('Provider')}</Text>
+        <Text style={{ fontWeight: 500 }}>{t('Global')}</Text>
+        <Text style={{ fontWeight: 500 }}>{t('Scoped')}</Text>
       </View>
 
-      {providers.map(provider => {
-        const statuses = statusMap[provider.slug];
-        const globalConfigured = Boolean(statuses?.global?.configured);
-        const fileConfigured = Boolean(statuses?.file?.configured);
+      {/* Content rows */}
+      <View style={{ backgroundColor: theme.tableBackground }}>
+        {providers.map((provider, index) => {
+          const statuses = statusMap[provider.slug];
+          const globalConfigured = Boolean(statuses?.global?.configured);
+          const fileConfigured = Boolean(statuses?.file?.configured);
+          const isLast = index === providers.length - 1;
 
-        return (
-          <View
-            key={provider.slug}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr',
-              gap: 10,
-              alignItems: 'center',
-              padding: '10px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-            }}
-          >
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontWeight: 600 }}>{provider.displayName}</Text>
-              {provider.description ? (
-                <Text style={{ fontSize: 12, color: 'var(--color-pageTextSubdued)' }}>
-                  {provider.description}
-                </Text>
-              ) : null}
-            </View>
+          return (
+            <View
+              key={provider.slug}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr 1fr',
+                gap: 10,
+                alignItems: 'center',
+                padding: '10px',
+                borderBottom: isLast ? 'none' : `1px solid ${theme.tableBorder}`,
+              }}
+            >
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontWeight: 600 }}>{provider.displayName}</Text>
+                {provider.description ? (
+                  <Text style={{ fontSize: 12, color: theme.pageTextSubdued }}>
+                    {provider.description}
+                  </Text>
+                ) : null}
+              </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <Text>{globalConfigured ? t('Configured') : t('Not configured')}</Text>
-              <Button
-                isDisabled={!canConfigure}
-                onPress={() => onConfigure({ provider, scope: 'global' })}
-              >
-                {globalConfigured ? t('Edit') : t('Set up')}
-              </Button>
-            </View>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <Text>{globalConfigured ? t('Configured') : t('Not configured')}</Text>
+                <Button
+                  isDisabled={!canConfigure}
+                  onPress={() => onConfigure({ provider, scope: 'global' })}
+                >
+                  {globalConfigured ? t('Edit') : t('Set up')}
+                </Button>
+              </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <Text>{fileConfigured ? t('Configured') : t('Not configured')}</Text>
-              <Button
-                isDisabled={!canConfigure}
-                onPress={() => onConfigure({ provider, scope: 'file' })}
-              >
-                {fileConfigured ? t('Edit') : t('Set up')}
-              </Button>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <Text>{fileConfigured ? t('Configured') : t('Not configured')}</Text>
+                <Button
+                  isDisabled={!canConfigure}
+                  onPress={() => onConfigure({ provider, scope: 'file' })}
+                >
+                  {fileConfigured ? t('Edit') : t('Set up')}
+                </Button>
+              </View>
             </View>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }
