@@ -115,18 +115,21 @@ export type Modal =
       name: 'gocardless-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'simplefin-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'pluggyai-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
@@ -163,6 +166,7 @@ export type Modal =
   | {
       name: 'gocardless-external-msg';
       options: {
+        fileId: string;
         onMoveExternal: (arg: {
           institutionId: string;
         }) => Promise<
