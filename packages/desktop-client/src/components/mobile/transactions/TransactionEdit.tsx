@@ -14,6 +14,7 @@ import { Button } from '@actual-app/components/button';
 import { SvgSplit } from '@actual-app/components/icons/v0';
 import {
   SvgAdd,
+  SvgLocation,
   SvgLocationCurrent,
   SvgPiggyBank,
   SvgTrash,
@@ -69,6 +70,7 @@ import { FocusableAmountInput } from './FocusableAmountInput';
 
 import { MobileBackButton } from '@desktop-client/components/mobile/MobileBackButton';
 import {
+  defaultTapFieldClassName,
   FieldLabel,
   InputField,
   TapField,
@@ -563,6 +565,9 @@ type TransactionEditInnerProps = {
   locationAccess: boolean;
   shouldShowForgetLocation?: boolean;
   onForgetLocation?: () => void;
+  callbackNearestPayee?: () => void;
+  hasAutoSelectedPayee?: boolean;
+  nearestPayee?: PayeeEntity | null;
 };
 
 const TransactionEditInner = memo<TransactionEditInnerProps>(
@@ -581,6 +586,9 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     shouldShowForgetLocation,
     onForgetLocation,
     locationAccess,
+    callbackNearestPayee,
+    hasAutoSelectedPayee,
+    nearestPayee,
   }) {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -822,6 +830,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
       (
         transactionId: TransactionEntity['id'],
         name: 'category' | 'payee' | 'account' | 'date' | 'amount' | 'notes',
+        extra?: Record<string, unknown>,
       ) => {
         onRequestActiveEdit?.(getFieldName(transaction.id, name), () => {
           const transactionToEdit = transactions.find(
@@ -887,7 +896,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                       onClose: () => {
                         onClearActiveEdit();
                       },
-                      locationAccess,
+                      ...(extra || {}),
                     },
                   },
                 }),
@@ -1090,21 +1099,37 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
 
           <View>
             <FieldLabel title={t('Payee')} />
-            <TapField
-              textStyle={{
-                ...(transaction.is_parent && {
-                  fontStyle: 'italic',
-                  fontWeight: 300,
-                }),
-              }}
-              value={title}
-              isDisabled={
-                !!editingField &&
-                editingField !== getFieldName(transaction.id, 'payee')
-              }
-              onPress={() => onEditFieldInner(transaction.id, 'payee')}
-              data-testid="payee-field"
-            />
+            <View style={{ flexDirection: 'row' }}>
+              <TapField
+                textStyle={{
+                  ...(transaction.is_parent && {
+                    fontStyle: 'italic',
+                    fontWeight: 300,
+                  }),
+                }}
+                style={{ flex: 1 }}
+                value={title}
+                isDisabled={
+                  !!editingField &&
+                  editingField !== getFieldName(transaction.id, 'payee')
+                }
+                onPress={() => onEditFieldInner(transaction.id, 'payee', hasAutoSelectedPayee ? { locationAccess } : {})}
+                data-testid="payee-field"
+              />
+              <Button
+                className={defaultTapFieldClassName()}
+                onPress={() => {
+                  if (hasAutoSelectedPayee || !nearestPayee) {
+                    onEditFieldInner(transaction.id, 'payee', { locationAccess });
+                  } else {
+                    callbackNearestPayee?.();
+                  }
+                }}
+                style={{ marginLeft: 0, marginRight: 8 }}
+              >
+                <SvgLocation width={16} height={16} />
+              </Button>
+            </View>
             {shouldShowForgetLocation && (
               <Button
                 variant="bare"
@@ -1112,7 +1137,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                 style={{
                   position: 'absolute',
                   top: '75%',
-                  right: '20px',
+                  right: '70px',
                   transform: 'translateY(-50%)',
                   backgroundColor: theme.errorBackground,
                   border: `1px solid ${theme.errorBorder}`,
@@ -1715,12 +1740,11 @@ function TransactionEditUnconnected({
   }, [activeTransactionId]);
 
   // Automatically select the nearest payee if available and unset
-  useEffect(() => {
+  const autoSelectPayee = useCallback(() => {
     const transaction = transactions[0];
     if (
       !nearestPayee ||
       !transaction ||
-      transaction.payee ||
       hasAutoSelectedPayee.current
     ) {
       return;
@@ -1859,6 +1883,9 @@ function TransactionEditUnconnected({
         shouldShowForgetLocation={shouldShowForgetLocation}
         onForgetLocation={onForgetLocation}
         locationAccess={locationAccess}
+        callbackNearestPayee={autoSelectPayee}
+        hasAutoSelectedPayee={hasAutoSelectedPayee.current}
+        nearestPayee={nearestPayee}
       />
     </View>
   );

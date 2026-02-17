@@ -82,7 +82,7 @@ type TapFieldProps = ComponentPropsWithRef<typeof Button> & {
   textStyle?: CSSProperties;
 };
 
-const defaultTapFieldClassName = () =>
+export const defaultTapFieldClassName = () =>
   css({
     ...valueStyle,
     flexDirection: 'row',
