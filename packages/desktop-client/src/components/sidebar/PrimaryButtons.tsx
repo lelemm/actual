@@ -7,6 +7,7 @@ import {
   SvgCheveronRight,
   SvgCog,
   SvgCreditCard,
+  SvgPlugin,
   SvgReports,
   SvgStoreFront,
   SvgTag,
@@ -16,6 +17,7 @@ import {
 import { SvgCalendar3 } from '@actual-app/components/icons/v2';
 import { View } from '@actual-app/components/view';
 
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useIsTestEnv } from '#hooks/useIsTestEnv';
 import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
 
@@ -23,6 +25,7 @@ import { Item } from './Item';
 import { SecondaryItem } from './SecondaryItem';
 
 export function PrimaryButtons() {
+  const pluginsEnabled = useFeatureFlag('plugins');
   const { t } = useTranslation();
   const [isOpen, setOpen] = useState(false);
   const onToggle = useCallback(() => setOpen(open => !open), []);
@@ -31,6 +34,8 @@ export function PrimaryButtons() {
   const syncServerStatus = useSyncServerStatus();
   const isTestEnv = useIsTestEnv();
   const isUsingServer = syncServerStatus !== 'no-server' || isTestEnv;
+  //. This is part of the full plugin support system that was removed from the initial bank sync MVP
+  // const { slotItems } = useActualPlugins();
 
   const isActive = [
     '/payees',
@@ -58,6 +63,8 @@ export function PrimaryButtons() {
         style={{ marginBottom: isOpen ? 8 : 0 }}
         forceActive={!isOpen && isActive}
       />
+      {/* //. This is part of the full plugin support system that was removed from the initial bank sync MVP */}
+      {/* <RenderPluginsComponent toRender={slotItems['main-menu']} /> */}
       {isOpen && (
         <>
           <SecondaryItem
@@ -86,6 +93,16 @@ export function PrimaryButtons() {
             to="/tags"
             indent={15}
           />
+          {pluginsEnabled && (
+            <SecondaryItem
+              title={t('Plugins')}
+              Icon={SvgPlugin}
+              to="/plugins"
+              indent={15}
+            />
+          )}
+          {/* //. This is part of the full plugin support system that was removed from the initial bank sync MVP */}
+          {/* <RenderPluginsComponent toRender={slotItems['more-menu']} /> */}
           <SecondaryItem
             title={t('Settings')}
             Icon={SvgCog}

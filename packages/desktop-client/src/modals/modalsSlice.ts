@@ -18,6 +18,7 @@ import type {
 } from '@actual-app/core/types/models';
 import type { CleanupTemplate } from '@actual-app/core/types/models/cleanup-templates';
 import type { Template } from '@actual-app/core/types/models/templates';
+import type { BasicModalProps } from '@actual-app/shared-types/modalProps';
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
@@ -650,6 +651,19 @@ export type Modal =
         categoryId: CategoryEntity['id'];
         templates: Template[];
         cleanup: CleanupTemplate[];
+      };
+    }
+  | {
+      name: 'select-new-plugin';
+      options: {
+        onSave: () => void | Promise<void>;
+      };
+    }
+  | {
+      name: 'plugin-modal';
+      options: {
+        parameter: (container: HTMLDivElement) => void | (() => void);
+        modalProps?: BasicModalProps;
       };
     };
 

@@ -9,7 +9,7 @@ export {
 // Client-side middleware
 export { initializePlugin } from './middleware';
 
-// Icons, styles, theme (client-side only)
+// Client-side component helpers
 export { Button, ButtonWithLoading } from '@actual-app/components/button';
 export { Input } from '@actual-app/components/input';
 export { SvgLogo } from '@actual-app/components/icons/logo';

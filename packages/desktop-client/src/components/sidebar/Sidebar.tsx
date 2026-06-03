@@ -31,6 +31,8 @@ export function Sidebar() {
 
   const { t } = useTranslation();
   const dispatch = useDispatch();
+  //. This is part of the full plugin support system that was removed from the initial bank sync MVP
+  // const { slotItems } = useActualPlugins();
   const sidebar = useSidebar();
   const { width } = useResponsive();
   const [isFloating = false, setFloatingSidebarPref] =
@@ -124,6 +126,9 @@ export function Sidebar() {
           >
             <PrimaryButtons />
 
+            {/* //. This is part of the full plugin support system that was removed from the initial bank sync MVP */}
+            {/* <RenderPluginsComponent toRender={slotItems['before-accounts']} /> */}
+
             <Accounts />
 
             <SecondaryButtons
@@ -135,6 +140,9 @@ export function Sidebar() {
                 },
               ]}
             />
+
+            {/* //. This is part of the full plugin support system that was removed from the initial bank sync MVP */}
+            {/* <RenderPluginsComponent toRender={slotItems['after-accounts']} /> */}
           </View>
         </View>
       </Resizable>

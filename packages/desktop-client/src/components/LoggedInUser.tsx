@@ -55,6 +55,8 @@ export function LoggedInUser({
   ) as (SyncedLocalFile | RemoteFile)[];
   const currentFile = remoteFiles.find(f => f.cloudFileId === cloudFileId);
   const hasSyncedPrefs = useSelector(state => state.prefs.synced);
+  //. This is part of the full plugin support system that was removed from the initial bank sync MVP
+  // const { slotItems } = useActualPlugins();
 
   const initializeUserData = useCallback(async () => {
     try {
@@ -222,6 +224,8 @@ export function LoggedInUser({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', ...style }}>
+      {/* //. This is part of the full plugin support system that was removed from the initial bank sync MVP */}
+      {/* <RenderPluginsComponent toRender={slotItems.topbar} /> */}
       <Button
         ref={triggerRef}
         variant="bare"
