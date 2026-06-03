@@ -33,6 +33,7 @@ type BankOption = {
 
 function useAvailableBanks(
   country: string | undefined,
+  fileId: string,
   refetchKey?: boolean | null,
 ) {
   const { t } = useTranslation();
@@ -56,10 +57,10 @@ function useAvailableBanks(
 
       setIsLoading(true);
 
-      const { data, error } = await sendCatch(
-        'enablebanking-aspsps',
-        country.toUpperCase(),
-      );
+      const { data, error } = await sendCatch('enablebanking-aspsps', {
+        country: country.toUpperCase(),
+        fileId,
+      });
 
       if (cancelled) return;
 
@@ -84,7 +85,7 @@ function useAvailableBanks(
     return () => {
       cancelled = true;
     };
-  }, [country, refetchKey, t]);
+  }, [country, fileId, refetchKey, t]);
 
   return {
     data: banks,
@@ -118,6 +119,7 @@ export function EnableBankingExternalMsgModal({
   onMoveExternal,
   onSuccess,
   onClose,
+  fileId,
 }: EnableBankingExternalMsgModalProps) {
   const { t } = useTranslation();
 
@@ -150,11 +152,11 @@ export function EnableBankingExternalMsgModal({
     data: bankOptions,
     isLoading: isBankOptionsLoading,
     isError: isBankOptionError,
-  } = useAvailableBanks(country, isEnableBankingSetupComplete);
+  } = useAvailableBanks(country, fileId, isEnableBankingSetupComplete);
   const {
     configuredEnableBanking: isConfigured,
     isLoading: isConfigurationLoading,
-  } = useEnableBankingStatus();
+  } = useEnableBankingStatus(fileId);
 
   const isJumpingRef = useRef(false);
   const stateRef = useRef<string | null>(null);
@@ -246,6 +248,7 @@ export function EnableBankingExternalMsgModal({
           name: 'enablebanking-init',
           options: {
             onSuccess: () => setIsEnableBankingSetupComplete(true),
+            fileId,
           },
         },
       }),

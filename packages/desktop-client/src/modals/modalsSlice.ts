@@ -116,29 +116,34 @@ export type Modal =
       name: 'gocardless-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'simplefin-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'pluggyai-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'enablebanking-init';
       options: {
         onSuccess: () => void;
+        fileId: string;
       };
     }
   | {
       name: 'enablebanking-external-msg';
       options: {
+        fileId: string;
         onMoveExternal: (arg: {
           aspspId: string;
           country: string;
@@ -158,6 +163,7 @@ export type Modal =
   | {
       name: 'gocardless-external-msg';
       options: {
+        fileId: string;
         onMoveExternal: (arg: {
           institutionId: string;
         }) => Promise<
@@ -167,6 +173,14 @@ export type Modal =
         >;
         onClose?: (() => void) | undefined;
         onSuccess: (data: GoCardlessToken) => Promise<void>;
+      };
+    }
+  | {
+      name: 'bank-sync-init';
+      options: {
+        providerSlug: string;
+        providerDisplayName: string;
+        onSuccess: (credentials: Record<string, string>) => void;
       };
     }
   | {

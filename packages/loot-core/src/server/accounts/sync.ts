@@ -133,26 +133,34 @@ async function downloadGoCardlessTransactions(
   acctId,
   bankId,
   since,
-  includeBalance = true,
+  includeBalance: boolean,
+  fileId: string,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
 
   logger.log('Pulling transactions from GoCardless');
 
+  const body: Record<string, unknown> = {
+    userId,
+    key: userKey,
+    requisitionId: bankId,
+    accountId: acctId,
+    startDate: since,
+    includeBalance,
+  };
+  const headers: Record<string, string> = {
+    'X-ACTUAL-TOKEN': userToken,
+  };
+  if (fileId) {
+    body.fileId = fileId;
+    headers['X-Actual-File-Id'] = fileId;
+  }
+
   const res = await post(
     getServer().GOCARDLESS_SERVER + '/transactions',
-    {
-      userId,
-      key: userKey,
-      requisitionId: bankId,
-      accountId: acctId,
-      startDate: since,
-      includeBalance,
-    },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
+    body,
+    headers,
   );
 
   if (res.error_code) {
@@ -189,6 +197,7 @@ async function downloadGoCardlessTransactions(
 async function downloadSimpleFinTransactions(
   acctId: AccountEntity['id'] | AccountEntity['id'][],
   since: string | string[],
+  fileId: string,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
@@ -197,17 +206,24 @@ async function downloadSimpleFinTransactions(
 
   logger.log('Pulling transactions from SimpleFin');
 
+  const body: Record<string, unknown> = {
+    accountId: acctId,
+    startDate: since,
+  };
+  const headers: Record<string, string> = {
+    'X-ACTUAL-TOKEN': userToken,
+  };
+  if (fileId) {
+    body.fileId = fileId;
+    headers['X-Actual-File-Id'] = fileId;
+  }
+
   let res;
   try {
     res = await post(
       getServer().SIMPLEFIN_SERVER + '/transactions',
-      {
-        accountId: acctId,
-        startDate: since,
-      },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      body,
+      headers,
       // 5 minute timeout for batch sync, one minute for individual accounts
       Array.isArray(acctId) ? 300000 : 60000,
     );
@@ -278,21 +294,29 @@ async function downloadSimpleFinTransactions(
 async function downloadPluggyAiTransactions(
   acctId: AccountEntity['id'],
   since: string,
+  fileId: string,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
 
   logger.log('Pulling transactions from Pluggy.ai');
 
+  const body: Record<string, unknown> = {
+    accountId: acctId,
+    startDate: since,
+  };
+  const headers: Record<string, string> = {
+    'X-ACTUAL-TOKEN': userToken,
+  };
+  if (fileId) {
+    body.fileId = fileId;
+    headers['X-Actual-File-Id'] = fileId;
+  }
+
   const res = await post(
     getServer().PLUGGYAI_SERVER + '/transactions',
-    {
-      accountId: acctId,
-      startDate: since,
-    },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
+    body,
+    headers,
     60000,
   );
 
@@ -317,6 +341,7 @@ async function downloadPluggyAiTransactions(
 async function downloadEnableBankingTransactions(
   acctId: string,
   since: string,
+  fileId: string,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
@@ -328,9 +353,11 @@ async function downloadEnableBankingTransactions(
     {
       accountId: acctId,
       startDate: since,
+      fileId,
     },
     {
       'X-ACTUAL-TOKEN': userToken,
+      'X-Actual-File-Id': fileId,
     },
     60000,
   );
@@ -349,6 +376,47 @@ async function downloadEnableBankingTransactions(
     transactions: all,
     accountBalance: balances,
     startingBalance,
+  };
+}
+
+async function downloadPluginTransactions(
+  providerSlug: string,
+  acctId: AccountEntity['id'],
+  bankId: string,
+  since: string,
+  fileId: string,
+) {
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) return;
+
+  logger.log(`Pulling transactions from plugin ${providerSlug}`);
+
+  const res = await post(
+    `${getServer().BASE_SERVER}/plugins-api/bank-sync/${providerSlug}/transactions`,
+    {
+      accountId: acctId,
+      requisitionId: bankId,
+      bankId,
+      startDate: since,
+    },
+    {
+      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-file-id': fileId,
+    },
+    60000,
+  );
+
+  if (res.error_code) {
+    throw BankSyncError(res.error_type, res.error_code, res.reason);
+  } else if ('error' in res) {
+    throw BankSyncError('UNKNOWN_ERROR', res.error, res.error);
+  }
+
+  const singleRes = res as BankSyncResponse;
+  return {
+    transactions: singleRes.transactions.all,
+    accountBalance: singleRes.balances,
+    startingBalance: singleRes.startingBalance,
   };
 }
 
@@ -1121,8 +1189,9 @@ export async function syncAccount(
   id: string,
   acctId: string,
   bankId: string,
-  customStartingDate?: string,
-  customStartingBalance?: number,
+  customStartingDate: string | undefined,
+  customStartingBalance: number | undefined,
+  fileId: string,
 ) {
   const acctRow = await db.select('accounts', id);
 
@@ -1133,9 +1202,17 @@ export async function syncAccount(
 
   let download;
   if (acctRow.account_sync_source === 'simpleFin') {
-    download = await downloadSimpleFinTransactions(acctId, syncStartDate);
+    download = await downloadSimpleFinTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
   } else if (acctRow.account_sync_source === 'pluggyai') {
-    download = await downloadPluggyAiTransactions(acctId, syncStartDate);
+    download = await downloadPluggyAiTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
   } else if (acctRow.account_sync_source === 'goCardless') {
     download = await downloadGoCardlessTransactions(
       userId,
@@ -1144,9 +1221,22 @@ export async function syncAccount(
       bankId,
       syncStartDate,
       newAccount,
+      fileId,
     );
   } else if (acctRow.account_sync_source === 'enableBanking') {
-    download = await downloadEnableBankingTransactions(acctId, syncStartDate);
+    download = await downloadEnableBankingTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
+  } else if (acctRow.account_sync_source) {
+    download = await downloadPluginTransactions(
+      acctRow.account_sync_source,
+      acctId,
+      bankId,
+      syncStartDate,
+      fileId,
+    );
   } else {
     throw new Error(
       `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,
@@ -1165,6 +1255,7 @@ export async function syncAccount(
 
 export async function simpleFinBatchSync(
   accounts: Array<Pick<AccountEntity, 'id' | 'account_id'>>,
+  fileId: string,
 ) {
   const startDates = await Promise.all(
     accounts.map(async a => getAccountSyncStartDate(a.id)),
@@ -1173,6 +1264,7 @@ export async function simpleFinBatchSync(
   const res = await downloadSimpleFinTransactions(
     accounts.map(a => a.account_id),
     startDates,
+    fileId,
   );
 
   if (!res) {
