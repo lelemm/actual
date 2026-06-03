@@ -37,6 +37,8 @@ packages/plugins-core/build
 packages/plugins-core/dist
 packages/plugins-core-sync-server/dist
 packages/sync-server-plugin-example/dist
+packages/bank-sync-plugin-gocardless/dist
+packages/bank-sync-plugin-gocardless/frontend-build
 packages/component-library/dist
 packages/query/dist
 packages/shared-types/dist
