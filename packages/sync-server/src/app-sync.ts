@@ -43,7 +43,6 @@ import type { GroupId } from './util/paths';
 
 const app = express();
 app.use(validateSessionMiddleware);
-app.use(errorMiddleware);
 app.use(requestLoggerMiddleware);
 app.use(
   express.raw({
@@ -450,6 +449,18 @@ app.get('/download-user-file', async (req, res) => {
     return;
   }
 
+  try {
+    await fs.access(path);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'ENOENT') {
+        res.status(404).send('File not found');
+        return;
+      }
+    }
+    throw error;
+  }
+
   res.setHeader('Content-Disposition', `attachment;filename=${fileId}`);
   res.sendFile(path, { dotfiles: 'allow' });
 });
@@ -570,3 +581,6 @@ app.post('/delete-user-file', (req, res) => {
 
   res.send(OK_RESPONSE);
 });
+
+// Error handling middleware (must be last)
+app.use(errorMiddleware);

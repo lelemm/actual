@@ -14,6 +14,7 @@ import * as enableBankingApp from './app-enablebanking/app-enablebanking';
 import * as goCardlessApp from './app-gocardless/app-gocardless';
 import * as openidApp from './app-openid';
 import * as pluggai from './app-pluggyai/app-pluggyai';
+import * as pluginsApp from './app-plugins';
 import * as secretApp from './app-secrets';
 import * as simpleFinApp from './app-simplefin/app-simplefin';
 import * as syncApp from './app-sync';
@@ -69,6 +70,7 @@ if (config.get('corsProxy.enabled')) {
 
 app.use('/admin', adminApp.handlers);
 app.use('/openid', openidApp.handlers);
+app.use('/plugins-api', pluginsApp.handlers);
 
 app.get('/mode', (req, res) => {
   res.send(config.get('mode'));
@@ -133,7 +135,7 @@ app.get('/metrics', (_req, res) => {
 // kept in both branches.
 const isDev = process.env.NODE_ENV === 'development';
 const scriptSrc = isDev
-  ? "'self' 'unsafe-inline' 'unsafe-eval' blob:"
+  ? "'self' 'unsafe-inline' 'unsafe-eval' blob: http: https:"
   : "'self' 'unsafe-eval' blob:";
 const connectSrc = isDev ? "'self' ws: wss: http: https:" : 'http: https:';
 const csp = [
@@ -214,6 +216,7 @@ export async function run() {
     }
   }
 
+  let server: ReturnType<typeof app.listen>;
   if (config.get('https.key') && config.get('https.cert')) {
     const https = await import('node:https');
     const httpsOptions = {
@@ -221,12 +224,40 @@ export async function run() {
       key: parseHTTPSConfig(config.get('https.key')),
       cert: parseHTTPSConfig(config.get('https.cert')),
     };
-    https.createServer(httpsOptions, app).listen(port, hostname, () => {
-      sendServerStartedMessage();
-    });
+    server = https
+      .createServer(httpsOptions, app)
+      .listen(port, hostname, () => {
+        sendServerStartedMessage();
+      });
   } else {
-    app.listen(port, hostname, () => {
+    server = app.listen(port, hostname, () => {
       sendServerStartedMessage();
     });
   }
+
+  // Graceful shutdown handler
+  async function gracefulShutdown(signal: string) {
+    console.log(`${signal} received. Starting graceful shutdown...`);
+
+    // Close HTTP server (stop accepting new connections)
+    server.close(() => {
+      console.log('HTTP server closed');
+    });
+
+    // Shutdown plugins
+    try {
+      const { pluginManager } = await import('./app-plugins.js');
+      await pluginManager.shutdown();
+      console.log('Plugins shut down successfully');
+    } catch (error) {
+      console.error('Error shutting down plugins:', error);
+    }
+
+    // Exit process
+    process.exit(0);
+  }
+
+  // Register shutdown handlers
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }

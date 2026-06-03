@@ -20,6 +20,7 @@
   "imports": {
     "#db": "./src/db.js",
     "#account-db": "./src/account-db.js",
+    "#server-prefs": "./src/server-prefs.js",
     "#load-config": "./src/load-config.js",
     "#migrations": "./src/migrations.ts",
     "#accounts/*": "./src/accounts/*.js",
@@ -39,6 +40,7 @@
     "#app-simplefin/*": "./src/app-simplefin/*.js",
     "#app-sync/services/*": "./src/app-sync/services/*.js",
     "#app-sync/*": "./src/app-sync/*.js",
+    "#plugin-runner": "./src/plugin-runner.js",
     "#scripts/*": "./src/scripts/*.js",
     "#services/*": "./src/services/*.js",
     "#util/title": "./src/util/title/index.js",
@@ -48,6 +50,7 @@
     "imports": {
       "#db": "./build/src/db.js",
       "#account-db": "./build/src/account-db.js",
+      "#server-prefs": "./build/src/server-prefs.js",
       "#load-config": "./build/src/load-config.js",
       "#migrations": "./build/src/migrations.js",
       "#accounts/*": "./build/src/accounts/*.js",
@@ -67,6 +70,7 @@
       "#app-simplefin/*": "./build/src/app-simplefin/*.js",
       "#app-sync/services/*": "./build/src/app-sync/services/*.js",
       "#app-sync/*": "./build/src/app-sync/*.js",
+      "#plugin-runner": "./build/src/plugin-runner.js",
       "#scripts/*": "./build/src/scripts/*.js",
       "#services/*": "./build/src/services/*.js",
       "#util/title": "./build/src/util/title/index.js",
@@ -84,12 +88,15 @@
     "db:test-migrate": "yarn build && cross-env NODE_ENV=test node build/scripts/run-migrations.js up",
     "db:test-downgrade": "yarn build && cross-env NODE_ENV=test node build/scripts/run-migrations.js down",
     "reset-password": "yarn build && node build/scripts/reset-password.js",
+    "enable-plugins": "yarn build && node build/scripts/enable-plugins.js",
+    "disable-plugins": "yarn build && node build/scripts/disable-plugins.js",
     "disable-openid": "yarn build && node build/scripts/disable-openid.js",
     "health-check": "yarn build && node build/scripts/health-check.js"
   },
   "dependencies": {
     "@actual-app/crdt": "workspace:*",
     "@actual-app/web": "workspace:*",
+    "adm-zip": "^0.5.17",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.8.0",
     "convict": "^6.2.5",
