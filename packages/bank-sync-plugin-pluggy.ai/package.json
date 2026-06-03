@@ -1,0 +1,52 @@
+{
+  "name": "@actual-app/bank-sync-plugin-pluggy.ai",
+  "version": "0.0.1",
+  "description": "Pluggy.ai bank sync plugin for Actual Budget",
+  "keywords": [
+    "actual",
+    "bank-sync",
+    "pluggy",
+    "pluggyai",
+    "plugin"
+  ],
+  "license": "MIT",
+  "author": "Actual Budget",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "npm run build:compile && npm run build:bundle && npm run build:frontend && npm run build:manifest && npm run build:zip",
+    "build:compile": "tsc",
+    "build:bundle": "node scripts/build-bundle.cjs",
+    "build:frontend": "vite build",
+    "build:manifest": "node scripts/build-manifest.cjs",
+    "build:zip": "node scripts/build-zip.cjs",
+    "deploy": "npm run build && npm run install:plugin",
+    "install:plugin": "node scripts/install-plugin.cjs",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist frontend-build *.zip",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@actual-app/components": "workspace:*",
+    "@actual-app/plugins-core": "workspace:*",
+    "@actual-app/plugins-core-sync-server": "workspace:*",
+    "express": "^5.2.1",
+    "i18next": "^25.10.10",
+    "pluggy-sdk": "^0.83.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-i18next": "^16.6.6"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.4.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^3.10.2",
+    "archiver": "^7.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.5"
+  }
+}
