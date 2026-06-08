@@ -470,7 +470,6 @@ describe('Enable Banking Express routes', () => {
             entry_reference: 'tx-1',
             transaction_amount: { currency: 'EUR', amount: '10.00' },
             status: 'BOOK',
-            booking_date: '2026-01-05',
           },
         ],
         continuation_key: 'page-2',
@@ -482,7 +481,6 @@ describe('Enable Banking Express routes', () => {
             entry_reference: 'tx-2',
             transaction_amount: { currency: 'EUR', amount: '20.00' },
             status: 'BOOK',
-            booking_date: '2026-01-06',
           },
         ],
       });

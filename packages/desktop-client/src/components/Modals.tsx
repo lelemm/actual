@@ -14,6 +14,7 @@ import { useDispatch } from '#redux';
 import { EditSyncAccount } from './banksync/EditSyncAccount';
 import { AccountAutocompleteModal } from './modals/AccountAutocompleteModal';
 import { AccountMenuModal } from './modals/AccountMenuModal';
+import { BankSyncInitialiseModal } from './modals/BankSyncInitialiseModal';
 import { BudgetAutomationsModal } from './modals/BudgetAutomationsModal';
 import { BudgetPageMenuModal } from './modals/BudgetPageMenuModal';
 import { CategoryAutocompleteModal } from './modals/CategoryAutocompleteModal';
@@ -70,6 +71,7 @@ import { OutOfSyncMigrationsModal } from './modals/OutOfSyncMigrationsModal';
 import { PasswordEnableModal } from './modals/PasswordEnableModal';
 import { PayeeAutocompleteModal } from './modals/PayeeAutocompleteModal';
 import { PluggyAiInitialiseModal } from './modals/PluggyAiInitialiseModal';
+import { PluginModal } from './modals/PluginModal';
 import { ScheduledTransactionMenuModal } from './modals/ScheduledTransactionMenuModal';
 import { SelectLinkedAccountsModal } from './modals/SelectLinkedAccountsModal';
 import { SelectNewPluginModal } from './modals/SelectNewPluginModal';
@@ -207,6 +209,9 @@ export function Modals() {
               }}
             />
           );
+
+        case 'bank-sync-init':
+          return <BankSyncInitialiseModal key={key} {...modal.options} />;
 
         case 'create-encryption-key':
           return <CreateEncryptionKeyModal key={key} {...modal.options} />;
@@ -422,6 +427,9 @@ export function Modals() {
 
         case 'select-new-plugin':
           return <SelectNewPluginModal key={key} {...modal.options} />;
+
+        case 'plugin-modal':
+          return <PluginModal key={key} {...modal.options} />;
 
         default:
           throw new Error('Unknown modal');

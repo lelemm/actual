@@ -1,5 +1,4 @@
 // @ts-strict-ignore
-import * as asyncStorage from '#platform/server/asyncStorage';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 import { isMutating, runHandler, runMutator } from '#server/mutators';
@@ -44,10 +43,6 @@ async function setupSimpleFinAccounts(
 
 beforeEach(async () => {
   vi.resetAllMocks();
-  vi.mocked(asyncStorage.multiGet).mockResolvedValue({
-    'user-id': 'user-1',
-    'user-key': 'key-1',
-  });
   await global.emptyDatabase()();
   await loadMappings();
 });
@@ -151,7 +146,6 @@ describe('simpleFinBatchSync', () => {
     });
   });
 });
-
 describe('accountsBankSync', () => {
   it('persists ok status after a successful sync', async () => {
     insertBank({ id: 'bank1', bank_id: 'gc-bank', name: 'GoCardless' });

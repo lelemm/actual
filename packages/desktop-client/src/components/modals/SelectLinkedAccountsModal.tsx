@@ -26,6 +26,7 @@ import {
   useLinkAccountEnableBankingMutation,
   useLinkAccountMutation,
   useLinkAccountPluggyAiMutation,
+  useLinkAccountPluginMutation,
   useLinkAccountSimpleFinMutation,
   useUnlinkAccountMutation,
 } from '#accounts';
@@ -103,14 +104,33 @@ export type SelectLinkedAccountsModalProps =
       externalAccounts: SyncServerAkahuAccount[];
       syncSource: 'akahu';
       upgradingAccountId?: string;
+    }
+  | {
+      requisitionId?: undefined;
+      externalAccounts: Array<{
+        account_id: string;
+        name: string;
+        institution: string;
+        balance: number;
+        [key: string]: unknown;
+      }>;
+      syncSource: 'plugin';
+      providerSlug: string;
+      bankId?: string;
+      upgradingAccountId?: string;
     };
 
-export function SelectLinkedAccountsModal({
-  requisitionId = undefined,
-  externalAccounts,
-  syncSource,
-  upgradingAccountId,
-}: SelectLinkedAccountsModalProps) {
+export function SelectLinkedAccountsModal(
+  props: SelectLinkedAccountsModalProps,
+) {
+  const {
+    requisitionId = undefined,
+    externalAccounts,
+    syncSource,
+    upgradingAccountId,
+  } = props;
+  const providerSlug = syncSource === 'plugin' ? props.providerSlug : undefined;
+  const pluginBankId = syncSource === 'plugin' ? props.bankId : undefined;
   const propsWithSortedExternalAccounts =
     useMemo<SelectLinkedAccountsModalProps>(() => {
       const toSort = externalAccounts ? [...externalAccounts] : [];
@@ -151,64 +171,73 @@ export function SelectLinkedAccountsModal({
             externalAccounts: toSort as SyncServerEnableBankingAccount[],
             upgradingAccountId,
           };
+        case 'plugin':
+          return {
+            syncSource: 'plugin',
+            providerSlug: providerSlug!,
+            bankId: pluginBankId,
+            externalAccounts: toSort as Array<{
+              account_id: string;
+              name: string;
+              institution: string;
+              balance: number;
+              [key: string]: unknown;
+            }>,
+            upgradingAccountId,
+          };
         default:
           throw new Error(`Unrecognized sync source: ${String(syncSource)}`);
       }
-    }, [externalAccounts, syncSource, requisitionId, upgradingAccountId]);
+    }, [
+      externalAccounts,
+      syncSource,
+      requisitionId,
+      upgradingAccountId,
+      providerSlug,
+      pluginBankId,
+    ]);
 
   const { t } = useTranslation();
   const { isNarrowWidth } = useResponsive();
   const dispatch = useDispatch();
   const { data: allAccounts = [] } = useAccounts();
   const localAccounts = allAccounts.filter(a => a.closed === 0);
-  const { initialDraftLinkAccounts, initiallyChosenAccounts } = useMemo(() => {
-    const externalAccountIds = new Set(
-      externalAccounts?.map(a => a.account_id) || [],
-    );
-    const initialDraftLinkAccounts = new Map<string, 'linking' | 'unlinking'>();
-    for (const acc of localAccounts) {
-      if (acc.account_id && externalAccountIds.has(acc.account_id)) {
-        initialDraftLinkAccounts.set(acc.account_id, 'linking');
-      }
-    }
-
-    const initiallyChosenAccounts = Object.fromEntries(
-      localAccounts
-        .filter(acc => acc.account_id)
-        .map(acc => [acc.account_id, acc.id]),
-    );
-
-    const preselectedExternalAccount =
-      propsWithSortedExternalAccounts.externalAccounts.find(
-        account => initiallyChosenAccounts[account.account_id] == null,
-      );
-
-    if (
-      upgradingAccountId &&
-      preselectedExternalAccount &&
-      !Object.values(initiallyChosenAccounts).includes(upgradingAccountId)
-    ) {
-      initiallyChosenAccounts[preselectedExternalAccount.account_id] =
-        upgradingAccountId;
-      initialDraftLinkAccounts.set(
-        preselectedExternalAccount.account_id,
-        'linking',
-      );
-    }
-
-    return { initialDraftLinkAccounts, initiallyChosenAccounts };
-  }, [
-    localAccounts,
-    externalAccounts,
-    propsWithSortedExternalAccounts.externalAccounts,
-    upgradingAccountId,
-  ]);
-
   const [draftLinkAccounts, setDraftLinkAccounts] = useState<
     Map<string, 'linking' | 'unlinking'>
-  >(initialDraftLinkAccounts);
+  >(() => {
+    const externalAccountIds = new Set(externalAccounts.map(a => a.account_id));
+    const initial = new Map<string, 'linking' | 'unlinking'>();
+    for (const acc of localAccounts) {
+      if (acc.account_id && externalAccountIds.has(acc.account_id)) {
+        initial.set(acc.account_id, 'linking');
+      }
+    }
+    return initial;
+  });
   const [chosenAccounts, setChosenAccounts] = useState<Record<string, string>>(
-    initiallyChosenAccounts,
+    () => {
+      const initiallyChosenAccounts = Object.fromEntries(
+        localAccounts
+          .filter(acc => acc.account_id)
+          .map(acc => [acc.account_id, acc.id]),
+      );
+
+      const preselectedExternalAccount =
+        propsWithSortedExternalAccounts.externalAccounts.find(
+          account => initiallyChosenAccounts[account.account_id] == null,
+        );
+
+      if (
+        upgradingAccountId &&
+        preselectedExternalAccount &&
+        !Object.values(initiallyChosenAccounts).includes(upgradingAccountId)
+      ) {
+        initiallyChosenAccounts[preselectedExternalAccount.account_id] =
+          upgradingAccountId;
+      }
+
+      return initiallyChosenAccounts;
+    },
   );
   const [customStartingDates, setCustomStartingDates] = useState<
     Record<string, StartingBalanceInfo>
@@ -222,6 +251,7 @@ export function SelectLinkedAccountsModal({
   const linkAccountPluggyAi = useLinkAccountPluggyAiMutation();
   const linkAccountAkahu = useLinkAccountAkahuMutation();
   const linkAccountEnableBanking = useLinkAccountEnableBankingMutation();
+  const linkAccountPlugin = useLinkAccountPluginMutation();
 
   async function onNext() {
     const chosenLocalAccountIds = Object.values(chosenAccounts);
@@ -319,6 +349,23 @@ export function SelectLinkedAccountsModal({
             startingDate,
             startingBalance,
           });
+        } else if (propsWithSortedExternalAccounts.syncSource === 'plugin') {
+          linkAccountPlugin.mutate({
+            providerSlug: propsWithSortedExternalAccounts.providerSlug,
+            externalAccount:
+              propsWithSortedExternalAccounts.externalAccounts[
+                externalAccountIndex
+              ],
+            bankId: propsWithSortedExternalAccounts.bankId,
+            upgradingId:
+              chosenLocalAccountId !== addOnBudgetAccountOption.id &&
+              chosenLocalAccountId !== addOffBudgetAccountOption.id
+                ? chosenLocalAccountId
+                : undefined,
+            offBudget,
+            startingDate,
+            startingBalance,
+          });
         } else {
           linkAccount.mutate({
             requisitionId: propsWithSortedExternalAccounts.requisitionId,
@@ -347,11 +394,7 @@ export function SelectLinkedAccountsModal({
   );
 
   function onSetLinkedAccount(
-    externalAccount:
-      | SyncServerGoCardlessAccount
-      | SyncServerSimpleFinAccount
-      | SyncServerPluggyAiAccount
-      | SyncServerAkahuAccount,
+    externalAccount: ExternalAccount,
     localAccountId: string | null | undefined,
   ) {
     setChosenAccounts(accounts => {
@@ -577,7 +620,11 @@ type ExternalAccount =
   | SyncServerSimpleFinAccount
   | SyncServerPluggyAiAccount
   | SyncServerAkahuAccount
-  | SyncServerEnableBankingAccount;
+  | SyncServerEnableBankingAccount
+  | Extract<
+      SelectLinkedAccountsModalProps,
+      { syncSource: 'plugin' }
+    >['externalAccounts'][number];
 
 type StartingBalanceInfo = {
   date: string;
