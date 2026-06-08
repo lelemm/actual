@@ -10,6 +10,7 @@ export type FeatureFlag =
   | 'budgetAnalysisReport'
   | 'payeeLocations'
   | 'enableBanking'
+  | 'plugins'
   | 'sankeyReport'
   | 'akahuBankSync';
 
@@ -111,16 +112,6 @@ export type GlobalPrefs = Partial<{
   theme: Theme;
   preferredDarkTheme: DarkTheme;
   plugins: boolean;
-  pluginThemes: Record<
-    string,
-    {
-      id: string;
-      displayName: string;
-      description?: string;
-      baseTheme?: 'light' | 'dark' | 'midnight';
-      colors: Record<string, string>;
-    }
-  >; // Complete plugin theme metadata
   installedCustomLightTheme?: string; // JSON of InstalledTheme for light custom theme (also used as single custom theme in non-auto mode)
   installedCustomDarkTheme?: string; // JSON of InstalledTheme for auto-mode dark custom theme
   customCssOverride?: string; // User-pasted CSS override applied on top of any theme. Empty string or undefined means no override.
@@ -156,7 +147,6 @@ export type GlobalPrefsJson = Partial<{
   'installed-custom-dark-theme'?: GlobalPrefs['installedCustomDarkTheme'];
   'custom-css-override'?: GlobalPrefs['customCssOverride'];
   plugins?: string; // "true" or "false"
-  'plugin-theme'?: string; // JSON string of complete plugin theme (current selected plugin theme)
   'server-self-signed-cert'?: GlobalPrefs['serverSelfSignedCert'];
   syncServerConfig?: GlobalPrefs['syncServerConfig'];
   notifyWhenUpdateIsAvailable?: GlobalPrefs['notifyWhenUpdateIsAvailable'];

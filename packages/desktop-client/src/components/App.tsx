@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ErrorBoundary, useErrorBoundary } from 'react-error-boundary';
@@ -24,6 +24,10 @@ import { useOnVisible } from '#hooks/useOnVisible';
 import { SpreadsheetProvider } from '#hooks/useSpreadsheet';
 import { setI18NextLanguage } from '#i18n';
 import { addNotification } from '#notifications/notificationsSlice';
+import {
+  ActualPluginsProvider,
+  useActualPlugins,
+} from '#plugin/ActualPluginsProvider';
 import { installPolyfills } from '#polyfills';
 import { loadGlobalPrefs } from '#prefs/prefsSlice';
 import { useDispatch, useSelector, useStore } from '#redux';
@@ -53,6 +57,9 @@ function AppInner() {
   const { showBoundary: showErrorBoundary } = useErrorBoundary();
   const dispatch = useDispatch();
   const userData = useSelector(state => state.user.data);
+  const { refreshPluginStore } = useActualPlugins();
+  const [startupComplete, setStartupComplete] = useState(false);
+  const loadedPluginsBudgetRef = useRef<string | null>(null);
 
   useEffect(() => {
     setI18NextLanguage(null);
@@ -122,6 +129,7 @@ function AppInner() {
 
     async function initAll() {
       await Promise.all([installPolyfills(), init()]);
+      setStartupComplete(true);
       dispatch(setAppState({ loadingText: null }));
     }
 
@@ -129,6 +137,104 @@ function AppInner() {
     // Removed cloudFileId & t from dependencies to prevent hard crash when closing budget in Electron
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showErrorBoundary]);
+
+  useEffect(() => {
+    if (!startupComplete) {
+      return;
+    }
+
+    if (!budgetId) {
+      loadedPluginsBudgetRef.current = null;
+      return;
+    }
+
+    if (loadedPluginsBudgetRef.current === budgetId) {
+      return;
+    }
+
+    loadedPluginsBudgetRef.current = budgetId;
+
+    let didCancel = false;
+
+    async function loadPluginsForBudget() {
+      dispatch(
+        setAppState({
+          loadingText: t('Loading plugins...'),
+        }),
+      );
+
+      try {
+        await refreshPluginStore();
+      } finally {
+        if (!didCancel) {
+          dispatch(setAppState({ loadingText: null }));
+        }
+      }
+    }
+
+    loadPluginsForBudget().catch(showErrorBoundary);
+
+    return () => {
+      didCancel = true;
+    };
+  }, [
+    budgetId,
+    dispatch,
+    refreshPluginStore,
+    showErrorBoundary,
+    startupComplete,
+    t,
+  ]);
+
+  useEffect(() => {
+    const handlePluginFilesMessage = async (event: MessageEvent) => {
+      const isServiceWorkerMessage =
+        typeof ServiceWorker !== 'undefined' &&
+        event.source instanceof ServiceWorker;
+
+      if (!isServiceWorkerMessage && !event.ports?.length) {
+        return;
+      }
+
+      if (event.data?.type !== 'plugin-files') {
+        return;
+      }
+
+      const { pluginUrl } = event.data.eventData;
+      try {
+        console.debug('[plugin-files] request from service worker', {
+          pluginUrl,
+        });
+        const files = await send('plugin-files', { pluginUrl });
+        console.debug('[plugin-files] response to service worker', {
+          pluginUrl,
+          fileCount: files?.length ?? 0,
+          fileNames: files?.map(file => file.name) ?? [],
+        });
+        event.ports?.[0]?.postMessage(files || []);
+      } catch (error) {
+        console.error('[plugin-files] error handling service worker request', {
+          pluginUrl,
+          error,
+        });
+        event.ports?.[0]?.postMessage([]);
+      }
+    };
+
+    window.addEventListener('message', handlePluginFilesMessage);
+    navigator.serviceWorker?.addEventListener(
+      'message',
+      handlePluginFilesMessage,
+    );
+
+    return () => {
+      window.removeEventListener('message', handlePluginFilesMessage);
+      navigator.serviceWorker?.removeEventListener(
+        'message',
+        handlePluginFilesMessage,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (userData?.tokenExpired) {
@@ -196,47 +302,51 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <ExposeNavigate />
-      <HotkeysProvider initiallyActiveScopes={['app']}>
-        <SpreadsheetProvider>
-          <SidebarProvider>
-            <BudgetMonthCountProvider>
-              <DndProvider backend={HTML5Backend}>
-                <View
-                  data-theme={theme}
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
+      <ActualPluginsProvider>
+        <ExposeNavigate />
+        <HotkeysProvider initiallyActiveScopes={['app']}>
+          <SpreadsheetProvider>
+            <SidebarProvider>
+              <BudgetMonthCountProvider>
+                <DndProvider backend={HTML5Backend}>
                   <View
-                    key={hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'}
+                    data-theme={theme}
                     style={{
-                      flexGrow: 1,
-                      overflow: 'hidden',
-                      ...styles.lightScrollbar,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
                     }}
                   >
-                    <ErrorBoundary FallbackComponent={ErrorFallback}>
-                      {process.env.REACT_APP_REVIEW_ID && !isTestEnv && (
-                        <DevelopmentTopBar />
-                      )}
-                      <AppInner />
-                    </ErrorBoundary>
-                    <ThemeStyle />
-                    <CustomThemeStyle />
-                    <ErrorBoundary FallbackComponent={FatalError}>
-                      <Modals />
-                    </ErrorBoundary>
-                    <UpdateNotification />
+                    <View
+                      key={
+                        hiddenScrollbars ? 'hidden-scrollbars' : 'scrollbars'
+                      }
+                      style={{
+                        flexGrow: 1,
+                        overflow: 'hidden',
+                        ...styles.lightScrollbar,
+                      }}
+                    >
+                      <ErrorBoundary FallbackComponent={ErrorFallback}>
+                        {process.env.REACT_APP_REVIEW_ID && !isTestEnv && (
+                          <DevelopmentTopBar />
+                        )}
+                        <AppInner />
+                      </ErrorBoundary>
+                      <ThemeStyle />
+                      <CustomThemeStyle />
+                      <ErrorBoundary FallbackComponent={FatalError}>
+                        <Modals />
+                      </ErrorBoundary>
+                      <UpdateNotification />
+                    </View>
                   </View>
-                </View>
-              </DndProvider>
-            </BudgetMonthCountProvider>
-          </SidebarProvider>
-        </SpreadsheetProvider>
-      </HotkeysProvider>
+                </DndProvider>
+              </BudgetMonthCountProvider>
+            </SidebarProvider>
+          </SpreadsheetProvider>
+        </HotkeysProvider>
+      </ActualPluginsProvider>
     </BrowserRouter>
   );
 }
