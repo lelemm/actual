@@ -1,0 +1,77 @@
+{
+  "name": "@actual-app/plugins-core",
+  "version": "0.1.0",
+  "description": "Core plugin system for Actual Budget",
+  "exports": {
+    "./BasicModalComponents": {
+      "types": "./src/BasicModalComponents.tsx",
+      "development": "./src/BasicModalComponents.tsx",
+      "import": "./build/BasicModalComponents.js",
+      "require": "./build/BasicModalComponents.cjs"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "development": "./src/middleware.ts",
+      "import": "./build/middleware.js",
+      "require": "./build/middleware.cjs"
+    },
+    "./types/actualPlugin": {
+      "types": "./src/types/actualPlugin.ts",
+      "development": "./src/types/actualPlugin.ts",
+      "import": "./build/types/actualPlugin.js",
+      "require": "./build/types/actualPlugin.cjs"
+    },
+    "./types/actualPluginEntry": {
+      "types": "./src/types/actualPluginEntry.ts",
+      "development": "./src/types/actualPluginEntry.ts"
+    },
+    "./types/actualPluginManifest": {
+      "types": "./src/types/actualPluginManifest.ts",
+      "development": "./src/types/actualPluginManifest.ts",
+      "import": "./build/types/actualPluginManifest.js",
+      "require": "./build/types/actualPluginManifest.cjs"
+    },
+    "./types/modalProps": {
+      "types": "./src/types/modalProps.ts",
+      "development": "./src/types/modalProps.ts"
+    },
+    "./types/plugin-files": {
+      "types": "./src/types/plugin-files.ts",
+      "development": "./src/types/plugin-files.ts"
+    },
+    "./src/*": "./src/*"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src/ tests/ --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@actual-app/components": "workspace:*",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "i18next": "^25.10.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-i18next": "^16.6.6",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.18.1",
+    "typescript-strict-plugin": "^2.4.4",
+    "vite": "^8.0.5",
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^4.1.2"
+  },
+  "peerDependencies": {
+    "@emotion/css": "^11.13.5",
+    "i18next": "^25.10.10",
+    "react": ">=19.2",
+    "react-aria-components": "^1.7.1",
+    "react-dom": ">=19.2",
+    "react-i18next": "^16.6.6",
+    "usehooks-ts": "^3.1.1"
+  }
+}
