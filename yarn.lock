@@ -226,6 +226,7 @@ __metadata:
     "@types/node": "npm:^22.19.17"
     "@types/supertest": "npm:^7.2.0"
     "@typescript/native-preview": "npm:beta"
+    adm-zip: "npm:^0.5.17"
     akahu: "npm:^2.5.1"
     bcrypt: "npm:^6.0.0"
     better-sqlite3: "npm:^12.8.0"
@@ -242,6 +243,7 @@ __metadata:
     migrate: "npm:^2.1.0"
     nodemon: "npm:^3.1.14"
     openid-client: "npm:^5.7.1"
+    path-to-regexp: "npm:^8.4.2"
     pluggy-sdk: "npm:^0.83.0"
     supertest: "npm:^7.2.2"
     typescript-strict-plugin: "npm:^2.4.4"
@@ -23196,7 +23198,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"path-to-regexp@npm:^8.0.0":
+"path-to-regexp@npm:^8.0.0, path-to-regexp@npm:^8.4.2":
   version: 8.4.2
   resolution: "path-to-regexp@npm:8.4.2"
   checksum: 10/70fd2cbce0b962cbcf4d312af07818bfce2bae11c09cf3bd86be99c0e30168238a1a7b02b18b452e73f075897df04597d30d63e56da7be41eecfc37998693389

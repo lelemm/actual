@@ -45,6 +45,14 @@ export default defineConfig({
           __dirname,
           'src/scripts/reset-password.js',
         ),
+        'scripts/enable-plugins': path.resolve(
+          __dirname,
+          'src/scripts/enable-plugins.js',
+        ),
+        'scripts/disable-plugins': path.resolve(
+          __dirname,
+          'src/scripts/disable-plugins.js',
+        ),
         'scripts/disable-openid': path.resolve(
           __dirname,
           'src/scripts/disable-openid.js',
@@ -57,6 +65,7 @@ export default defineConfig({
           __dirname,
           'src/scripts/health-check.js',
         ),
+        'src/plugin-runner': path.resolve(__dirname, 'src/plugin-runner.js'),
       },
       output: {
         format: 'esm',
