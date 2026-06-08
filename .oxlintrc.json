@@ -411,6 +411,12 @@
       }
     },
     {
+      "files": ["packages/bank-sync-plugin-simplefin/frontend/src/**/*"],
+      "rules": {
+        "actual/no-anchor-tag": "off"
+      }
+    },
+    {
       "files": ["packages/desktop-client/**/*.{js,ts,jsx,tsx}"],
       "rules": {
         "typescript-paths/absolute-parent-import": [

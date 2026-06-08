@@ -66,6 +66,30 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@actual-app/bank-sync-plugin-simplefin@workspace:packages/bank-sync-plugin-simplefin":
+  version: 0.0.0-use.local
+  resolution: "@actual-app/bank-sync-plugin-simplefin@workspace:packages/bank-sync-plugin-simplefin"
+  dependencies:
+    "@actual-app/components": "workspace:*"
+    "@actual-app/plugins-core": "workspace:*"
+    "@actual-app/plugins-core-sync-server": "workspace:*"
+    "@module-federation/vite": "npm:^1.4.1"
+    "@types/node": "npm:^22.19.17"
+    "@types/react": "npm:^19.2.14"
+    "@types/react-dom": "npm:^19.2.3"
+    "@vitejs/plugin-react-swc": "npm:^3.10.2"
+    archiver: "npm:^7.0.0"
+    axios: "npm:^1.6.0"
+    esbuild: "npm:^0.24.0"
+    i18next: "npm:^25.10.10"
+    react: "npm:19.2.4"
+    react-dom: "npm:19.2.4"
+    react-i18next: "npm:^16.6.6"
+    typescript: "npm:^6.0.2"
+    vite: "npm:^8.0.5"
+  languageName: unknown
+  linkType: soft
+
 "@actual-app/ci-actions@workspace:*, @actual-app/ci-actions@workspace:packages/ci-actions":
   version: 0.0.0-use.local
   resolution: "@actual-app/ci-actions@workspace:packages/ci-actions"
@@ -12738,7 +12762,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"axios@npm:^1.13.5, axios@npm:^1.6.0":
+"axios@npm:^1.13.5":
   version: 1.17.0
   resolution: "axios@npm:1.17.0"
   dependencies:
@@ -12750,7 +12774,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"axios@npm:^1.2.1":
+"axios@npm:^1.2.1, axios@npm:^1.6.0":
   version: 1.16.1
   resolution: "axios@npm:1.16.1"
   dependencies:
