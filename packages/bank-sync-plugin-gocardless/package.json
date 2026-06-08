@@ -1,0 +1,63 @@
+{
+  "name": "@actual-app/bank-sync-plugin-gocardless",
+  "version": "0.0.1",
+  "description": "GoCardless bank sync plugin for Actual Budget",
+  "keywords": [
+    "actual",
+    "bank-sync",
+    "gocardless",
+    "plugin"
+  ],
+  "license": "MIT",
+  "author": "Actual Budget",
+  "type": "module",
+  "main": "dist/index.js",
+  "imports": {
+    "#gocardless-node.types": "./src/gocardless-node.types.ts",
+    "#gocardless.types": "./src/gocardless.types.ts",
+    "#legacy/errors": "./legacy/errors.js",
+    "#manifest": "./src/manifest.ts",
+    "#util/payee-name": "./src/util/payee-name.js",
+    "#util/title": "./src/util/title/index.js",
+    "#utils": "./src/utils.js"
+  },
+  "scripts": {
+    "build": "npm run build:compile && npm run build:bundle && npm run build:frontend && npm run build:manifest && npm run build:zip",
+    "build:compile": "tsc -b",
+    "build:bundle": "node scripts/build-bundle.cjs",
+    "build:frontend": "vite build",
+    "build:manifest": "node scripts/build-manifest.cjs",
+    "build:zip": "node scripts/build-zip.cjs",
+    "deploy": "npm run build && npm run install:plugin",
+    "install:plugin": "node scripts/install-plugin.cjs",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist frontend-build *.zip",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@actual-app/components": "workspace:*",
+    "@actual-app/plugins-core": "workspace:*",
+    "@actual-app/plugins-core-sync-server": "workspace:*",
+    "axios": "^1.6.0",
+    "date-fns": "^4.1.0",
+    "i18next": "^25.10.10",
+    "jws": "^3.2.2",
+    "nordigen-node": "^1.3.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-i18next": "^16.6.6",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.4.1",
+    "@types/jws": "^3.2.11",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^3.10.2",
+    "archiver": "^7.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.5"
+  }
+}

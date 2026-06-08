@@ -390,6 +390,7 @@
       "files": [
         "packages/api/migrations/*",
         "packages/loot-core/migrations/*",
+        "packages/bank-sync-plugin-gocardless/src/banks/*.js",
         "packages/sync-server/src/app-gocardless/banks/*.ts",
         "*.config.{ts,mts,mjs}"
       ],
@@ -399,6 +400,12 @@
     },
     {
       "files": ["packages/docs/**/*"],
+      "rules": {
+        "actual/no-anchor-tag": "off"
+      }
+    },
+    {
+      "files": ["packages/bank-sync-plugin-gocardless/frontend/src/**/*"],
       "rules": {
         "actual/no-anchor-tag": "off"
       }
