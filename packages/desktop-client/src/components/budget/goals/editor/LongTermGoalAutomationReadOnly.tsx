@@ -19,11 +19,14 @@ export function LongTermGoalAutomationReadOnly({
     amountToInteger(template.amount, format.currency.decimalPlaces),
     'financial',
   );
+  const displayAmount = template.amountFormula ?? amount;
 
   return (
     <Trans>
       Long-term goal of{' '}
-      <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>
+      <FinancialText>
+        {{ amount: displayAmount } as TransObjectLiteral}
+      </FinancialText>
     </Trans>
   );
 }

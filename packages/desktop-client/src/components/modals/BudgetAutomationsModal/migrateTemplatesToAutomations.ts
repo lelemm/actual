@@ -21,6 +21,8 @@ function getDisplayTypeFromTemplate(template: Template): DisplayTemplateType {
     case 'average':
     case 'copy':
       return 'historical';
+    case 'formula':
+      return 'formula';
     case 'by':
     case 'spend':
       return 'by';

@@ -24,9 +24,10 @@ import {
   hideNativeDateIconClassName,
   InputField,
 } from '#components/mobile/MobileForms';
-import { AmountInput } from '#components/util/AmountInput';
 import { GenericInput } from '#components/util/GenericInput';
 import { useFormat } from '#hooks/useFormat';
+
+import { FormulaAmountInput, FormulaModeButton } from './FormulaAmountInput';
 
 type MonthFieldProps = {
   id: string;
@@ -72,11 +73,13 @@ function MonthField({ id, value, onChange }: MonthFieldProps) {
 
 type BySaveAutomationProps = {
   template: ByTemplate | SpendTemplate;
+  categoryBadges?: Record<string, string>;
   dispatch: (action: Action) => void;
 };
 
 export const BySaveAutomation = ({
   template,
+  categoryBadges,
   dispatch,
 }: BySaveAutomationProps) => {
   const { t } = useTranslation();
@@ -103,26 +106,42 @@ export const BySaveAutomation = ({
   const repeats = !!template.repeat;
   const spendDown = template.type === 'spend';
   const fromMonth = template.type === 'spend' ? template.from : '';
+  const hasAmountFormula = template.amountFormula !== undefined;
+
+  const amountField = (
+    <FormField style={{ flex: hasAmountFormula ? 1 : TWO_UP_FIELD_FLEX }}>
+      <FormLabel title={t('Total amount')} htmlFor="by-amount-field" />
+      <FormulaAmountInput
+        id="by-amount-field"
+        amount={amount}
+        formula={template.amountFormula}
+        categoryBadges={categoryBadges}
+        onAmountUpdate={(value: number) =>
+          dispatch(
+            updateTemplate({
+              type: template.type,
+              amount: integerToAmount(value, format.currency.decimalPlaces),
+            }),
+          )
+        }
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: template.type, amountFormula }))
+        }
+      />
+    </FormField>
+  );
 
   return (
-    <>
+    <View style={{ position: 'relative', paddingTop: 20 }}>
+      <FormulaModeButton
+        formula={template.amountFormula}
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: template.type, amountFormula }))
+        }
+      />
+      {hasAmountFormula && amountField}
       <SpaceBetween align="center" gap={10} style={{ marginTop: 10 }}>
-        <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
-          <FormLabel title={t('Total amount')} htmlFor="by-amount-field" />
-          <AmountInput
-            id="by-amount-field"
-            value={amount}
-            zeroSign="+"
-            onUpdate={(value: number) =>
-              dispatch(
-                updateTemplate({
-                  type: template.type,
-                  amount: integerToAmount(value, format.currency.decimalPlaces),
-                }),
-              )
-            }
-          />
-        </FormField>
+        {!hasAmountFormula && amountField}
         <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
           <FormLabel title={t('Target month')} htmlFor="by-month-field" />
           <MonthField
@@ -285,6 +304,6 @@ export const BySaveAutomation = ({
           </FormField>
         </SpaceBetween>
       )}
-    </>
+    </View>
   );
 };

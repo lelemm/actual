@@ -213,6 +213,47 @@ describe('validateAutomation adjustment range', () => {
   });
 });
 
+describe('validateAutomation formulas', () => {
+  const today = new Date('2026-01-15');
+
+  it('treats a bare equals sign as an incomplete formula automation', () => {
+    expect(
+      validateAutomation(
+        {
+          type: 'formula',
+          formula: '=',
+          directive: 'template',
+          priority: 1,
+        },
+        'formula',
+        [],
+        [],
+        today,
+      ),
+    ).toEqual({ kind: 'formula-missing', field: 'formula' });
+  });
+
+  it('treats a bare equals sign as an incomplete amount formula', () => {
+    expect(
+      validateAutomation(
+        {
+          type: 'periodic',
+          amount: 100,
+          amountFormula: '=',
+          period: { period: 'month', amount: 1 },
+          starting: '2026-01-01',
+          directive: 'template',
+          priority: 1,
+        },
+        'fixed',
+        [],
+        [],
+        today,
+      ),
+    ).toEqual({ kind: 'formula-missing', field: 'amount' });
+  });
+});
+
 describe('validateSchedulePriorities', () => {
   function scheduleAt(name: string, priority: number): Template {
     return { type: 'schedule', name, directive: 'template', priority };

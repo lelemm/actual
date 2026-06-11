@@ -3,14 +3,20 @@ import { vi } from 'vitest';
 import * as aql from '#server/aql';
 import * as db from '#server/db';
 import type { DbCategory } from '#server/db';
+import * as sheet from '#server/sheet';
+import type { Node } from '#server/spreadsheet/spreadsheet';
 import { amountToInteger } from '#shared/util';
-import type { CategoryEntity } from '#types/models';
+import type { CategoryEntity, CategoryGroupEntity } from '#types/models';
 import type { ByTemplate, Template } from '#types/models/templates';
 
 import * as actions from './actions';
 import { CategoryTemplateContext } from './category-template-context';
 import { distributeRemainder } from './goal-template';
 import * as statements from './statements';
+
+function mockSheetNode(value: number): Node {
+  return { value } as Node;
+}
 
 // Mock getSheetValue and getCategories
 vi.mock('./actions', () => ({
@@ -25,6 +31,10 @@ vi.mock('#server/db', () => ({
 
 vi.mock('#server/aql', () => ({
   aqlQuery: vi.fn(),
+}));
+
+vi.mock('#server/sheet', () => ({
+  getCell: vi.fn(() => mockSheetNode(0)),
 }));
 
 vi.mock('./statements', () => ({
@@ -64,6 +74,8 @@ class TestCategoryTemplateContext extends CategoryTemplateContext {
     budgeted: number,
     currencyCode: string = 'USD',
     hideDecimal: boolean = false,
+    categories: CategoryEntity[] = [category],
+    categoryGroups: CategoryGroupEntity[] = [],
   ) {
     super(
       templates,
@@ -73,6 +85,10 @@ class TestCategoryTemplateContext extends CategoryTemplateContext {
       budgeted,
       currencyCode,
       hideDecimal,
+      false,
+      false,
+      categories,
+      categoryGroups,
     );
   }
 }
@@ -455,6 +471,317 @@ describe('CategoryTemplateContext', () => {
 
       const result = CategoryTemplateContext.runPeriodic(template, instance);
       expect(result).toBe(amountToInteger(100));
+    });
+
+    it('should calculate amount from an amount formula', () => {
+      const template: Template = {
+        type: 'periodic',
+        amount: 100,
+        amountFormula: '=BUDGETED + 25',
+        period: {
+          period: 'month',
+          amount: 1,
+        },
+        starting: '2024-01-01',
+        directive: 'template',
+        priority: 1,
+      };
+      instance = new TestCategoryTemplateContext(
+        [],
+        {
+          id: 'test',
+          name: 'Test Category',
+          group: 'test-group',
+          is_income: false,
+        },
+        '2024-01',
+        0,
+        amountToInteger(75),
+      );
+
+      const result = CategoryTemplateContext.runPeriodic(template, instance);
+      expect(result).toBe(amountToInteger(100));
+    });
+  });
+
+  describe('formula templates', () => {
+    const category: CategoryEntity = {
+      id: 'test',
+      name: 'Test Category',
+      group: 'test-group',
+      is_income: false,
+    };
+
+    it('should budget the result of a formula template', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '=AVAILABLE_FUNDS / 2',
+        directive: 'template',
+        priority: 1,
+      };
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(200),
+        amountToInteger(200),
+      );
+
+      expect(result).toBe(amountToInteger(100));
+      expect(instance.getValues().perTemplateContribution.get(template)).toBe(
+        amountToInteger(100),
+      );
+    });
+
+    it('should use formula-backed balance caps', async () => {
+      const limitTemplate: Template = {
+        type: 'limit',
+        amount: 150,
+        amountFormula: '=200',
+        hold: false,
+        period: 'monthly',
+        directive: 'template',
+        priority: null,
+      };
+      const refillTemplate: Template = {
+        type: 'refill',
+        directive: 'template',
+        priority: 1,
+      };
+      const instance = new TestCategoryTemplateContext(
+        [limitTemplate, refillTemplate],
+        category,
+        '2024-01',
+        amountToInteger(50),
+        0,
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(300),
+        amountToInteger(300),
+      );
+
+      expect(result).toBe(amountToInteger(150));
+    });
+
+    it('should use formula-backed long-term goals', () => {
+      const goalTemplate: Template = {
+        type: 'goal',
+        amount: 1000,
+        amountFormula: '=1200',
+        directive: 'goal',
+      };
+      const instance = new TestCategoryTemplateContext(
+        [goalTemplate],
+        category,
+        '2024-01',
+        0,
+        0,
+      );
+
+      expect(instance.getValues().goal).toBe(amountToInteger(1200));
+    });
+
+    it('should throw for formulas that do not start with equals', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '100',
+        directive: 'template',
+        priority: 1,
+      };
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+      );
+
+      await expect(
+        instance.runTemplatesForPriority(
+          1,
+          amountToInteger(200),
+          amountToInteger(200),
+        ),
+      ).rejects.toThrow('Formula must start with =');
+    });
+
+    it('should read another month by negative offset', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '=BUDGETED_AT(-1)',
+        directive: 'template',
+        priority: 1,
+      };
+      vi.mocked(sheet.getCell).mockImplementation((sheetName, cell) =>
+        mockSheetNode(
+          sheetName === 'budget202312' && cell === 'budget-test'
+            ? amountToInteger(80)
+            : 0,
+        ),
+      );
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(200),
+        amountToInteger(200),
+      );
+
+      expect(result).toBe(amountToInteger(80));
+    });
+
+    it('should expose CATEGORY_ID as a composite category key', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '=BUDGETED_AT(0, CATEGORY_ID)',
+        directive: 'template',
+        priority: 1,
+      };
+      vi.mocked(sheet.getCell).mockImplementation((sheetName, cell) =>
+        mockSheetNode(
+          sheetName === 'budget202401' && cell === 'budget-test'
+            ? amountToInteger(45)
+            : 0,
+        ),
+      );
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(200),
+        amountToInteger(200),
+      );
+
+      expect(result).toBe(amountToInteger(45));
+    });
+
+    it('should read another category by composite key and MM-YYYY month', async () => {
+      const groceries: CategoryEntity = {
+        id: 'groceries',
+        name: 'Groceries',
+        group: 'test-group',
+        is_income: false,
+      };
+      const template: Template = {
+        type: 'formula',
+        formula: '=BUDGET_VALUE("budgeted", "12-2023", "category:groceries")',
+        directive: 'template',
+        priority: 1,
+      };
+      vi.mocked(sheet.getCell).mockImplementation((sheetName, cell) =>
+        mockSheetNode(
+          sheetName === 'budget202312' && cell === 'budget-groceries'
+            ? amountToInteger(125)
+            : 0,
+        ),
+      );
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+        'USD',
+        false,
+        [category, groceries],
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(200),
+        amountToInteger(200),
+      );
+
+      expect(result).toBe(amountToInteger(125));
+    });
+
+    it('should read category group budget cells by composite key', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '=BUDGETED_AT(0, "category-group:test-group") / 3',
+        directive: 'template',
+        priority: 1,
+      };
+      vi.mocked(sheet.getCell).mockImplementation((sheetName, cell) =>
+        mockSheetNode(
+          sheetName === 'budget202401' && cell === 'group-budget-test-group'
+            ? amountToInteger(90)
+            : 0,
+        ),
+      );
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+        'USD',
+        false,
+        [category],
+        [
+          {
+            id: 'test-group',
+            name: 'Test Group',
+            hidden: false,
+            categories: [category],
+          },
+        ],
+      );
+
+      const result = await instance.runTemplatesForPriority(
+        1,
+        amountToInteger(200),
+        amountToInteger(200),
+      );
+
+      expect(result).toBe(amountToInteger(30));
+    });
+
+    it('should reject untyped budget references', async () => {
+      const template: Template = {
+        type: 'formula',
+        formula: '=BUDGETED_AT(-1, "Groceries")',
+        directive: 'template',
+        priority: 1,
+      };
+      const instance = new TestCategoryTemplateContext(
+        [template],
+        category,
+        '2024-01',
+        0,
+        0,
+        'USD',
+        false,
+        [category],
+      );
+
+      await expect(
+        instance.runTemplatesForPriority(
+          1,
+          amountToInteger(200),
+          amountToInteger(200),
+        ),
+      ).rejects.toThrow('Use category:<id> or category-group:<id>');
     });
   });
 

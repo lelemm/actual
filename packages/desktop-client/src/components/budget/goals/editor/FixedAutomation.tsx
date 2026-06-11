@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
 import { SpaceBetween } from '@actual-app/components/space-between';
+import { View } from '@actual-app/components/view';
 import { amountToInteger, integerToAmount } from '@actual-app/core/shared/util';
 import type { PeriodicTemplate } from '@actual-app/core/types/models/templates';
 
@@ -11,12 +12,14 @@ import { updateTemplate } from '#components/budget/goals/actions';
 import type { Action } from '#components/budget/goals/actions';
 import { TWO_UP_FIELD_FLEX } from '#components/budget/goals/editor/fieldLayout';
 import { FormField, FormLabel } from '#components/forms';
-import { AmountInput } from '#components/util/AmountInput';
 import { GenericInput } from '#components/util/GenericInput';
 import { useFormat } from '#hooks/useFormat';
 
+import { FormulaAmountInput, FormulaModeButton } from './FormulaAmountInput';
+
 type FixedAutomationProps = {
   template: PeriodicTemplate;
+  categoryBadges?: Record<string, string>;
   dispatch: (action: Action) => void;
 };
 
@@ -24,6 +27,7 @@ type PeriodUnit = 'day' | 'week' | 'month' | 'year';
 
 export const FixedAutomation = ({
   template,
+  categoryBadges,
   dispatch,
 }: FixedAutomationProps) => {
   const { t } = useTranslation();
@@ -41,6 +45,7 @@ export const FixedAutomation = ({
   );
   const periodUnit = template.period?.period ?? 'month';
   const periodAmount = template.period?.amount ?? 1;
+  const hasAmountFormula = template.amountFormula !== undefined;
   const [rawPeriodAmount, setRawPeriodAmount] = useState(String(periodAmount));
   // Resync when a different automation row is selected (the component
   // instance is reused across rows).
@@ -60,66 +65,83 @@ export const FixedAutomation = ({
     }
   };
 
+  const amountField = (
+    <FormField style={{ flex: hasAmountFormula ? 1 : TWO_UP_FIELD_FLEX }}>
+      <FormLabel title={t('Amount')} htmlFor="amount-field" />
+      <FormulaAmountInput
+        id="amount-field"
+        amount={amount}
+        formula={template.amountFormula}
+        categoryBadges={categoryBadges}
+        onAmountUpdate={(value: number) =>
+          dispatch(
+            updateTemplate({
+              type: 'periodic',
+              amount: integerToAmount(value, format.currency.decimalPlaces),
+            }),
+          )
+        }
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: 'periodic', amountFormula }))
+        }
+      />
+    </FormField>
+  );
+
   return (
-    <SpaceBetween align="center" gap={10} style={{ marginTop: 10 }}>
-      <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
-        <FormLabel title={t('Amount')} htmlFor="amount-field" />
-        <AmountInput
-          id="amount-field"
-          value={amount}
-          zeroSign="+"
-          onUpdate={(value: number) =>
-            dispatch(
-              updateTemplate({
-                type: 'periodic',
-                amount: integerToAmount(value, format.currency.decimalPlaces),
-              }),
-            )
-          }
-        />
-      </FormField>
-      <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
-        <FormLabel title={t('Every')} htmlFor="period-amount-field" />
-        <Input
-          id="period-amount-field"
-          type="number"
-          min={1}
-          step={1}
-          value={rawPeriodAmount}
-          onChangeValue={setRawPeriodAmount}
-          onBlur={commitPeriodAmount}
-        />
-      </FormField>
-      <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
-        <FormLabel title={t('Period')} htmlFor="period-unit-field" />
-        <Select
-          id="period-unit-field"
-          value={periodUnit}
-          onChange={value =>
-            dispatch(
-              updateTemplate({
-                type: 'periodic',
-                period: {
-                  period: value,
-                  amount: periodAmount,
-                },
-              }),
-            )
-          }
-          options={periodUnitOptions}
-        />
-      </FormField>
-      <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
-        <FormLabel title={t('Starting')} htmlFor="starting-field" />
-        <GenericInput
-          type="date"
-          field="date"
-          value={template.starting ?? ''}
-          onChange={(value: string) =>
-            dispatch(updateTemplate({ type: 'periodic', starting: value }))
-          }
-        />
-      </FormField>
-    </SpaceBetween>
+    <View style={{ position: 'relative', paddingTop: 20 }}>
+      <FormulaModeButton
+        formula={template.amountFormula}
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: 'periodic', amountFormula }))
+        }
+      />
+      {hasAmountFormula && amountField}
+      <SpaceBetween align="center" gap={10} style={{ marginTop: 10 }}>
+        {!hasAmountFormula && amountField}
+        <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
+          <FormLabel title={t('Every')} htmlFor="period-amount-field" />
+          <Input
+            id="period-amount-field"
+            type="number"
+            min={1}
+            step={1}
+            value={rawPeriodAmount}
+            onChangeValue={setRawPeriodAmount}
+            onBlur={commitPeriodAmount}
+          />
+        </FormField>
+        <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
+          <FormLabel title={t('Period')} htmlFor="period-unit-field" />
+          <Select
+            id="period-unit-field"
+            value={periodUnit}
+            onChange={value =>
+              dispatch(
+                updateTemplate({
+                  type: 'periodic',
+                  period: {
+                    period: value,
+                    amount: periodAmount,
+                  },
+                }),
+              )
+            }
+            options={periodUnitOptions}
+          />
+        </FormField>
+        <FormField style={{ flex: TWO_UP_FIELD_FLEX }}>
+          <FormLabel title={t('Starting')} htmlFor="starting-field" />
+          <GenericInput
+            type="date"
+            field="date"
+            value={template.starting ?? ''}
+            onChange={(value: string) =>
+              dispatch(updateTemplate({ type: 'periodic', starting: value }))
+            }
+          />
+        </FormField>
+      </SpaceBetween>
+    </View>
   );
 };

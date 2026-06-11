@@ -20,20 +20,24 @@ import {
 } from '#components/budget/goals/editor/fieldLayout';
 import { FormField, FormLabel } from '#components/forms';
 import { TapField } from '#components/mobile/MobileForms';
-import { PercentInput } from '#components/util/PercentInput';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
+
+import { FormulaModeButton } from './FormulaAmountInput';
+import { FormulaPercentInput } from './FormulaPercentInput';
 
 type PercentageAutomationProps = {
   dispatch: (action: Action) => void;
   template: PercentageTemplate;
   categories: CategoryGroupEntity[];
+  categoryBadges?: Record<string, string>;
 };
 
 export const PercentageAutomation = ({
   dispatch,
   template,
   categories,
+  categoryBadges,
 }: PercentageAutomationProps) => {
   const { t } = useTranslation();
   const reduxDispatch = useDispatch();
@@ -55,9 +59,49 @@ export const PercentageAutomation = ({
       .find(category => category.id === template.category)?.name ??
     template.category ??
     '';
+  const hasPercentFormula = template.percentFormula !== undefined;
+
+  const percentageField = (
+    <FormField style={{ flex: hasPercentFormula ? 1 : fieldFlex }}>
+      <FormLabel title={t('Percentage')} htmlFor="percent-field" />
+      <FormulaPercentInput
+        id="percent-field"
+        percent={template.percent}
+        formula={template.percentFormula}
+        categoryBadges={categoryBadges}
+        onPercentUpdate={(percent: number) =>
+          dispatch(
+            updateTemplate({
+              type: 'percentage',
+              percent,
+            }),
+          )
+        }
+        onFormulaUpdate={percentFormula =>
+          dispatch(updateTemplate({ type: 'percentage', percentFormula }))
+        }
+      />
+    </FormField>
+  );
 
   return (
-    <>
+    <View style={{ position: 'relative', paddingTop: 20 }}>
+      <FormulaModeButton
+        formula={template.percentFormula}
+        valueLabel={t('Use percentage')}
+        onFormulaUpdate={percentFormula =>
+          dispatch(
+            updateTemplate({
+              type: 'percentage',
+              percentFormula:
+                percentFormula === undefined
+                  ? undefined
+                  : `=${template.percent || 0}`,
+            }),
+          )
+        }
+      />
+      {hasPercentFormula && percentageField}
       <SpaceBetween
         gap={isNarrowWidth ? MOBILE_FIELD_GAP : DESKTOP_FIELD_GAP}
         style={{ marginTop: 10 }}
@@ -106,22 +150,7 @@ export const PercentageAutomation = ({
             />
           )}
         </FormField>
-        <FormField style={{ flex: fieldFlex }}>
-          <FormLabel title={t('Percentage')} htmlFor="percent-field" />
-          <PercentInput
-            id="percent-field"
-            key="percent-input"
-            value={template.percent}
-            onUpdatePercent={(percent: number) =>
-              dispatch(
-                updateTemplate({
-                  type: 'percentage',
-                  percent,
-                }),
-              )
-            }
-          />
-        </FormField>
+        {!hasPercentFormula && percentageField}
       </SpaceBetween>
       <SpaceBetween
         gap={isNarrowWidth ? MOBILE_FIELD_GAP : DESKTOP_FIELD_GAP}
@@ -155,6 +184,6 @@ export const PercentageAutomation = ({
         </FormField>
         {!isNarrowWidth && <View style={{ flex: 1 }} />}
       </SpaceBetween>
-    </>
+    </View>
   );
 };

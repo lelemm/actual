@@ -7,6 +7,7 @@ import { View } from '@actual-app/components/view';
 import { displayTemplateTypes } from '#components/budget/goals/constants';
 import type { DisplayTemplateType } from '#components/budget/goals/constants';
 import { getDisplayTemplateMeta } from '#components/budget/goals/displayTemplateMeta';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 
 // Types managed in the Options sidebar section, not as contribution-type
 // swaps.
@@ -22,7 +23,9 @@ type TypePickerProps = {
 
 export function TypePicker({ active, disabledTypes, onPick }: TypePickerProps) {
   const { t } = useTranslation();
+  const formulaMode = useFeatureFlag('formulaMode');
   const entries = displayTemplateTypes
+    .filter(id => id !== 'formula' || formulaMode || active === 'formula')
     .filter(id => !NON_CONTRIBUTION_TYPES.has(id))
     .map(id => [id, getDisplayTemplateMeta(id)] as const);
   const disabledHint = t('Only one of this type allowed per category');

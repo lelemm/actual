@@ -96,7 +96,7 @@ export const AmountAdjustment = ({
             onChange={changeUnit}
             options={[
               ['none', t('No adjustment')],
-              ['fixed', t('Fixed amount')],
+              ['fixed', t('By amount')],
               ['percent', t('Percentage')],
             ]}
             style={{ width: 160 }}

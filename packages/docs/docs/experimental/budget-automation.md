@@ -104,11 +104,108 @@ Dining out budget automations:
 
 ![restaurant budget tooltip](/img/goal-template/automation-tooltip-2.webp)
 
+### Excel formulas in automations {#automation-formulas}
+
+If you have **Excel formula mode** enabled, some automation fields can be calculated with an Excel-style formula.
+
+Formula support is available in the UI for:
+
+- A full **Formula** automation, where the formula result is the monthly amount to budget.
+- The amount field in **By amount**, **Save by date**, **Balance cap**, and **Long-term goal** automations.
+- The percentage field in **% of income** automations. A formula result of `15` means `15%`.
+
+Formula fields must start with `=` and must return a number. Monetary formulas return normal money units, such as `25` for `$25.00`. Actual stores and applies those values internally using your budget currency precision.
+
+When editing a formula-backed field, click **Run formulas** to evaluate it in the automation editor. This updates the preview and stores the calculated value as the field's current value. When you later apply budget automations from the budget page, Actual evaluates formulas again and uses the fresh value.
+
+#### Formula variables {#automation-formula-variables}
+
+Budget automation formulas can use these variables:
+
+| Variable          | Description                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `MONTH`           | The month being budgeted, in `YYYY-MM` format                                            |
+| `CATEGORY_ID`     | The typed reference for the category this automation belongs to, such as `category:<id>` |
+| `CATEGORY_NAME`   | The name of the category this automation belongs to                                      |
+| `BUDGETED`        | Amount already budgeted in this category for the month                                   |
+| `BALANCE`         | Category balance carried into the month                                                  |
+| `CARRYOVER`       | Whether the category has carryover enabled                                               |
+| `AVAILABLE_FUNDS` | Funds still available when this automation priority runs                                 |
+| `TO_BUDGET_START` | To Budget amount before the current priority group is run                                |
+
+Example:
+
+```text
+=IF(BALANCE < 50, 100, 25)
+```
+
+#### Reading other budget cells {#automation-formula-budget-cells}
+
+Use the budget helper functions to read budget values from the current month, another month, another category, or a category group.
+
+| Function       | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `BUDGETED_AT`  | Amount budgeted for a month and category or category group                           |
+| `SPENT_AT`     | Spending/activity for a month and category or category group                         |
+| `BALANCE_AT`   | Balance for a month and category or category group                                   |
+| `GOAL_AT`      | Goal amount for a month and category                                                 |
+| `BUDGET_VALUE` | Generic form for `budgeted`, `spent`, `balance`, or `goal`. `goal` is category-only. |
+
+The month argument is optional. You can pass:
+
+- A relative month offset, such as `-1` for last month or `-10` for ten months ago.
+- A month string in `YYYY-MM` format, such as `"2026-06"`.
+- A month string in `MM-YYYY` format, such as `"06-2026"`.
+
+The reference argument is also optional. If omitted, Actual uses the current category. To reference another category or category group, choose it from the formula autocomplete. The editor inserts a typed reference and displays it as a badge, for example `Bills / Cell phone` or `Bills`.
+
+Explicit references must use one of these formats:
+
+- `category:<id>` for a category.
+- `category-group:<id>` for a category group.
+
+Category names can be duplicated, so names are not accepted as formula references.
+
+Examples:
+
+```text
+=BUDGETED_AT(-1)
+=SPENT_AT(-3, "category:9f2286fc-bbce-4171-9dbe-a580d27abfa8")
+=BALANCE_AT("06-2026", "category-group:4d2371c4-240d-41e0-94a9-65fa7a2f94db")
+=BUDGET_VALUE("goal", "2026-06", "category:9f2286fc-bbce-4171-9dbe-a580d27abfa8")
+```
+
+#### Examples {#automation-formula-examples}
+
+Budget half of what was budgeted to another category this month:
+
+```text
+=BUDGETED_AT(0, "category:9f2286fc-bbce-4171-9dbe-a580d27abfa8") / 2
+```
+
+Budget enough to bring the category balance up to `300`, but never less than `0`:
+
+```text
+=MAX(0, 300 - BALANCE)
+```
+
+Use a larger fixed amount in December:
+
+```text
+=IF(RIGHT(MONTH, 2) = "12", 200, 75)
+```
+
+Set a `% of income` automation to use `20%` while available funds are high, otherwise `10%`:
+
+```text
+=IF(AVAILABLE_FUNDS > 1000, 20, 10)
+```
+
 ### Fixed Amount {#fixed-amount}
 
 This is the simplest type of automation. The amount (A) will be budgeted at the cadence you choose (B & C) with the starting date you set (D).
 
-![fixed amount automation](/img/goal-template/fixed-amount-automation.webp)
+![by amount automation](/img/goal-template/fixed-amount-automation.webp)
 
 :::info
 For weeks or days, the entire month will be budgeted based on the number of weeks/days in that month.
@@ -117,7 +214,7 @@ For weeks, the number of weeks in a month is based on the weekday of your start 
 :::
 
 :::tip
-You can give different priorities to multiple _Fixed amount_ automations in the same category and they will be respected when the budget fills.
+You can give different priorities to multiple _By amount_ automations in the same category and they will be respected when the budget fills.
 
 This [blog post using note templates](../../blog/2024-03-25-goal-templates-with-a-twist) from 2024 goes into this in more detail.
 :::
@@ -132,7 +229,7 @@ The automation determines how much to budget each month to meet your savings goa
 
 **Options:**
 
-- **Repeat** (C). You can repeat the automation if your target is cyclical, such as bills due quarterly or yearly. If you need to repeat based on a number of days or weeks, use the _Fixed amount_ automation.
+- **Repeat** (C). You can repeat the automation if your target is cyclical, such as bills due quarterly or yearly. If you need to repeat based on a number of days or weeks, use the _By amount_ automation.
 - **Allow early spending** (D). This option allows you to spend funds along the way. Starting in the month you choose, you can spend from the category without the automation recalculating the remaining monthly amounts. By the target date, the remaining balance will be the amount you did not spend earlier. This option is handy for times when spending happens months before the event, like travel savings, wedding plans or the birthday gifts in our example.
 
 :::warning
@@ -236,11 +333,11 @@ Scheduled expenses (e.g. insurance, property rates, etc.) often increase year on
 
 This feature adds adjustments to either [_Cover schedule_](#cover-schedule) or [_From history_](#from-history) automations.
 
-You can adjust your automation by either a _Fixed amount_ or by _Percentage_.
+You can adjust your automation by either _By amount_ or by _Percentage_.
 
 ![adjustment types](/img/goal-template/adjustment-type.webp)
 
-The _Fixed amount_ type can either increase or decrease the amount budgeted. The default is to increase the amount. Click the **+** to switch.
+The _By amount_ type can either increase or decrease the amount budgeted. The default is to increase the amount. Click the **+** to switch.
 
 ![fixed amount adjustment](/img/goal-template/adjustment-fixed.webp)
 
@@ -286,7 +383,7 @@ So, the budget covers 4 Saturday meals and 4 work weeks. The projected budget is
 
 ![balance cap example showing October](/img/goal-template/october-restaurants.webp)
 
-Here’s another example. We want to budget 300 every 2 weeks, but not in months with 3 Fridays. We place a 600 balance cap on our category and start a _Fixed amount_ automation at 300 every 2 weeks on a Friday.
+Here’s another example. We want to budget 300 every 2 weeks, but not in months with 3 Fridays. We place a 600 balance cap on our category and start a _By amount_ automation at 300 every 2 weeks on a Friday.
 
 There are 3 Fridays in July, but the Balance cap holds our grocery budget at 600.00:
 

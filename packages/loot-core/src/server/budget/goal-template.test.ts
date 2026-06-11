@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import * as aql from '#server/aql';
 import * as db from '#server/db';
 import type { DbCategory } from '#server/db';
+import * as sheet from '#server/sheet';
 import type { CategoryEntity } from '#types/models';
 import type { Template } from '#types/models/templates';
 
@@ -25,10 +26,15 @@ vi.mock('./actions', () => ({
 vi.mock('#server/db', () => ({
   getCategories: vi.fn(),
   first: vi.fn(),
+  updateWithSchema: vi.fn(),
 }));
 
 vi.mock('#server/aql', () => ({
   aqlQuery: vi.fn(),
+}));
+
+vi.mock('#server/sheet', () => ({
+  getCell: vi.fn(() => ({ value: 0 })),
 }));
 
 vi.mock('#server/sync', () => ({
@@ -70,7 +76,46 @@ function setupAqlForCategoryLookup(cat: CategoryEntity) {
     }
     if (queryStr.includes('category_groups')) {
       return {
-        data: [{ id: cat.group, hidden: false, categories: [cat] }],
+        data: [
+          {
+            id: cat.group,
+            name: 'Test Group',
+            hidden: false,
+            categories: [cat],
+          },
+        ],
+        dependencies: [],
+      };
+    }
+    if (queryStr.includes('categories')) {
+      return { data: [cat], dependencies: [] };
+    }
+    return { data: [], dependencies: [] };
+  });
+}
+
+function setupAqlForCategoryLookupWithFormulaScope(
+  cat: CategoryEntity,
+  formulaCategories: CategoryEntity[],
+) {
+  vi.mocked(aql.aqlQuery).mockImplementation(async (query: unknown) => {
+    const queryStr = JSON.stringify(query);
+    if (queryStr.includes('hideFraction')) {
+      return { data: [{ value: 'false' }], dependencies: [] };
+    }
+    if (queryStr.includes('defaultCurrencyCode')) {
+      return { data: [{ value: 'USD' }], dependencies: [] };
+    }
+    if (queryStr.includes('category_groups')) {
+      return {
+        data: [
+          {
+            id: cat.group,
+            name: 'Test Group',
+            hidden: false,
+            categories: formulaCategories,
+          },
+        ],
         dependencies: [],
       };
     }
@@ -107,7 +152,14 @@ function setupAqlForWideScope(
     }
     if (queryStr.includes('category_groups')) {
       return {
-        data: [{ id: 'g1', hidden: false, categories: categoriesInGroup }],
+        data: [
+          {
+            id: 'g1',
+            name: 'Test Group',
+            hidden: false,
+            categories: categoriesInGroup,
+          },
+        ],
         dependencies: [],
       };
     }
@@ -122,6 +174,9 @@ describe('dryRunCategoryTemplate', () => {
       [] as Awaited<ReturnType<typeof statements.getActiveSchedules>>,
     );
     vi.mocked(db.getCategories).mockResolvedValue([]);
+    vi.mocked(sheet.getCell).mockReturnValue({ value: 0 } as ReturnType<
+      typeof sheet.getCell
+    >);
   });
 
   it('budgets a single periodic template through the engine end-to-end', async () => {
@@ -216,7 +271,158 @@ describe('dryRunCategoryTemplate', () => {
       categoryId: 'missing',
       templates,
     });
-    expect(result).toEqual({ budgeted: 0, perTemplate: [0] });
+    expect(result).toEqual({
+      budgeted: 0,
+      perTemplate: [0],
+      resolvedFormulaAmounts: [null],
+    });
+  });
+
+  it('returns resolved formula-backed field amounts', async () => {
+    setupSheetMock({ 'to-budget': 100000 });
+    setupAqlForCategoryLookup(category);
+
+    const templates: Template[] = [
+      {
+        type: 'periodic',
+        amount: 0,
+        amountFormula: '=125',
+        period: { period: 'week', amount: 1 },
+        starting: '2024-01-01',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+    const result = await dryRunCategoryTemplate({
+      month: '2024-01',
+      categoryId: category.id,
+      templates,
+    });
+
+    expect(result.budgeted).toBe(62500);
+    expect(result.perTemplate).toEqual([62500]);
+    expect(result.resolvedFormulaAmounts).toEqual([125]);
+  });
+
+  it('returns resolved formula-backed percentage values', async () => {
+    setupSheetMock({ 'to-budget': 100000, 'total-income': 200000 });
+    setupAqlForCategoryLookup(category);
+
+    const templates: Template[] = [
+      {
+        type: 'percentage',
+        percent: 0,
+        percentFormula: '=15',
+        previous: false,
+        category: 'all income',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+    const result = await dryRunCategoryTemplate({
+      month: '2024-01',
+      categoryId: category.id,
+      templates,
+    });
+
+    expect(result.budgeted).toBe(30000);
+    expect(result.perTemplate).toEqual([30000]);
+    expect(result.resolvedFormulaAmounts).toEqual([15]);
+  });
+
+  it('allows budget formulas to reference another category by composite key', async () => {
+    const billsCategory: CategoryEntity = {
+      id: '9f2286fc-bbce-4171-9dbe-a580d27abfa8',
+      name: 'Bills',
+      group: 'g1',
+      is_income: false,
+    };
+    setupSheetMock({ 'to-budget': 100000 });
+    vi.mocked(sheet.getCell).mockReturnValue({ value: 7500 } as ReturnType<
+      typeof sheet.getCell
+    >);
+    setupAqlForCategoryLookupWithFormulaScope(category, [
+      category,
+      billsCategory,
+    ]);
+
+    const templates: Template[] = [
+      {
+        type: 'periodic',
+        amount: 0,
+        amountFormula: `=BUDGETED_AT(0, "category:${billsCategory.id}") / 2`,
+        period: { period: 'month', amount: 1 },
+        starting: '2024-01-01',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+    const result = await dryRunCategoryTemplate({
+      month: '2024-01',
+      categoryId: category.id,
+      templates,
+    });
+
+    expect(result.budgeted).toBe(3750);
+    expect(result.resolvedFormulaAmounts).toEqual([37.5]);
+  });
+
+  it('allows budget formulas to reference category group cells', async () => {
+    setupSheetMock({ 'to-budget': 100000 });
+    vi.mocked(sheet.getCell).mockImplementation(
+      (sheetName, cell) =>
+        ({
+          value:
+            sheetName === 'budget202401' && cell === 'group-budget-g1'
+              ? 9000
+              : 0,
+        }) as ReturnType<typeof sheet.getCell>,
+    );
+    setupAqlForCategoryLookupWithFormulaScope(category, [category]);
+
+    const templates: Template[] = [
+      {
+        type: 'periodic',
+        amount: 0,
+        amountFormula: '=BUDGETED_AT(0, "category-group:g1") / 3',
+        period: { period: 'month', amount: 1 },
+        starting: '2024-01-01',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+    const result = await dryRunCategoryTemplate({
+      month: '2024-01',
+      categoryId: category.id,
+      templates,
+    });
+
+    expect(result.budgeted).toBe(3000);
+    expect(result.resolvedFormulaAmounts).toEqual([30]);
+  });
+
+  it('rejects category group references for goal formulas', async () => {
+    setupSheetMock({ 'to-budget': 100000 });
+    setupAqlForCategoryLookupWithFormulaScope(category, [category]);
+
+    const templates: Template[] = [
+      {
+        type: 'formula',
+        formula: '=GOAL_AT(0, "category-group:g1")',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+
+    await expect(
+      dryRunCategoryTemplate({
+        month: '2024-01',
+        categoryId: category.id,
+        templates,
+      }),
+    ).rejects.toThrow(
+      'Budget formula category groups do not support goal values',
+    );
   });
 
   it('shows full demand even when To Budget cannot cover it', async () => {
@@ -305,6 +511,9 @@ describe('applyMultipleCategoryTemplates', () => {
       [] as Awaited<ReturnType<typeof statements.getActiveSchedules>>,
     );
     vi.mocked(db.getCategories).mockResolvedValue([] as DbCategory[]);
+    vi.mocked(sheet.getCell).mockReturnValue({ value: 0 } as ReturnType<
+      typeof sheet.getCell
+    >);
   });
 
   it('writes per-category budgets and returns a success notification', async () => {
@@ -346,6 +555,43 @@ describe('applyMultipleCategoryTemplates', () => {
     const cat2Budget = budgetCalls.find(c => c.category === cat2.id);
     expect(cat1Budget?.amount).toBe(10000);
     expect(cat2Budget?.amount).toBe(20000);
+  });
+
+  it('persists freshly resolved UI formula values when applying templates', async () => {
+    const uiCat: CategoryEntity = {
+      ...cat1,
+      template_settings: { source: 'ui' },
+    };
+    const templates: Template[] = [
+      {
+        type: 'periodic',
+        amount: 0,
+        amountFormula: '=125',
+        period: { period: 'month', amount: 1 },
+        starting: '2024-01-01',
+        directive: 'template',
+        priority: 1,
+      },
+    ];
+    setupSheetMock({ 'to-budget': 100000 });
+    setupAqlMultiCategory([uiCat], {
+      [uiCat.id]: templates,
+    });
+
+    await applyMultipleCategoryTemplates({
+      month: '2024-01',
+      categoryIds: [uiCat.id],
+    });
+
+    expect(actions.setBudget).toHaveBeenCalledWith({
+      month: '2024-01',
+      category: uiCat.id,
+      amount: 12500,
+    });
+    expect(db.updateWithSchema).toHaveBeenCalledWith('categories', {
+      id: uiCat.id,
+      goal_def: JSON.stringify([{ ...templates[0], amount: 125 }]),
+    });
   });
 
   it('clamps lower-priority categories when funds run out', async () => {
@@ -416,6 +662,31 @@ describe('applyMultipleCategoryTemplates', () => {
 
     expect(result.message).toMatch(/There were errors/);
     expect(result.pre).toMatch(/Target month has passed/);
+    expect(actions.setBudget).not.toHaveBeenCalled();
+  });
+
+  it('returns an error notification when a formula cannot run during apply', async () => {
+    setupSheetMock({ 'to-budget': 100000 });
+    setupAqlMultiCategory([cat1], {
+      [cat1.id]: [
+        {
+          type: 'formula',
+          formula: '=GOAL_AT(0, "category-group:g1")',
+          directive: 'template',
+          priority: 1,
+        },
+      ],
+    });
+
+    const result = await applyMultipleCategoryTemplates({
+      month: '2024-01',
+      categoryIds: [cat1.id],
+    });
+
+    expect(result.message).toMatch(/There were errors/);
+    expect(result.pre).toMatch(
+      /Budget formula category groups do not support goal values/,
+    );
     expect(actions.setBudget).not.toHaveBeenCalled();
   });
 

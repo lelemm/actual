@@ -4,6 +4,7 @@ import { Select } from '@actual-app/components/select';
 import { SpaceBetween } from '@actual-app/components/space-between';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
+import { View } from '@actual-app/components/view';
 import {
   currentDate,
   dayFromDate,
@@ -20,17 +21,20 @@ import type { Action } from '#components/budget/goals/actions';
 import { TWO_UP_FIELD_FLEX } from '#components/budget/goals/editor/fieldLayout';
 import { FormField, FormLabel } from '#components/forms';
 import { LabeledCheckbox } from '#components/forms/LabeledCheckbox';
-import { AmountInput } from '#components/util/AmountInput';
 import { useDaysOfWeek } from '#hooks/useDaysOfWeek';
 import { useFormat } from '#hooks/useFormat';
 
+import { FormulaAmountInput, FormulaModeButton } from './FormulaAmountInput';
+
 type LimitAutomationProps = {
   template: LimitTemplate;
+  categoryBadges?: Record<string, string>;
   dispatch: (action: Action) => void;
 };
 
 export const LimitAutomation = ({
   template,
+  categoryBadges,
   dispatch,
 }: LimitAutomationProps) => {
   const { t } = useTranslation();
@@ -45,6 +49,7 @@ export const LimitAutomation = ({
   const start = template.start;
   const dayOfWeek = start ? getDay(parseDate(start)) : 0;
   const hold = template.hold;
+  const hasAmountFormula = template.amountFormula !== undefined;
 
   const selectButtonClassName = css({
     '&[data-hovered]': {
@@ -74,19 +79,26 @@ export const LimitAutomation = ({
   );
 
   const amountField = (
-    <FormField key="amount-field" style={{ flex: TWO_UP_FIELD_FLEX }}>
+    <FormField
+      key="amount-field"
+      style={{ flex: hasAmountFormula ? 1 : TWO_UP_FIELD_FLEX }}
+    >
       <FormLabel title={t('Amount')} htmlFor="amount-field" />
-      <AmountInput
+      <FormulaAmountInput
         id="amount-field"
-        value={amount}
-        zeroSign="+"
-        onUpdate={(value: number) =>
+        amount={amount}
+        formula={template.amountFormula}
+        categoryBadges={categoryBadges}
+        onAmountUpdate={(value: number) =>
           dispatch(
             updateTemplate({
               type: 'limit',
               amount: integerToAmount(value, format.currency.decimalPlaces),
             }),
           )
+        }
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: 'limit', amountFormula }))
         }
       />
     </FormField>
@@ -113,9 +125,16 @@ export const LimitAutomation = ({
   );
 
   return (
-    <>
+    <View style={{ position: 'relative', paddingTop: 20 }}>
+      <FormulaModeButton
+        formula={template.amountFormula}
+        onFormulaUpdate={amountFormula =>
+          dispatch(updateTemplate({ type: 'limit', amountFormula }))
+        }
+      />
+      {hasAmountFormula && amountField}
       <SpaceBetween align="center" gap={10} style={{ marginTop: 10 }}>
-        {amountField}
+        {!hasAmountFormula && amountField}
         {cadenceField}
       </SpaceBetween>
 
@@ -176,6 +195,6 @@ export const LimitAutomation = ({
           </LabeledCheckbox>
         </FormField>
       </SpaceBetween>
-    </>
+    </View>
   );
 };

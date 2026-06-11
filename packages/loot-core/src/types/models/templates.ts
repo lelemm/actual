@@ -11,6 +11,7 @@ type BaseTemplateWithPriority = {
 export type PercentageTemplate = {
   type: 'percentage';
   percent: number;
+  percentFormula?: string;
   previous: boolean;
   category: string;
 } & BaseTemplateWithPriority;
@@ -18,6 +19,7 @@ export type PercentageTemplate = {
 export type PeriodicTemplate = {
   type: 'periodic';
   amount: number;
+  amountFormula?: string;
   period: {
     period: 'day' | 'week' | 'month' | 'year';
     amount: number;
@@ -34,6 +36,7 @@ export type PeriodicTemplate = {
 export type ByTemplate = {
   type: 'by';
   amount: number;
+  amountFormula?: string;
   month: string;
   annual?: boolean;
   repeat?: number;
@@ -43,6 +46,7 @@ export type ByTemplate = {
 export type SpendTemplate = {
   type: 'spend';
   amount: number;
+  amountFormula?: string;
   month: string;
   from: string;
   annual?: boolean;
@@ -100,18 +104,25 @@ export type RefillTemplate = {
 export type GoalTemplate = {
   type: 'goal';
   amount: number;
+  amountFormula?: string;
   directive: 'goal';
 } & BaseTemplate;
 
 export type LimitTemplate = {
   type: 'limit';
   amount: number;
+  amountFormula?: string;
   hold: boolean;
   period: 'daily' | 'weekly' | 'monthly';
   start?: string;
   directive: 'template';
   priority: null;
 } & BaseTemplate;
+
+export type FormulaTemplate = {
+  type: 'formula';
+  formula: string;
+} & BaseTemplateWithPriority;
 
 type ErrorTemplate = {
   type: 'error';
@@ -133,4 +144,5 @@ export type Template =
   | CopyTemplate
   | RefillTemplate
   | LimitTemplate
+  | FormulaTemplate
   | ErrorTemplate;

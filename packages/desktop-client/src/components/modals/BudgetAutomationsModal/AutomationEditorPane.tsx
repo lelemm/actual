@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
@@ -21,6 +22,7 @@ import {
   AutomationErrorDetail,
   AutomationErrorTitle,
 } from '#components/budget/goals/automationMessages';
+import { getCategoryFormulaBadges } from '#components/budget/goals/categoryFormulaBadges';
 import type { DisplayTemplateType } from '#components/budget/goals/constants';
 import { getDisplayTemplateMeta } from '#components/budget/goals/displayTemplateMeta';
 import {
@@ -75,6 +77,7 @@ type AutomationEditorPaneProps = {
   automationErrors: (AutomationErrorKind | null)[];
   schedules: readonly ScheduleEntity[];
   categories: CategoryGroupEntity[];
+  formulaCategories: CategoryGroupEntity[];
   hasLimitAutomation: boolean;
   onAddLimitAutomation: () => void;
   setEntries: (fn: (prev: AutomationEntry[]) => AutomationEntry[]) => void;
@@ -87,6 +90,7 @@ export function AutomationEditorPane({
   automationErrors,
   schedules,
   categories,
+  formulaCategories,
   hasLimitAutomation,
   onAddLimitAutomation,
   setEntries,
@@ -95,6 +99,10 @@ export function AutomationEditorPane({
   const { t } = useTranslation();
   const active = entries[activeIdx];
   const activeError = automationErrors[activeIdx];
+  const categoryBadges = useMemo(
+    () => getCategoryFormulaBadges(formulaCategories),
+    [formulaCategories],
+  );
 
   const state = active ? getInitialState(active.template) : null;
 
@@ -148,6 +156,7 @@ export function AutomationEditorPane({
           case 'average':
           case 'copy':
           case 'refill':
+          case 'formula':
             return { ...entry, template: { ...t, priority } };
           default:
             return entry;
@@ -282,6 +291,7 @@ export function AutomationEditorPane({
                 dispatch={dispatch}
                 schedules={schedules}
                 categories={categories}
+                categoryBadges={categoryBadges}
                 hasLimitAutomation={hasLimitAutomation}
                 onAddLimitAutomation={onAddLimitAutomation}
               />
@@ -296,6 +306,7 @@ export function AutomationEditorPane({
             dispatch={dispatch}
             schedules={schedules}
             categories={categories}
+            categoryBadges={categoryBadges}
             hasLimitAutomation={hasLimitAutomation}
             onAddLimitAutomation={onAddLimitAutomation}
           />

@@ -2,6 +2,7 @@ import type {
   AverageTemplate,
   ByTemplate,
   CopyTemplate,
+  FormulaTemplate,
   GoalTemplate,
   LimitTemplate,
   PercentageTemplate,
@@ -18,6 +19,7 @@ export const displayTemplateTypes = [
   'by',
   'percentage',
   'historical',
+  'formula',
   'limit',
   'refill',
   'remainder',
@@ -54,6 +56,10 @@ export type ReducerState =
   | {
       template: ByTemplate | SpendTemplate;
       displayType: 'by';
+    }
+  | {
+      template: FormulaTemplate;
+      displayType: 'formula';
     }
   | {
       template: RemainderTemplate;

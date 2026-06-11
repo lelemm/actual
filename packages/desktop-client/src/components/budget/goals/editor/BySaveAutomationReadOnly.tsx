@@ -25,6 +25,7 @@ export const BySaveAutomationReadOnly = ({
     amountToInteger(template.amount, format.currency.decimalPlaces),
     'financial',
   );
+  const displayAmount = template.amountFormula ?? amount;
   const month = formatMonthLabel(template.month, locale);
   const repeat = template.repeat ?? 1;
   const from =
@@ -34,7 +35,10 @@ export const BySaveAutomationReadOnly = ({
     if (from) {
       return (
         <Trans count={repeat}>
-          Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          Save{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           by {{ month }}, early spending from {{ from }}, repeating every{' '}
           {{ count: repeat }} years
         </Trans>
@@ -42,7 +46,10 @@ export const BySaveAutomationReadOnly = ({
     }
     return (
       <Trans count={repeat}>
-        Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+        Save{' '}
+        <FinancialText>
+          {{ amount: displayAmount } as TransObjectLiteral}
+        </FinancialText>{' '}
         by {{ month }}, repeating every {{ count: repeat }} years
       </Trans>
     );
@@ -52,7 +59,10 @@ export const BySaveAutomationReadOnly = ({
     if (from) {
       return (
         <Trans count={repeat}>
-          Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          Save{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           by {{ month }}, early spending from {{ from }}, repeating every{' '}
           {{ count: repeat }} months
         </Trans>
@@ -60,7 +70,10 @@ export const BySaveAutomationReadOnly = ({
     }
     return (
       <Trans count={repeat}>
-        Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+        Save{' '}
+        <FinancialText>
+          {{ amount: displayAmount } as TransObjectLiteral}
+        </FinancialText>{' '}
         by {{ month }}, repeating every {{ count: repeat }} months
       </Trans>
     );
@@ -69,7 +82,10 @@ export const BySaveAutomationReadOnly = ({
   if (from) {
     return (
       <Trans>
-        Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+        Save{' '}
+        <FinancialText>
+          {{ amount: displayAmount } as TransObjectLiteral}
+        </FinancialText>{' '}
         by {{ month }}, early spending from {{ from }}
       </Trans>
     );
@@ -77,8 +93,11 @@ export const BySaveAutomationReadOnly = ({
 
   return (
     <Trans>
-      Save <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText> by{' '}
-      {{ month }}
+      Save{' '}
+      <FinancialText>
+        {{ amount: displayAmount } as TransObjectLiteral}
+      </FinancialText>{' '}
+      by {{ month }}
     </Trans>
   );
 };

@@ -113,6 +113,7 @@ type BudgetAutomationsBodyProps = {
   initialCleanup: CleanupTemplate[];
   schedules: readonly ScheduleEntity[];
   categories: CategoryGroupEntity[];
+  formulaCategories: CategoryGroupEntity[];
   month: string;
   onClose: () => void;
 };
@@ -125,6 +126,7 @@ export function BudgetAutomationsBody({
   initialCleanup,
   schedules,
   categories,
+  formulaCategories,
   month,
   onClose,
 }: BudgetAutomationsBodyProps) {
@@ -145,6 +147,9 @@ export function BudgetAutomationsBody({
     onDelete,
     onSave,
     onUnmigrate,
+    runDryRun,
+    dryRunLoading,
+    hasFormulaAutomations,
     setEntries,
     cleanupGroups,
     createCleanupGroup,
@@ -252,6 +257,15 @@ export function BudgetAutomationsBody({
           >
             {format(totalMonthly, 'financial')}
           </Text>
+          {hasFormulaAutomations && (
+            <Button
+              onPress={runDryRun}
+              isDisabled={hasErrors || dryRunLoading}
+              style={{ marginTop: 6 }}
+            >
+              <Trans>Run formulas</Trans>
+            </Button>
+          )}
         </View>
       </View>
 
@@ -394,6 +408,7 @@ export function BudgetAutomationsBody({
               automationErrors={automationErrors}
               schedules={schedules}
               categories={categories}
+              formulaCategories={formulaCategories}
               hasLimitAutomation={hasLimitAutomation}
               onAddLimitAutomation={onAddLimitAutomation}
               setEntries={setEntries}

@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from 'react';
 
 import {
+  SvgCalculator,
   SvgChartPie,
   SvgEquals,
   SvgFlag,
@@ -31,7 +32,7 @@ export function getDisplayTemplateMeta(
   switch (displayType) {
     case 'fixed':
       return {
-        label: t('Fixed amount'),
+        label: t('By amount'),
         description: t('Add a set amount every month, week, day, or year.'),
         icon: SvgPiggyBank,
       };
@@ -62,6 +63,12 @@ export function getDisplayTemplateMeta(
           'Use past months: average, a specific month, or a copy.',
         ),
         icon: SvgTime,
+      };
+    case 'formula':
+      return {
+        label: t('Formula'),
+        description: t("Calculate this month's contribution with a formula."),
+        icon: SvgCalculator,
       };
     case 'limit':
       return {

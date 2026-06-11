@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -13,14 +14,17 @@ import type {
 } from '@actual-app/core/types/models';
 
 import { FormField, FormLabel, FormTextLabel } from '#components/forms';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 
 import { setType } from './actions';
 import type { Action } from './actions';
+import { getCategoryFormulaBadges } from './categoryFormulaBadges';
 import type { ReducerState } from './constants';
 import { displayTemplateTypes } from './constants';
 import { getDisplayTemplateMeta } from './displayTemplateMeta';
 import { BySaveAutomation } from './editor/BySaveAutomation';
 import { FixedAutomation } from './editor/FixedAutomation';
+import { FormulaAutomation } from './editor/FormulaAutomation';
 import { HistoricalAutomation } from './editor/HistoricalAutomation';
 import { LimitAutomation } from './editor/LimitAutomation';
 import { LongTermGoalAutomation } from './editor/LongTermGoalAutomation';
@@ -35,6 +39,7 @@ type BudgetAutomationEditorProps = {
   dispatch: (action: Action) => void;
   schedules: readonly ScheduleEntity[];
   categories: CategoryGroupEntity[];
+  formulaCategories?: CategoryGroupEntity[];
   hasLimitAutomation?: boolean;
   onAddLimitAutomation?: () => void;
 };
@@ -84,6 +89,12 @@ const displayTypeToDescription = {
       to account for seasonal changes.
     </Trans>
   ),
+  formula: (
+    <Trans>
+      Calculate this category&apos;s monthly budget contribution with an
+      Excel-style formula.
+    </Trans>
+  ),
   by: (
     <Trans>
       Spread a target amount across the months between now and a target date.
@@ -111,16 +122,26 @@ export function BudgetAutomationEditor({
   dispatch,
   schedules,
   categories,
+  formulaCategories = categories,
   hasLimitAutomation = false,
   onAddLimitAutomation,
 }: BudgetAutomationEditorProps) {
   const { t } = useTranslation();
+  const formulaMode = useFeatureFlag('formulaMode');
+  const categoryBadges = useMemo(
+    () => getCategoryFormulaBadges(formulaCategories),
+    [formulaCategories],
+  );
 
   let automationEditor: ReactNode;
   switch (state.displayType) {
     case 'limit':
       automationEditor = (
-        <LimitAutomation template={state.template} dispatch={dispatch} />
+        <LimitAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
       );
       break;
     case 'refill':
@@ -133,7 +154,20 @@ export function BudgetAutomationEditor({
       break;
     case 'fixed':
       automationEditor = (
-        <FixedAutomation template={state.template} dispatch={dispatch} />
+        <FixedAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
+      );
+      break;
+    case 'formula':
+      automationEditor = (
+        <FormulaAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
       );
       break;
     case 'schedule':
@@ -151,6 +185,7 @@ export function BudgetAutomationEditor({
           dispatch={dispatch}
           template={state.template}
           categories={categories}
+          categoryBadges={categoryBadges}
         />
       );
       break;
@@ -161,7 +196,11 @@ export function BudgetAutomationEditor({
       break;
     case 'by':
       automationEditor = (
-        <BySaveAutomation template={state.template} dispatch={dispatch} />
+        <BySaveAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
       );
       break;
     case 'remainder':
@@ -171,7 +210,11 @@ export function BudgetAutomationEditor({
       break;
     case 'goal':
       automationEditor = (
-        <LongTermGoalAutomation template={state.template} dispatch={dispatch} />
+        <LongTermGoalAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
       );
       break;
     default:
@@ -203,10 +246,14 @@ export function BudgetAutomationEditor({
           <InitialFocus>
             <Select
               id="type-field"
-              options={displayTemplateTypes.map(type => [
-                type,
-                getDisplayTemplateMeta(type).label,
-              ])}
+              options={displayTemplateTypes
+                .filter(
+                  type =>
+                    type !== 'formula' ||
+                    formulaMode ||
+                    state.displayType === 'formula',
+                )
+                .map(type => [type, getDisplayTemplateMeta(type).label])}
               defaultLabel={t('Select an option')}
               value={state.displayType}
               onChange={type => type && dispatch(setType(type))}

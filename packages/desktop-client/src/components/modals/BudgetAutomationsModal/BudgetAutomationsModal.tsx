@@ -11,6 +11,7 @@ import type { Template } from '@actual-app/core/types/models/templates';
 import { useBudgetAutomationCategories } from '#components/budget/goals/useBudgetAutomationCategories';
 import { Modal } from '#components/common/Modal';
 import { useBudgetAutomations } from '#hooks/useBudgetAutomations';
+import { useCategories } from '#hooks/useCategories';
 import { useCategory } from '#hooks/useCategory';
 import { useCategoryCleanup } from '#hooks/useCategoryCleanup';
 import { useSchedules } from '#hooks/useSchedules';
@@ -60,6 +61,8 @@ export function BudgetAutomationsModal({
   const { schedules } = useSchedules({ query: q('schedules').select('*') });
 
   const categories = useBudgetAutomationCategories();
+  const { data: { grouped: formulaCategories } = { grouped: categories } } =
+    useCategories();
 
   const { loading: cleanupLoading } = useCategoryCleanup({
     categoryId,
@@ -138,6 +141,7 @@ export function BudgetAutomationsModal({
               initialCleanup={parsedCleanup}
               schedules={schedules}
               categories={categories}
+              formulaCategories={formulaCategories}
               month={effectiveMonth}
               onClose={() => state.close()}
             />
@@ -150,6 +154,7 @@ export function BudgetAutomationsModal({
               initialCleanup={parsedCleanup}
               schedules={schedules}
               categories={categories}
+              formulaCategories={formulaCategories}
               month={effectiveMonth}
               onClose={() => state.close()}
             />

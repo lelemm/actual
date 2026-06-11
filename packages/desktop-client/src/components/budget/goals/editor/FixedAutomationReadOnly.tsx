@@ -19,6 +19,7 @@ export function FixedAutomationReadOnly({
     amountToInteger(template.amount, format.currency.decimalPlaces),
     'financial',
   );
+  const displayAmount = template.amountFormula ?? amount;
   const periodAmount = template.period?.amount ?? 1;
   const periodUnit = template.period?.period ?? 'month';
 
@@ -27,7 +28,9 @@ export function FixedAutomationReadOnly({
       return (
         <Trans count={periodAmount}>
           Budget{' '}
-          <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           every {{ count: periodAmount }} days
         </Trans>
       );
@@ -35,7 +38,9 @@ export function FixedAutomationReadOnly({
       return (
         <Trans count={periodAmount}>
           Budget{' '}
-          <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           every {{ count: periodAmount }} weeks
         </Trans>
       );
@@ -43,7 +48,9 @@ export function FixedAutomationReadOnly({
       return (
         <Trans count={periodAmount}>
           Budget{' '}
-          <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           every {{ count: periodAmount }} months
         </Trans>
       );
@@ -51,7 +58,9 @@ export function FixedAutomationReadOnly({
       return (
         <Trans count={periodAmount}>
           Budget{' '}
-          <FinancialText>{{ amount } as TransObjectLiteral}</FinancialText>{' '}
+          <FinancialText>
+            {{ amount: displayAmount } as TransObjectLiteral}
+          </FinancialText>{' '}
           every {{ count: periodAmount }} years
         </Trans>
       );

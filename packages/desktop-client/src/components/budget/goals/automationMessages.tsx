@@ -37,6 +37,10 @@ export function AutomationErrorTitle({
       return <Trans>Source category not recognised</Trans>;
     case 'adjustment-out-of-range':
       return <Trans>Adjustment out of range</Trans>;
+    case 'formula-missing':
+      return <Trans>Formula missing</Trans>;
+    case 'formula-invalid':
+      return <Trans>Formula must start with =</Trans>;
     default:
       error satisfies never;
       return null;
@@ -82,6 +86,10 @@ export function AutomationErrorShort({
       return <Trans>Pick a valid income category</Trans>;
     case 'adjustment-out-of-range':
       return <Trans>Adjustment out of range</Trans>;
+    case 'formula-missing':
+      return <Trans>Enter a formula</Trans>;
+    case 'formula-invalid':
+      return <Trans>Start the formula with =</Trans>;
     default:
       error satisfies never;
       return null;
@@ -164,6 +172,14 @@ export function AutomationErrorDetail({
         <Trans>
           A percentage decrease must be under 100% and an increase at most
           1000%.
+        </Trans>
+      );
+    case 'formula-missing':
+      return <Trans>Formula fields need an Excel-style formula to run.</Trans>;
+    case 'formula-invalid':
+      return (
+        <Trans>
+          Excel-style formulas must start with an equals sign, such as =100.
         </Trans>
       );
     default:

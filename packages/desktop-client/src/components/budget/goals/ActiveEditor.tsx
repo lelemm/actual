@@ -7,6 +7,7 @@ import type { Action } from './actions';
 import type { ReducerState } from './constants';
 import { BySaveAutomation } from './editor/BySaveAutomation';
 import { FixedAutomation } from './editor/FixedAutomation';
+import { FormulaAutomation } from './editor/FormulaAutomation';
 import { HistoricalAutomation } from './editor/HistoricalAutomation';
 import { LimitAutomation } from './editor/LimitAutomation';
 import { LongTermGoalAutomation } from './editor/LongTermGoalAutomation';
@@ -20,6 +21,7 @@ type ActiveEditorProps = {
   dispatch: (action: Action) => void;
   schedules: readonly ScheduleEntity[];
   categories: CategoryGroupEntity[];
+  categoryBadges?: Record<string, string>;
   hasLimitAutomation: boolean;
   onAddLimitAutomation: () => void;
 };
@@ -29,12 +31,19 @@ export function ActiveEditor({
   dispatch,
   schedules,
   categories,
+  categoryBadges,
   hasLimitAutomation,
   onAddLimitAutomation,
 }: ActiveEditorProps) {
   switch (state.displayType) {
     case 'limit':
-      return <LimitAutomation template={state.template} dispatch={dispatch} />;
+      return (
+        <LimitAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
+      );
     case 'refill':
       return (
         <RefillAutomation
@@ -43,7 +52,21 @@ export function ActiveEditor({
         />
       );
     case 'fixed':
-      return <FixedAutomation template={state.template} dispatch={dispatch} />;
+      return (
+        <FixedAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
+      );
+    case 'formula':
+      return (
+        <FormulaAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
+      );
     case 'schedule':
       return (
         <ScheduleAutomation
@@ -58,6 +81,7 @@ export function ActiveEditor({
           dispatch={dispatch}
           template={state.template}
           categories={categories}
+          categoryBadges={categoryBadges}
         />
       );
     case 'historical':
@@ -65,14 +89,24 @@ export function ActiveEditor({
         <HistoricalAutomation template={state.template} dispatch={dispatch} />
       );
     case 'by':
-      return <BySaveAutomation template={state.template} dispatch={dispatch} />;
+      return (
+        <BySaveAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
+      );
     case 'remainder':
       return (
         <RemainderAutomation template={state.template} dispatch={dispatch} />
       );
     case 'goal':
       return (
-        <LongTermGoalAutomation template={state.template} dispatch={dispatch} />
+        <LongTermGoalAutomation
+          template={state.template}
+          categoryBadges={categoryBadges}
+          dispatch={dispatch}
+        />
       );
     default:
       state satisfies never;

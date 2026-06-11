@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { send } from '@actual-app/core/platform/client/connection';
 import type {
@@ -27,6 +28,7 @@ import {
 } from '#components/budget/goals/validateAutomation';
 import { useCleanupGroups } from '#hooks/useCleanupGroups';
 import { pushModal } from '#modals/modalsSlice';
+import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 import { NON_CONTRIBUTION_TYPES } from './TypePicker';
@@ -34,6 +36,51 @@ import { NON_CONTRIBUTION_TYPES } from './TypePicker';
 export type ActiveSelection =
   | { kind: 'entry'; idx: number }
   | { kind: 'cleanup' };
+
+function hasFormula(template: AutomationEntry['template']): boolean {
+  if (template.type === 'formula') return true;
+  if (
+    (template.type === 'periodic' ||
+      template.type === 'by' ||
+      template.type === 'spend' ||
+      template.type === 'limit' ||
+      template.type === 'goal') &&
+    template.amountFormula !== undefined
+  ) {
+    return true;
+  }
+  if (template.type === 'percentage' && template.percentFormula !== undefined) {
+    return true;
+  }
+  return false;
+}
+
+function canPreviewWithStoredValues(templates: AutomationEntry['template'][]) {
+  return templates.every(template => template.type !== 'formula');
+}
+
+function removeFormulaFields(
+  templates: AutomationEntry['template'][],
+): AutomationEntry['template'][] {
+  return templates.map(template => {
+    switch (template.type) {
+      case 'periodic':
+      case 'by':
+      case 'spend':
+      case 'limit':
+      case 'goal': {
+        const { amountFormula: _amountFormula, ...rest } = template;
+        return rest;
+      }
+      case 'percentage': {
+        const { percentFormula: _percentFormula, ...rest } = template;
+        return rest;
+      }
+      default:
+        return template;
+    }
+  });
+}
 
 function pickInitialSelection(
   entries: AutomationEntry[],
@@ -69,6 +116,7 @@ export function useBudgetAutomationsEditor({
   onClose,
 }: UseBudgetAutomationsEditorArgs) {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const { groups: cleanupGroups, createGroup: createCleanupGroup } =
     useCleanupGroups();
 
@@ -82,7 +130,9 @@ export function useBudgetAutomationsEditor({
   const [dryRun, setDryRun] = useState<{
     budgeted: number;
     perTemplate: number[];
+    resolvedFormulaAmounts: Array<number | null>;
   } | null>(null);
+  const [dryRunLoading, setDryRunLoading] = useState(false);
 
   const onAddAutomation = (create?: () => AutomationEntry) => {
     const fallback = getAutomationExamples().find(
@@ -157,6 +207,48 @@ export function useBudgetAutomationsEditor({
     });
   };
 
+  const applyResolvedFormulaAmounts = useCallback(
+    (resolvedFormulaAmounts?: Array<number | null>) => {
+      if (!resolvedFormulaAmounts) return;
+
+      setEntries(prev =>
+        prev.map((entry, index) => {
+          const amount = resolvedFormulaAmounts[index];
+          if (amount == null) return entry;
+
+          const template = entry.template;
+          switch (template.type) {
+            case 'periodic':
+            case 'by':
+            case 'spend':
+            case 'limit':
+            case 'goal':
+              if (template.amountFormula === undefined) return entry;
+              return {
+                ...entry,
+                template: {
+                  ...template,
+                  amount,
+                },
+              };
+            case 'percentage':
+              if (template.percentFormula === undefined) return entry;
+              return {
+                ...entry,
+                template: {
+                  ...template,
+                  percent: amount,
+                },
+              };
+            default:
+              return entry;
+          }
+        }),
+      );
+    },
+    [],
+  );
+
   const onSave = async () => {
     if (saving) return;
     setSaving(true);
@@ -219,37 +311,123 @@ export function useBudgetAutomationsEditor({
       validPercentageSources,
     ),
   );
+  const hasAutomationErrors = automationErrors.some(error => error !== null);
+  const hasFormulaAutomations = templates.some(hasFormula);
+
+  const runDryRun = useCallback(async () => {
+    if (templates.length === 0) {
+      setDryRun({ budgeted: 0, perTemplate: [], resolvedFormulaAmounts: [] });
+      return;
+    }
+    if (hasAutomationErrors) {
+      setDryRun(null);
+      return;
+    }
+
+    setDryRunLoading(true);
+    try {
+      const result = await send('budget/dry-run-category-template', {
+        month,
+        categoryId,
+        templates,
+      });
+      setDryRun(result);
+      applyResolvedFormulaAmounts(result.resolvedFormulaAmounts);
+    } catch (error) {
+      setDryRun(null);
+      dispatch(
+        addNotification({
+          notification: {
+            type: 'error',
+            message: t('There was an error running budget formulas.'),
+            pre: error instanceof Error ? error.message : String(error),
+          },
+        }),
+      );
+    } finally {
+      setDryRunLoading(false);
+    }
+  }, [
+    templates,
+    month,
+    categoryId,
+    hasAutomationErrors,
+    applyResolvedFormulaAmounts,
+    dispatch,
+    t,
+  ]);
 
   useEffect(() => {
     if (templates.length === 0) {
-      setDryRun({ budgeted: 0, perTemplate: [] });
+      setDryRun({ budgeted: 0, perTemplate: [], resolvedFormulaAmounts: [] });
       return;
     }
-    let cancelled = false;
-    const run = debounce(async () => {
-      try {
-        const result = await send('budget/dry-run-category-template', {
-          month,
-          categoryId,
-          templates,
-        });
-        if (!cancelled) setDryRun(result);
-      } catch {
-        if (!cancelled) setDryRun(null);
+    if (hasAutomationErrors) {
+      setDryRun(null);
+      return;
+    }
+    if (hasFormulaAutomations) {
+      if (!canPreviewWithStoredValues(templates)) {
+        return;
       }
-    }, 200);
-    void run();
-    return () => {
-      cancelled = true;
-      run.cancel();
-    };
-  }, [templates, month, categoryId]);
+      let cancelled = false;
+      const run = debounce(async () => {
+        try {
+          const result = await send('budget/dry-run-category-template', {
+            month,
+            categoryId,
+            templates: removeFormulaFields(templates),
+          });
+          if (!cancelled) {
+            setDryRun(result);
+          }
+        } catch {
+          if (!cancelled) setDryRun(null);
+        }
+      }, 200);
+      void run();
+      return () => {
+        cancelled = true;
+        run.cancel();
+      };
+    }
+    {
+      let cancelled = false;
+      const run = debounce(async () => {
+        try {
+          const result = await send('budget/dry-run-category-template', {
+            month,
+            categoryId,
+            templates,
+          });
+          if (!cancelled) {
+            setDryRun(result);
+            applyResolvedFormulaAmounts(result.resolvedFormulaAmounts);
+          }
+        } catch {
+          if (!cancelled) setDryRun(null);
+        }
+      }, 200);
+      void run();
+      return () => {
+        cancelled = true;
+        run.cancel();
+      };
+    }
+  }, [
+    templates,
+    month,
+    categoryId,
+    hasAutomationErrors,
+    hasFormulaAutomations,
+    applyResolvedFormulaAmounts,
+  ]);
 
   const totalMonthly = dryRun?.budgeted ?? 0;
   const contributions: (number | null)[] = entries.map((_, i) =>
     dryRun?.perTemplate?.[i] != null ? dryRun.perTemplate[i] : null,
   );
-  const hasErrors = automationErrors.some(error => error !== null);
+  const hasErrors = hasAutomationErrors;
   const conflicts = [
     validatePercentageAllocation(templates),
     validateSchedulePriorities(templates),
@@ -295,6 +473,9 @@ export function useBudgetAutomationsEditor({
     onDelete,
     onSave,
     onUnmigrate,
+    runDryRun,
+    dryRunLoading,
+    hasFormulaAutomations,
     cleanupGroups,
     createCleanupGroup,
     automationErrors,

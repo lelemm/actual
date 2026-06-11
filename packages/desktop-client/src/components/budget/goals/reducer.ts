@@ -77,6 +77,11 @@ export const getInitialState = (template: Template | null): ReducerState => {
         template,
         displayType: 'historical',
       };
+    case 'formula':
+      return {
+        template,
+        displayType: 'formula',
+      };
     case 'goal':
       return {
         template,
@@ -182,6 +187,19 @@ const changeType = (
           directive: 'template',
           type: 'average',
           numMonths: 3,
+          priority: DEFAULT_PRIORITY,
+        },
+      };
+    case 'formula':
+      if (prevState.template.type === 'formula') {
+        return prevState;
+      }
+      return {
+        displayType: visualType,
+        template: {
+          directive: 'template',
+          type: 'formula',
+          formula: '=0',
           priority: DEFAULT_PRIORITY,
         },
       };

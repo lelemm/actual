@@ -42,6 +42,10 @@ type Notification = {
   sticky?: boolean | undefined;
 };
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function storeTemplates({
   categoriesWithTemplates,
   source,
@@ -111,11 +115,15 @@ export async function applyMultipleCategoryTemplates({
   );
   await storeNoteTemplates();
   const categoryTemplates = await getTemplates(c => categoryIds.includes(c.id));
+  const formulaCategoryGroups = await getCategoryGroups();
+  const formulaCategories = getCategoriesFromGroups(formulaCategoryGroups);
   const ret = await processTemplate(
     month,
     true,
     categoryTemplates,
     categoryData,
+    formulaCategories,
+    formulaCategoryGroups,
   );
   return ret;
 }
@@ -132,11 +140,15 @@ export async function applySingleCategoryTemplate({
   );
   await storeNoteTemplates();
   const categoryTemplates = await getTemplates(c => c.id === category);
+  const formulaCategoryGroups = await getCategoryGroups();
+  const formulaCategories = getCategoriesFromGroups(formulaCategoryGroups);
   const ret = await processTemplate(
     month,
     true,
     categoryTemplates,
     categoryData,
+    formulaCategories,
+    formulaCategoryGroups,
   );
   return ret;
 }
@@ -145,11 +157,35 @@ export function runCheckTemplates() {
   return checkTemplateNotes();
 }
 
-async function getCategories(): Promise<CategoryEntity[]> {
+async function getCategoryGroups(): Promise<CategoryGroupEntity[]> {
   const { data: categoryGroups }: { data: CategoryGroupEntity[] } =
     await aqlQuery(q('category_groups').filter({ hidden: false }).select('*'));
 
+  return categoryGroups;
+}
+
+function getCategoriesFromGroups(
+  categoryGroups: CategoryGroupEntity[],
+): CategoryEntity[] {
   return categoryGroups.flatMap(g => g.categories || []).filter(c => !c.hidden);
+}
+
+function inferCategoryGroups(
+  categories: CategoryEntity[],
+): CategoryGroupEntity[] {
+  const groups = new Map<string, CategoryEntity[]>();
+  for (const category of categories) {
+    const categoriesForGroup = groups.get(category.group) ?? [];
+    categoriesForGroup.push(category);
+    groups.set(category.group, categoriesForGroup);
+  }
+
+  return Array.from(groups, ([id, categories]) => ({
+    id,
+    name: id,
+    hidden: false,
+    categories,
+  }));
 }
 
 async function getTemplates(
@@ -215,6 +251,71 @@ async function setGoals(month: string, templateGoal: TemplateGoal[]) {
   });
 }
 
+function applyResolvedFormulaValue(
+  template: Template,
+  value: number,
+): Template {
+  switch (template.type) {
+    case 'periodic':
+    case 'by':
+    case 'spend':
+    case 'limit':
+    case 'goal':
+      if (template.amountFormula === undefined) return template;
+      return { ...template, amount: value };
+    case 'percentage':
+      if (template.percentFormula === undefined) return template;
+      return { ...template, percent: value };
+    default:
+      return template;
+  }
+}
+
+async function persistResolvedFormulaValues(
+  contexts: CategoryTemplateContext[],
+  categoryTemplates: Record<CategoryEntity['id'], Template[]>,
+) {
+  await batchMessages(async () => {
+    for (const context of contexts) {
+      if (context.category.template_settings?.source !== 'ui') {
+        continue;
+      }
+
+      const templates = categoryTemplates[context.category.id];
+      if (!templates) {
+        continue;
+      }
+
+      const values = context.getValues();
+      let changed = false;
+      const updatedTemplates = templates.map(template => {
+        const resolvedValue = values.resolvedFormulaAmounts.get(template);
+        if (resolvedValue == null) {
+          return template;
+        }
+
+        const updatedTemplate = applyResolvedFormulaValue(
+          template,
+          resolvedValue,
+        );
+        if (updatedTemplate !== template) {
+          changed = true;
+        }
+        return updatedTemplate;
+      });
+
+      if (!changed) {
+        continue;
+      }
+
+      await db.updateWithSchema('categories', {
+        id: context.category.id,
+        goal_def: JSON.stringify(updatedTemplates),
+      });
+    }
+  });
+}
+
 type ComputedTemplates = {
   contexts: CategoryTemplateContext[];
   errors: string[];
@@ -226,14 +327,23 @@ async function computeTemplates(
   force: boolean,
   categoryTemplates: Record<CategoryEntity['id'], Template[]>,
   categories: CategoryEntity[] = [],
+  formulaCategories: CategoryEntity[] = categories,
+  formulaCategoryGroups: CategoryGroupEntity[] = [],
   skipAvailableClamp: boolean = false,
 ): Promise<ComputedTemplates> {
   // setup categories
   const isTracking = isTrackingBudget();
   if (!categories.length) {
-    categories = (await getCategories()).filter(
+    formulaCategoryGroups = await getCategoryGroups();
+    categories = getCategoriesFromGroups(formulaCategoryGroups).filter(
       c => isTracking || !c.is_income,
     );
+  }
+  if (!formulaCategories.length) {
+    formulaCategories = categories;
+  }
+  if (!formulaCategoryGroups.length) {
+    formulaCategoryGroups = inferCategoryGroups(formulaCategories);
   }
 
   // setup categories to process
@@ -261,6 +371,8 @@ async function computeTemplates(
           month,
           budgeted,
           skipAvailableClamp,
+          formulaCategories,
+          formulaCategoryGroups,
         );
         // don't use the funds that are not from templates
         if (!templateContext.isGoalOnly()) {
@@ -270,7 +382,7 @@ async function computeTemplates(
         templateContext.getPriorities().forEach(p => prioritiesSet.add(p));
         templateContexts.push(templateContext);
       } catch (e) {
-        errors.push(`${category.name}: ${e.message}`);
+        errors.push(`${category.name}: ${getErrorMessage(e)}`);
       }
 
       // do a reset of the goals that are orphaned
@@ -292,13 +404,21 @@ async function computeTemplates(
   for (const priority of priorities) {
     const availStart = availBudget;
     for (const templateContext of templateContexts) {
-      const budget = await templateContext.runTemplatesForPriority(
-        priority,
-        availBudget,
-        availStart,
-      );
-      availBudget -= budget;
+      try {
+        const budget = await templateContext.runTemplatesForPriority(
+          priority,
+          availBudget,
+          availStart,
+        );
+        availBudget -= budget;
+      } catch (e) {
+        errors.push(`${templateContext.category.name}: ${getErrorMessage(e)}`);
+      }
     }
+  }
+
+  if (errors.length > 0) {
+    return { contexts: templateContexts, errors, orphanGoals };
   }
 
   distributeRemainder(templateContexts, availBudget);
@@ -311,12 +431,16 @@ async function processTemplate(
   force: boolean,
   categoryTemplates: Record<CategoryEntity['id'], Template[]>,
   categories: CategoryEntity[] = [],
+  formulaCategories: CategoryEntity[] = categories,
+  formulaCategoryGroups: CategoryGroupEntity[] = [],
 ): Promise<Notification> {
   const { contexts, errors, orphanGoals } = await computeTemplates(
     month,
     force,
     categoryTemplates,
     categories,
+    formulaCategories,
+    formulaCategoryGroups,
   );
 
   if (contexts.length === 0 && errors.length === 0) {
@@ -352,6 +476,7 @@ async function processTemplate(
   });
   await setBudgets(month, budgetList);
   await setGoals(month, goalList);
+  await persistResolvedFormulaValues(contexts, categoryTemplates);
 
   return {
     type: 'message',
@@ -362,6 +487,7 @@ async function processTemplate(
 export type DryRunCategoryResult = {
   budgeted: number;
   perTemplate: number[];
+  resolvedFormulaAmounts: Array<number | null>;
 };
 
 export async function dryRunCategoryTemplate({
@@ -380,20 +506,40 @@ export async function dryRunCategoryTemplate({
     q('categories').filter({ id: categoryId }).select('*'),
   );
   if (categoryData.length === 0) {
-    return { budgeted: 0, perTemplate: templates.map(() => 0) };
+    return {
+      budgeted: 0,
+      perTemplate: templates.map(() => 0),
+      resolvedFormulaAmounts: templates.map(() => null),
+    };
   }
-  const { contexts } = await computeTemplates(
+  const formulaCategoryGroups = await getCategoryGroups();
+  const formulaCategories = getCategoriesFromGroups(formulaCategoryGroups);
+  const { contexts, errors } = await computeTemplates(
     month,
     true,
     { [categoryId]: templates },
     categoryData,
+    formulaCategories,
+    formulaCategoryGroups,
     true,
   );
+  if (errors.length > 0) {
+    throw new Error(errors.join('\n\n'));
+  }
   const ctx = contexts.find(c => c.category.id === categoryId);
-  if (!ctx) return { budgeted: 0, perTemplate: templates.map(() => 0) };
+  if (!ctx) {
+    return {
+      budgeted: 0,
+      perTemplate: templates.map(() => 0),
+      resolvedFormulaAmounts: templates.map(() => null),
+    };
+  }
   const values = ctx.getValues();
   return {
     budgeted: values.budgeted,
     perTemplate: templates.map(t => values.perTemplateContribution.get(t) ?? 0),
+    resolvedFormulaAmounts: templates.map(
+      t => values.resolvedFormulaAmounts.get(t) ?? null,
+    ),
   };
 }

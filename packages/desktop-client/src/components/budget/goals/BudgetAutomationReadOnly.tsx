@@ -16,6 +16,7 @@ import { View } from '@actual-app/components/view';
 import type { ReducerState } from './constants';
 import { BySaveAutomationReadOnly } from './editor/BySaveAutomationReadOnly';
 import { FixedAutomationReadOnly } from './editor/FixedAutomationReadOnly';
+import { FormulaAutomationReadOnly } from './editor/FormulaAutomationReadOnly';
 import { HistoricalAutomationReadOnly } from './editor/HistoricalAutomationReadOnly';
 import { LimitAutomationReadOnly } from './editor/LimitAutomationReadOnly';
 import { LongTermGoalAutomationReadOnly } from './editor/LongTermGoalAutomationReadOnly';
@@ -58,6 +59,11 @@ export function BudgetAutomationReadOnly({
     case 'fixed':
       automationReadOnly = (
         <FixedAutomationReadOnly template={state.template} />
+      );
+      break;
+    case 'formula':
+      automationReadOnly = (
+        <FormulaAutomationReadOnly template={state.template} />
       );
       break;
     case 'schedule':

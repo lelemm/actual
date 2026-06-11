@@ -18,6 +18,7 @@ import { DEFAULT_PRIORITY, getInitialState, templateReducer } from './reducer';
 
 type BudgetAutomationProps = {
   categories: CategoryGroupEntity[];
+  formulaCategories?: CategoryGroupEntity[];
   schedules: readonly ScheduleEntity[];
   template?: Template;
   onSave?: (template: Template, displayType: DisplayTemplateType) => void;
@@ -45,6 +46,7 @@ export const BudgetAutomation = ({
   onDelete,
   onSave,
   categories,
+  formulaCategories = categories,
   schedules,
   readOnlyStyle,
   style,
@@ -100,6 +102,7 @@ export const BudgetAutomation = ({
           dispatch={dispatch}
           schedules={schedules}
           categories={categories}
+          formulaCategories={formulaCategories}
           hasLimitAutomation={hasLimitAutomation}
           onAddLimitAutomation={onAddLimitAutomation}
         />

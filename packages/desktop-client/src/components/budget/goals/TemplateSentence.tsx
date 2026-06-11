@@ -5,6 +5,7 @@ import type { TransObjectLiteral } from '@actual-app/core/types/util';
 
 import { BySaveAutomationReadOnly } from './editor/BySaveAutomationReadOnly';
 import { FixedAutomationReadOnly } from './editor/FixedAutomationReadOnly';
+import { FormulaAutomationReadOnly } from './editor/FormulaAutomationReadOnly';
 import { HistoricalAutomationReadOnly } from './editor/HistoricalAutomationReadOnly';
 import { LimitAutomationReadOnly } from './editor/LimitAutomationReadOnly';
 import { LongTermGoalAutomationReadOnly } from './editor/LongTermGoalAutomationReadOnly';
@@ -29,6 +30,8 @@ export function TemplateSentence({
       return <RefillAutomationReadOnly />;
     case 'periodic':
       return <FixedAutomationReadOnly template={template} />;
+    case 'formula':
+      return <FormulaAutomationReadOnly template={template} />;
     case 'schedule':
       return <ScheduleAutomationReadOnly template={template} />;
     case 'percentage':

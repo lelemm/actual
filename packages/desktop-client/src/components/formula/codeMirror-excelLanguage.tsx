@@ -12,15 +12,449 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import type { StreamParser } from '@codemirror/language';
+import { RangeSetBuilder } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
-import { EditorView, hoverTooltip, tooltips } from '@codemirror/view';
-import type { Tooltip } from '@codemirror/view';
+import {
+  Decoration,
+  EditorView,
+  hoverTooltip,
+  tooltips,
+  ViewPlugin,
+  WidgetType,
+} from '@codemirror/view';
+import type { DecorationSet, Tooltip, ViewUpdate } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { t } from 'i18next';
 
 import { queryModeFunctions } from './queryModeFunctions';
 import type { FunctionDef } from './queryModeFunctions';
 import { transactionModeFunctions } from './transactionModeFunctions';
+
+type FormulaMode = 'transaction' | 'query' | 'budget';
+type CategoryBadges = Record<string, string>;
+
+const budgetNamedExpressionBadges: Record<string, string> = {
+  MONTH: 'MONTH',
+  CATEGORY_ID: 'CATEGORY_ID',
+  CATEGORY_NAME: 'CATEGORY_NAME',
+  BUDGETED: 'BUDGETED',
+  BALANCE: 'BALANCE',
+  CARRYOVER: 'CARRYOVER',
+  AVAILABLE_FUNDS: 'AVAILABLE_FUNDS',
+  TO_BUDGET_START: 'TO_BUDGET_START',
+};
+
+const budgetNamedExpressionPattern = new RegExp(
+  `\\b(${Object.keys(budgetNamedExpressionBadges).join('|')})\\b`,
+  'g',
+);
+
+type FormulaBadgeVariant = 'reference' | 'named-expression' | 'month';
+export type MonthYearFormat = 'year-month' | 'month-year';
+
+export type FormulaMonthBadgeClick = {
+  view: EditorView;
+  anchorRect: DOMRect;
+  from: number;
+  to: number;
+  month: string;
+  format: MonthYearFormat;
+};
+
+export type FormulaReferenceBadgeClick = {
+  view: EditorView;
+  anchorRect: DOMRect;
+  from: number;
+  to: number;
+  referenceKey: string;
+};
+
+function parseMonthYear(
+  value: string,
+): { month: string; format: MonthYearFormat } | null {
+  const yearMonth = value.match(/^(\d{4})-(\d{1,2})$/);
+  if (yearMonth) {
+    const month = Number(yearMonth[2]);
+    if (month >= 1 && month <= 12) {
+      return {
+        month: `${yearMonth[1]}-${String(month).padStart(2, '0')}`,
+        format: 'year-month',
+      };
+    }
+  }
+
+  const monthYear = value.match(/^(\d{1,2})-(\d{4})$/);
+  if (monthYear) {
+    const month = Number(monthYear[1]);
+    if (month >= 1 && month <= 12) {
+      return {
+        month: `${monthYear[2]}-${String(month).padStart(2, '0')}`,
+        format: 'month-year',
+      };
+    }
+  }
+
+  return null;
+}
+
+export function formatMonthYear(month: string, format: MonthYearFormat) {
+  if (format === 'month-year') {
+    return `${month.slice(5, 7)}-${month.slice(0, 4)}`;
+  }
+  return month;
+}
+
+class FormulaBadgeWidget extends WidgetType {
+  constructor(
+    readonly label: string,
+    readonly variant: FormulaBadgeVariant = 'reference',
+    readonly monthPicker?: {
+      from: number;
+      to: number;
+      month: string;
+      format: MonthYearFormat;
+    },
+    readonly onMonthBadgeClick?: (details: FormulaMonthBadgeClick) => void,
+    readonly referencePicker?: {
+      from: number;
+      to: number;
+      referenceKey: string;
+    },
+    readonly onReferenceBadgeClick?: (
+      details: FormulaReferenceBadgeClick,
+    ) => void,
+  ) {
+    super();
+  }
+
+  eq(other: FormulaBadgeWidget) {
+    return (
+      other.label === this.label &&
+      other.variant === this.variant &&
+      other.monthPicker?.from === this.monthPicker?.from &&
+      other.monthPicker?.to === this.monthPicker?.to &&
+      other.monthPicker?.month === this.monthPicker?.month &&
+      other.monthPicker?.format === this.monthPicker?.format &&
+      other.onMonthBadgeClick === this.onMonthBadgeClick &&
+      other.referencePicker?.from === this.referencePicker?.from &&
+      other.referencePicker?.to === this.referencePicker?.to &&
+      other.referencePicker?.referenceKey ===
+        this.referencePicker?.referenceKey &&
+      other.onReferenceBadgeClick === this.onReferenceBadgeClick
+    );
+  }
+
+  toDOM(view: EditorView) {
+    const element = document.createElement('span');
+    element.textContent = this.label;
+    element.title = this.label;
+    element.style.display = 'inline-flex';
+    element.style.alignItems = 'center';
+    element.style.maxWidth = '220px';
+    element.style.overflow = 'hidden';
+    element.style.textOverflow = 'ellipsis';
+    element.style.whiteSpace = 'nowrap';
+    element.style.padding = '0 6px';
+    element.style.margin = '0 1px';
+    element.style.borderRadius = '999px';
+    element.style.border = `1px solid ${theme.formInputBorder}`;
+    element.style.backgroundColor =
+      this.variant === 'month' ? theme.noticeBackground : theme.pillBackground;
+    element.style.color =
+      this.variant === 'month' ? theme.noticeText : theme.pageText;
+    element.style.fontSize = '12px';
+    element.style.lineHeight = '18px';
+    const monthPicker = this.monthPicker;
+    if (monthPicker && this.onMonthBadgeClick) {
+      element.style.cursor = 'pointer';
+      element.addEventListener('mousedown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      element.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onMonthBadgeClick?.({
+          view,
+          anchorRect: element.getBoundingClientRect(),
+          from: monthPicker.from,
+          to: monthPicker.to,
+          month: monthPicker.month,
+          format: monthPicker.format,
+        });
+      });
+    }
+
+    const referencePicker = this.referencePicker;
+    if (referencePicker && this.onReferenceBadgeClick) {
+      element.style.cursor = 'pointer';
+      element.addEventListener('mousedown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      element.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onReferenceBadgeClick?.({
+          view,
+          anchorRect: element.getBoundingClientRect(),
+          from: referencePicker.from,
+          to: referencePicker.to,
+          referenceKey: referencePicker.referenceKey,
+        });
+      });
+    }
+
+    return element;
+  }
+}
+
+function formulaBadgeExtension(
+  mode: FormulaMode,
+  categoryBadges?: CategoryBadges,
+  onMonthBadgeClick?: (details: FormulaMonthBadgeClick) => void,
+  onReferenceBadgeClick?: (details: FormulaReferenceBadgeClick) => void,
+): Extension {
+  if (
+    mode !== 'budget' &&
+    (!categoryBadges || Object.keys(categoryBadges).length === 0)
+  ) {
+    return [];
+  }
+
+  const buildDecorations = (view: EditorView): DecorationSet => {
+    const builder = new RangeSetBuilder<Decoration>();
+    const quotedString = /"([^"]+)"/g;
+    const badgeRanges: Array<{
+      from: number;
+      to: number;
+      label: string;
+      variant: FormulaBadgeVariant;
+      referencePicker?: {
+        from: number;
+        to: number;
+        referenceKey: string;
+      };
+      monthPicker?: {
+        from: number;
+        to: number;
+        month: string;
+        format: MonthYearFormat;
+      };
+    }> = [];
+
+    for (const range of view.visibleRanges) {
+      const from = range.from;
+      const text = view.state.doc.sliceString(range.from, range.to);
+      const quotedRanges: Array<{ from: number; to: number }> = [];
+      quotedString.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = quotedString.exec(text)) !== null) {
+        const start = from + match.index;
+        const end = start + match[0].length;
+        quotedRanges.push({ from: start, to: end });
+
+        const label = categoryBadges?.[match[1]];
+        if (label) {
+          badgeRanges.push({
+            from: start,
+            to: end,
+            label,
+            variant: 'reference',
+            referencePicker: {
+              from: start,
+              to: end,
+              referenceKey: match[1],
+            },
+          });
+          continue;
+        }
+
+        const parsedMonth = parseMonthYear(match[1]);
+        if (mode === 'budget' && parsedMonth) {
+          badgeRanges.push({
+            from: start,
+            to: end,
+            label: match[1],
+            variant: 'month',
+            monthPicker: {
+              from: start,
+              to: end,
+              month: parsedMonth.month,
+              format: parsedMonth.format,
+            },
+          });
+        }
+      }
+
+      if (mode !== 'budget') {
+        continue;
+      }
+
+      budgetNamedExpressionPattern.lastIndex = 0;
+      while ((match = budgetNamedExpressionPattern.exec(text)) !== null) {
+        const start = from + match.index;
+        const end = start + match[0].length;
+        if (
+          quotedRanges.some(range => start >= range.from && end <= range.to)
+        ) {
+          continue;
+        }
+
+        badgeRanges.push({
+          from: start,
+          to: end,
+          label: budgetNamedExpressionBadges[match[1]],
+          variant: 'named-expression',
+        });
+      }
+    }
+
+    badgeRanges
+      .sort((a, b) => a.from - b.from || a.to - b.to)
+      .forEach(({ from, to, label, variant, referencePicker, monthPicker }) => {
+        builder.add(
+          from,
+          to,
+          Decoration.replace({
+            widget: new FormulaBadgeWidget(
+              label,
+              variant,
+              monthPicker,
+              onMonthBadgeClick,
+              referencePicker,
+              onReferenceBadgeClick,
+            ),
+            inclusive: false,
+          }),
+        );
+      });
+
+    return builder.finish();
+  };
+
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = buildDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = buildDecorations(update.view);
+        }
+      }
+    },
+    {
+      decorations: plugin => plugin.decorations,
+      provide: plugin =>
+        EditorView.atomicRanges.of(
+          view => view.plugin(plugin)?.decorations ?? Decoration.none,
+        ),
+    },
+  );
+}
+
+const budgetModeFunctions = Object.fromEntries(
+  Object.entries(queryModeFunctions).filter(
+    ([name]) =>
+      ![
+        'BUDGET_QUERY',
+        'QUERY',
+        'QUERY_COUNT',
+        'QUERY_EXTRACT_CATEGORIES',
+        'QUERY_EXTRACT_TIMEFRAME_END',
+        'QUERY_EXTRACT_TIMEFRAME_START',
+      ].includes(name),
+  ),
+) as Record<string, FunctionDef>;
+
+Object.assign(budgetModeFunctions, {
+  BUDGET_VALUE: {
+    name: 'BUDGET_VALUE',
+    description: t(
+      'Returns a budget value for a month and category or category group. The month can be an offset like -10, YYYY-MM, or MM-YYYY.',
+    ),
+    parameters: [
+      {
+        name: 'dimension',
+        description: 'budgeted, spent, balance, or goal',
+      },
+      {
+        name: 'month_or_offset',
+        description: 'Optional month string or numeric offset',
+      },
+      {
+        name: 'reference',
+        description: 'Optional category:<id> or category-group:<id>',
+      },
+    ],
+  },
+  BUDGETED_AT: {
+    name: 'BUDGETED_AT',
+    description: t(
+      'Returns the budgeted amount for a month and category or category group.',
+    ),
+    parameters: [
+      {
+        name: 'month_or_offset',
+        description: 'Optional month string or numeric offset',
+      },
+      {
+        name: 'reference',
+        description: 'Optional category:<id> or category-group:<id>',
+      },
+    ],
+  },
+  SPENT_AT: {
+    name: 'SPENT_AT',
+    description: t(
+      'Returns the spent/activity amount for a month and category or category group.',
+    ),
+    parameters: [
+      {
+        name: 'month_or_offset',
+        description: 'Optional month string or numeric offset',
+      },
+      {
+        name: 'reference',
+        description: 'Optional category:<id> or category-group:<id>',
+      },
+    ],
+  },
+  BALANCE_AT: {
+    name: 'BALANCE_AT',
+    description: t(
+      'Returns the balance for a month and category or category group.',
+    ),
+    parameters: [
+      {
+        name: 'month_or_offset',
+        description: 'Optional month string or numeric offset',
+      },
+      {
+        name: 'reference',
+        description: 'Optional category:<id> or category-group:<id>',
+      },
+    ],
+  },
+  GOAL_AT: {
+    name: 'GOAL_AT',
+    description: t('Returns the goal amount for a month and category.'),
+    parameters: [
+      {
+        name: 'month_or_offset',
+        description: 'Optional month string or numeric offset',
+      },
+      {
+        name: 'reference',
+        description: 'Optional category:<id>',
+      },
+    ],
+  },
+} satisfies Record<string, FunctionDef>);
 
 // Tooltip components using the same styles as Tooltip.tsx
 function FunctionTooltip({
@@ -67,8 +501,6 @@ function FieldTooltip({ label, info }: { label: string; info: string }) {
     </div>
   );
 }
-
-type FormulaMode = 'query' | 'transaction';
 
 // Function categories for different syntax highlighting
 const MATH_FUNCTIONS = new Set([
@@ -421,7 +853,11 @@ const transactionFields: Completion[] = [
 // Convert function definitions to completions with grouping
 function getFunctionCompletions(mode: FormulaMode): Completion[] {
   const functions =
-    mode === 'query' ? queryModeFunctions : transactionModeFunctions;
+    mode === 'query'
+      ? queryModeFunctions
+      : mode === 'budget'
+        ? budgetModeFunctions
+        : transactionModeFunctions;
 
   // Helper to create completion with section info
   const createCompletion = (
@@ -470,6 +906,7 @@ export function excelFormulaAutocomplete(
   mode: FormulaMode,
   queries?: Record<string, unknown>,
   variables?: Record<string, number | string>,
+  categoryBadges?: CategoryBadges,
 ): Extension {
   const functionCompletions = getFunctionCompletions(mode);
 
@@ -557,6 +994,40 @@ export function excelFormulaAutocomplete(
       }))
     : [];
 
+  const budgetVariableCompletions: Completion[] =
+    mode === 'budget'
+      ? [
+          'MONTH',
+          'CATEGORY_ID',
+          'CATEGORY_NAME',
+          'BUDGETED',
+          'BALANCE',
+          'CARRYOVER',
+          'AVAILABLE_FUNDS',
+          'TO_BUDGET_START',
+        ].map(varName => ({
+          label: varName,
+          type: 'variable',
+          section: '🔢 Variables',
+          info: t('Budget automation variable'),
+          boost: 20,
+        }))
+      : [];
+
+  const categoryCompletions: Completion[] =
+    mode === 'budget' && categoryBadges
+      ? Object.entries(categoryBadges).map(([referenceKey, label]) => ({
+          label,
+          type: 'constant',
+          section: '🏷️ Budget References',
+          info: t('Insert budget reference: {{referenceKey}}', {
+            referenceKey,
+          }),
+          apply: `"${referenceKey}"`,
+          boost: 18,
+        }))
+      : [];
+
   return autocompletion({
     override: [
       (context: CompletionContext) => {
@@ -567,6 +1038,8 @@ export function excelFormulaAutocomplete(
 
         const suggestions: Completion[] = [
           ...variableCompletions, // Put variable completions first
+          ...budgetVariableCompletions,
+          ...categoryCompletions,
           ...queryCompletions, // Put query completions first
           ...functionCompletions,
         ];
@@ -580,13 +1053,14 @@ export function excelFormulaAutocomplete(
           // Define section priority order
           const sectionOrder: Record<string, number> = {
             '🔢 Variables': -1,
-            '🔍 Query Functions': 0,
-            '📊 Math Functions': 1,
-            '🔀 Logical Functions': 2,
-            '📝 Text Functions': 3,
-            '📅 Date Functions': 4,
-            '⚙️ Other Functions': 5,
-            '💰 Transaction Fields': 6,
+            '🏷️ Budget References': 0,
+            '🔍 Query Functions': 1,
+            '📊 Math Functions': 2,
+            '🔀 Logical Functions': 3,
+            '📝 Text Functions': 4,
+            '📅 Date Functions': 5,
+            '⚙️ Other Functions': 6,
+            '💰 Transaction Fields': 7,
           };
 
           // Get section names
@@ -625,7 +1099,11 @@ export function excelFormulaAutocomplete(
 // Hover tooltip for documentation
 export function excelFormulaHover(mode: FormulaMode): Extension {
   const functions =
-    mode === 'query' ? queryModeFunctions : transactionModeFunctions;
+    mode === 'query'
+      ? queryModeFunctions
+      : mode === 'budget'
+        ? budgetModeFunctions
+        : transactionModeFunctions;
 
   return hoverTooltip((view, pos) => {
     const word = view.state.wordAt(pos);
@@ -880,11 +1358,20 @@ export function excelFormulaExtension(
   queries?: Record<string, unknown>,
   isDark?: boolean,
   variables?: Record<string, number | string>,
+  categoryBadges?: CategoryBadges,
+  onMonthBadgeClick?: (details: FormulaMonthBadgeClick) => void,
+  onReferenceBadgeClick?: (details: FormulaReferenceBadgeClick) => void,
 ): Extension[] {
   return [
     excelFormulaLanguage,
-    excelFormulaAutocomplete(mode, queries, variables),
+    excelFormulaAutocomplete(mode, queries, variables, categoryBadges),
     excelFormulaHover(mode),
+    formulaBadgeExtension(
+      mode,
+      categoryBadges,
+      onMonthBadgeClick,
+      onReferenceBadgeClick,
+    ),
     isDark ? excelFormulaDarkHighlighting : excelFormulaHighlighting,
     isDark ? functionCategoryThemeDark : functionCategoryTheme,
     tooltipZIndexTheme,

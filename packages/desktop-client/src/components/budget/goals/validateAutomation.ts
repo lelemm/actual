@@ -15,7 +15,40 @@ export type AutomationErrorKind =
   | { kind: 'by-target-past'; month: string }
   | { kind: 'spend-no-from' }
   | { kind: 'spend-from-after-target' }
-  | { kind: 'adjustment-out-of-range' };
+  | { kind: 'adjustment-out-of-range' }
+  | { kind: 'formula-missing'; field: 'formula' | 'amount' | 'percentage' }
+  | { kind: 'formula-invalid'; field: 'formula' | 'amount' | 'percentage' };
+
+function validateFormula(
+  formula: string | undefined,
+  field: 'formula' | 'amount' | 'percentage',
+): AutomationErrorKind | null {
+  if (formula === undefined) return null;
+  const trimmedFormula = formula.trim();
+  if (trimmedFormula === '' || trimmedFormula === '=') {
+    return { kind: 'formula-missing', field };
+  }
+  if (!trimmedFormula.startsWith('=')) {
+    return { kind: 'formula-invalid', field };
+  }
+  return null;
+}
+
+function validateAmountFormula(template: Template): AutomationErrorKind | null {
+  if (
+    template.type === 'periodic' ||
+    template.type === 'by' ||
+    template.type === 'spend' ||
+    template.type === 'limit' ||
+    template.type === 'goal'
+  ) {
+    return validateFormula(template.amountFormula, 'amount');
+  }
+  if (template.type === 'percentage') {
+    return validateFormula(template.percentFormula, 'percentage');
+  }
+  return null;
+}
 
 function isAdjustmentOutOfRange(template: Template): boolean {
   if (
@@ -45,7 +78,13 @@ export function validateAutomation(
   // server-side at apply time).
   validPercentageSources?: ReadonlySet<string>,
 ): AutomationErrorKind | null {
+  const amountFormulaError = validateAmountFormula(template);
+  if (amountFormulaError) return amountFormulaError;
+
   switch (displayType) {
+    case 'formula':
+      if (template.type !== 'formula') return null;
+      return validateFormula(template.formula, 'formula');
     case 'schedule':
       if (template.type !== 'schedule') return null;
       if (!template.name) return { kind: 'schedule-not-found', name: '' };
@@ -82,7 +121,10 @@ export function validateAutomation(
     case 'percentage':
       if (template.type !== 'percentage') return null;
       if (!template.category) return { kind: 'percentage-no-source' };
-      if (template.percent <= 0 || template.percent > 100) {
+      if (
+        template.percentFormula === undefined &&
+        (template.percent <= 0 || template.percent > 100)
+      ) {
         return {
           kind: 'percentage-out-of-range',
           percent: template.percent,
