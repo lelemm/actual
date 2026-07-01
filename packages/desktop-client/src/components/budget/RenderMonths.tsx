@@ -12,9 +12,14 @@ import { MonthsContext } from './MonthsContext';
 type RenderMonthsProps = {
   children: ReactNode | (({ month }: { month: string }) => ReactNode);
   style?: CSSProperties;
+  lastStyle?: CSSProperties;
 };
 
-export function RenderMonths({ children, style }: RenderMonthsProps) {
+export function RenderMonths({
+  children,
+  style,
+  lastStyle,
+}: RenderMonthsProps) {
   const { months } = useContext(MonthsContext);
 
   return months.map((month, index) => (
@@ -24,6 +29,7 @@ export function RenderMonths({ children, style }: RenderMonthsProps) {
           flex: 1,
           borderLeft: '1px solid ' + theme.tableBorder,
           ...style,
+          ...(index === months.length - 1 ? lastStyle : undefined),
         }}
       >
         {typeof children === 'function' ? children({ month }) : children}

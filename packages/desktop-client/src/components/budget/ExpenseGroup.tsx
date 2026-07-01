@@ -17,7 +17,9 @@ import type {
 } from '#components/sort';
 import { Row, ROW_HEIGHT } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
+import { useLocalPref } from '#hooks/useLocalPref';
 
+import { GoalColumnSpacer } from './BudgetProgress';
 import { RenderMonths } from './RenderMonths';
 import { SidebarGroup } from './SidebarGroup';
 
@@ -26,6 +28,7 @@ import { useBudgetComponents } from '.';
 type ExpenseGroupProps = {
   group: ComponentProps<typeof SidebarGroup>['group'];
   collapsed: boolean;
+  isLast?: boolean;
   editingCell: { id: string; cell: string } | null;
   dragState: DragState<CategoryEntity> | DragState<CategoryGroupEntity> | null;
   onEditName?: ComponentProps<typeof SidebarGroup>['onEdit'];
@@ -47,6 +50,7 @@ type ExpenseGroupProps = {
 export function ExpenseGroup({
   group,
   collapsed,
+  isLast,
   editingCell,
   dragState,
   onEditName,
@@ -88,6 +92,7 @@ export function ExpenseGroup({
   });
 
   const { ExpenseGroupComponent: MonthComponent } = useBudgetComponents();
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
 
   return (
     <Row
@@ -146,6 +151,12 @@ export function ExpenseGroup({
         <RenderMonths>
           {({ month }) => <MonthComponent month={month} group={group} />}
         </RenderMonths>
+        {showProgressBars && (
+          <GoalColumnSpacer
+            backgroundColor={theme.budgetHeaderCurrentMonth}
+            roundedBottomRight={isLast}
+          />
+        )}
       </View>
     </Row>
   );

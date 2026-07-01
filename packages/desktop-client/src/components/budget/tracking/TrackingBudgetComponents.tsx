@@ -19,6 +19,7 @@ import { css } from '@emotion/css';
 import { t } from 'i18next';
 
 import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import { MonthlySpendingProgressBar } from '#components/budget/BudgetProgress';
 import { makeAmountGrey } from '#components/budget/util';
 import { NotesButton } from '#components/NotesButton';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
@@ -26,6 +27,7 @@ import { Field, SheetCell } from '#components/table';
 import type { SheetCellProps } from '#components/table';
 import { useCategoryScheduleGoalTemplateIndicator } from '#hooks/useCategoryScheduleGoalTemplateIndicator';
 import { useFormat } from '#hooks/useFormat';
+import { useLocalPref } from '#hooks/useLocalPref';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSheetValue } from '#hooks/useSheetValue';
 import { useUndo } from '#hooks/useUndo';
@@ -202,6 +204,8 @@ export const CategoryMonth = memo(function CategoryMonth({
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
   const format = useFormat();
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
+  const showMonthlySpendingProgress = showProgressBars && !category.is_income;
 
   const [balanceMenuOpen, setBalanceMenuOpen] = useState(false);
   const triggerBalanceMenuRef = useRef(null);
@@ -461,17 +465,54 @@ export const CategoryMonth = memo(function CategoryMonth({
         <Field
           name="balance"
           width="flex"
-          style={{ paddingRight: styles.monthRightPadding, textAlign: 'right' }}
+          style={{
+            paddingRight: styles.monthRightPadding,
+            position: 'relative',
+            textAlign: 'right',
+            ...(showMonthlySpendingProgress && {
+              containerType: 'inline-size',
+              '& .balance-value-button': {
+                position: 'absolute',
+                left: 5,
+                right: styles.monthRightPadding,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                transition: 'top .15s ease, transform .15s ease',
+              },
+              '& .category-progressbar-values': {
+                opacity: 0,
+                transition: 'opacity .12s ease',
+              },
+              '@container (min-width: 110px)': {
+                '&:hover .category-progressbar-inner': {
+                  height: 13,
+                  opacity: 1,
+                },
+                '&:hover .category-progressbar-values': {
+                  opacity: 1,
+                },
+                '&:hover:has(.category-progressbar-overflow) .balance-value-button':
+                  {
+                    alignItems: 'flex-start',
+                    top: 0,
+                    transform: 'translateY(0)',
+                  },
+              },
+            }),
+          }}
         >
           <Button
+            className={
+              showMonthlySpendingProgress ? 'balance-value-button' : undefined
+            }
             variant="bare"
             ref={triggerBalanceMenuRef}
             onPress={() => !category.is_income && setBalanceMenuOpen(true)}
             style={{
               justifyContent: 'flex-end',
               background: 'transparent',
-              width: '100%',
               padding: 0,
+              ...(showMonthlySpendingProgress ? {} : { width: '100%' }),
             }}
           >
             <BalanceWithCarryover
@@ -483,6 +524,23 @@ export const CategoryMonth = memo(function CategoryMonth({
               longGoal={trackingBudget.catLongGoal(category.id)}
             />
           </Button>
+          {showMonthlySpendingProgress && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 5,
+                right: styles.monthRightPadding,
+                bottom: 0,
+                height: 10,
+                pointerEvents: 'none',
+              }}
+            >
+              <MonthlySpendingProgressBar
+                category={category}
+                placement="category"
+              />
+            </View>
+          )}
 
           <Popover
             triggerRef={triggerBalanceMenuRef}

@@ -2,10 +2,13 @@
 import React from 'react';
 
 import { theme } from '@actual-app/components/theme';
+import { View } from '@actual-app/components/view';
 import type { CategoryGroupEntity } from '@actual-app/core/types/models';
 
 import { Row } from '#components/table';
+import { useLocalPref } from '#hooks/useLocalPref';
 
+import { GoalColumnSpacer } from './BudgetProgress';
 import { RenderMonths } from './RenderMonths';
 import { SidebarGroup } from './SidebarGroup';
 
@@ -13,6 +16,7 @@ import { useBudgetComponents } from '.';
 
 type IncomeGroupProps = {
   group: CategoryGroupEntity;
+  isLast?: boolean;
   editingCell: { id: CategoryGroupEntity['id']; cell: string } | null;
   collapsed: boolean;
   onEditName: (id: CategoryGroupEntity['id']) => void;
@@ -27,6 +31,7 @@ type IncomeGroupProps = {
 
 export function IncomeGroup({
   group,
+  isLast,
   editingCell,
   collapsed,
   onEditName,
@@ -36,6 +41,8 @@ export function IncomeGroup({
   onShowNewCategory,
 }: IncomeGroupProps) {
   const { IncomeGroupComponent: MonthComponent } = useBudgetComponents();
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
+
   return (
     <Row
       collapsed
@@ -58,9 +65,23 @@ export function IncomeGroup({
         onToggleCollapse={onToggleCollapse}
         onShowNewCategory={onShowNewCategory}
       />
-      <RenderMonths>
-        {({ month }) => <MonthComponent month={month} group={group} />}
-      </RenderMonths>
+      <View
+        style={
+          isLast && showProgressBars
+            ? {
+                flex: 1,
+                flexDirection: 'row',
+                borderBottomRightRadius: 4,
+                overflow: 'hidden',
+              }
+            : { flex: 1, flexDirection: 'row' }
+        }
+      >
+        <RenderMonths>
+          {({ month }) => <MonthComponent month={month} group={group} />}
+        </RenderMonths>
+      </View>
+      {showProgressBars && <GoalColumnSpacer invisible />}
     </Row>
   );
 }

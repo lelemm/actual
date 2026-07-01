@@ -5,7 +5,9 @@ import { Button } from '@actual-app/components/button';
 import { View } from '@actual-app/components/view';
 
 import { useGlobalPref } from '#hooks/useGlobalPref';
+import { useLocalPref } from '#hooks/useLocalPref';
 
+import { GoalColumnSpacer } from './BudgetProgress';
 import { RenderMonths } from './RenderMonths';
 
 import { useBudgetComponents } from '.';
@@ -16,6 +18,7 @@ type IncomeHeaderProps = {
 
 export function IncomeHeader({ onShowNewGroup }: IncomeHeaderProps) {
   const [categoryExpandedStatePref] = useGlobalPref('categoryExpandedState');
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
   const categoryExpandedState = categoryExpandedStatePref ?? 0;
   const { IncomeHeaderComponent: MonthComponent } = useBudgetComponents();
   return (
@@ -34,6 +37,7 @@ export function IncomeHeader({ onShowNewGroup }: IncomeHeaderProps) {
       <RenderMonths style={{ border: 0, justifyContent: 'flex-end' }}>
         <MonthComponent />
       </RenderMonths>
+      {showProgressBars && <GoalColumnSpacer invisible />}
     </View>
   );
 }

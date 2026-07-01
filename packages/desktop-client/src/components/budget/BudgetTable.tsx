@@ -17,6 +17,7 @@ import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useLocalPref } from '#hooks/useLocalPref';
 
 import { BudgetCategories } from './BudgetCategories';
+import { GOAL_COLUMN_WIDTH } from './BudgetProgressHelpers';
 import { BudgetSummaries } from './BudgetSummaries';
 import { BudgetTotals } from './BudgetTotals';
 import { MonthsProvider } from './MonthsContext';
@@ -84,6 +85,7 @@ export function BudgetTable(props: BudgetTableProps) {
   const [showHiddenCategories, setShowHiddenCategoriesPef] = useLocalPref(
     'budget.showHiddenCategories',
   );
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
   const [categoryExpandedStatePref] = useGlobalPref('categoryExpandedState');
   const categoryExpandedState = categoryExpandedStatePref ?? 0;
   const [editing, setEditing] = useState<{ id: string; cell: string } | null>(
@@ -281,6 +283,9 @@ export function BudgetTable(props: BudgetTableProps) {
         >
           <BudgetSummaries />
         </MonthsProvider>
+        {showProgressBars && (
+          <View style={{ width: GOAL_COLUMN_WIDTH, flexShrink: 0 }} />
+        )}
       </View>
 
       <MonthsProvider

@@ -11,9 +11,11 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useGlobalPref } from '#hooks/useGlobalPref';
+import { useLocalPref } from '#hooks/useLocalPref';
 
 import { useBudgetMonthCount } from './BudgetMonthCountContext';
 import { BudgetPageHeader } from './BudgetPageHeader';
+import { GOAL_COLUMN_WIDTH } from './BudgetProgressHelpers';
 import { BudgetTable } from './BudgetTable';
 
 function getNumPossibleMonths(width: number, categoryWidth: number) {
@@ -53,15 +55,18 @@ const DynamicBudgetTable = ({
 }: DynamicBudgetTableProps) => {
   const { setDisplayMax } = useBudgetMonthCount();
   const [categoryExpandedStatePref] = useGlobalPref('categoryExpandedState');
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
   const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const categoryExpandedState = categoryExpandedStatePref ?? 0;
+  const categoryWidth = 200 + 100 * categoryExpandedState;
+  const goalColumnWidth = showProgressBars ? GOAL_COLUMN_WIDTH : 0;
 
   const numPossible = getNumPossibleMonths(
-    width,
-    200 + 100 * categoryExpandedState,
+    width - goalColumnWidth,
+    categoryWidth,
   );
   const numMonths = Math.min(numPossible, maxMonths);
-  const maxWidth = 200 + 100 * categoryExpandedState + 500 * numMonths;
+  const maxWidth = categoryWidth + 500 * numMonths + goalColumnWidth;
 
   useEffect(() => {
     setDisplayMax(numPossible);

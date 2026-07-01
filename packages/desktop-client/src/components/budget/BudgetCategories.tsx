@@ -13,6 +13,7 @@ import type { DragState, OnDropCallback } from '#components/sort';
 import { Row } from '#components/table';
 import { useLocalPref } from '#hooks/useLocalPref';
 
+import { GoalColumnSpacer } from './BudgetProgress';
 import { ExpenseCategory } from './ExpenseCategory';
 import { ExpenseGroup } from './ExpenseGroup';
 import { IncomeCategory } from './IncomeCategory';
@@ -80,6 +81,7 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
     const [collapsedGroupIds = [], setCollapsedGroupIdsPref] =
       useLocalPref('budget.collapsed');
     const [showHiddenCategories] = useLocalPref('budget.showHiddenCategories');
+    const [showProgressBars] = useLocalPref('budget.showProgressBars');
     function onCollapse(value: Array<CategoryGroupEntity['id']>) {
       setCollapsedGroupIdsPref(value);
     }
@@ -251,6 +253,9 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
       >
         {items.map((item, idx) => {
           let content;
+          const isLastBeforeIncome =
+            items[idx + 1]?.type === 'income-separator' ||
+            idx === items.length - 1;
           switch (item.type) {
             case 'new-group':
               content = (
@@ -265,6 +270,12 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
                     onHideNewGroup={onHideNewGroup}
                     onEdit={onEditName}
                   />
+                  <View style={{ flex: 1 }} />
+                  {showProgressBars && (
+                    <GoalColumnSpacer
+                      backgroundColor={theme.budgetHeaderCurrentMonth}
+                    />
+                  )}
                 </Row>
               );
               break;
@@ -286,6 +297,8 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
                     onHideNewCategory={onHideNewCategory}
                     onEditName={onEditName!}
                   />
+                  <View style={{ flex: 1 }} />
+                  {showProgressBars && <GoalColumnSpacer />}
                 </Row>
               );
               break;
@@ -296,6 +309,7 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
                   group={item.value}
                   editingCell={editingCell}
                   collapsed={collapsedGroupIds.includes(item.value.id)}
+                  isLast={isLastBeforeIncome}
                   dragState={dragState}
                   onEditName={onEditName}
                   onSave={_onSaveGroup}
@@ -315,6 +329,7 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
                 <ExpenseCategory
                   cat={item.value}
                   categoryGroup={item.group}
+                  isLast={isLastBeforeIncome}
                   editingCell={editingCell}
                   dragState={dragState}
                   onEditName={onEditName}
@@ -345,6 +360,7 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
                 <IncomeGroup
                   group={item.value}
                   editingCell={editingCell}
+                  isLast={idx === items.length - 1}
                   collapsed={collapsedGroupIds.includes(item.value.id)}
                   onEditName={onEditName!}
                   onSave={_onSaveGroup}

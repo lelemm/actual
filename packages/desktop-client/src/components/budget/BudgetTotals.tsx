@@ -15,7 +15,9 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import { useGlobalPref } from '#hooks/useGlobalPref';
+import { useLocalPref } from '#hooks/useLocalPref';
 
+import { GoalColumnHeader } from './BudgetProgress';
 import { RenderMonths } from './RenderMonths';
 import { getScrollbarWidth } from './util';
 
@@ -35,6 +37,9 @@ export const BudgetTotals = memo(function BudgetTotals({
   const { t } = useTranslation();
   const [categoryExpandedStatePref, setCategoryExpandedStatePref] =
     useGlobalPref('categoryExpandedState');
+  const [showProgressBars, setShowProgressBars] = useLocalPref(
+    'budget.showProgressBars',
+  );
   const categoryExpandedState = categoryExpandedStatePref ?? 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -70,6 +75,7 @@ export const BudgetTotals = memo(function BudgetTotals({
         marginLeft: 5,
         marginRight: 5 + getScrollbarWidth(),
         borderRadius: '4px 4px 0 0',
+        overflow: 'hidden',
         borderBottom: '1px solid ' + theme.tableBorder,
         '& .hover-visible': {
           opacity: 0,
@@ -155,6 +161,8 @@ export const BudgetTotals = memo(function BudgetTotals({
             onMenuSelect={type => {
               if (type === 'toggle-visibility') {
                 toggleHiddenCategories();
+              } else if (type === 'toggle-progress-bars') {
+                setShowProgressBars(!showProgressBars);
               } else if (type === 'expandAllCategories') {
                 expandAllCategories();
               } else if (type === 'collapseAllCategories') {
@@ -168,6 +176,12 @@ export const BudgetTotals = memo(function BudgetTotals({
                 text: t('Toggle hidden categories'),
               },
               {
+                name: 'toggle-progress-bars',
+                text: showProgressBars
+                  ? t('Hide progress bars')
+                  : t('Show progress bars'),
+              },
+              {
                 name: 'expandAllCategories',
                 text: t('Expand all'),
               },
@@ -179,9 +193,16 @@ export const BudgetTotals = memo(function BudgetTotals({
           />
         </Popover>
       </View>
-      <RenderMonths>
+      <RenderMonths
+        lastStyle={
+          showProgressBars
+            ? { borderTopRightRadius: 4, overflow: 'hidden' }
+            : undefined
+        }
+      >
         <MonthComponent />
       </RenderMonths>
+      {showProgressBars && <GoalColumnHeader />}
     </View>
   );
 });

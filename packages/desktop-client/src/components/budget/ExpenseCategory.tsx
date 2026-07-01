@@ -17,7 +17,9 @@ import type {
 } from '#components/sort';
 import { Row } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
+import { useLocalPref } from '#hooks/useLocalPref';
 
+import { LongGoalColumnCell } from './BudgetProgress';
 import { RenderMonths } from './RenderMonths';
 import { SidebarCategory } from './SidebarCategory';
 
@@ -26,6 +28,7 @@ import { useBudgetComponents } from '.';
 type ExpenseCategoryProps = {
   cat: CategoryEntity;
   categoryGroup?: CategoryGroupEntity;
+  isLast?: boolean;
   editingCell: { id: string; cell: string } | null;
   dragState: DragState<CategoryEntity> | DragState<CategoryGroupEntity> | null;
   onEditName?: ComponentProps<typeof SidebarCategory>['onEditName'];
@@ -41,6 +44,7 @@ type ExpenseCategoryProps = {
 export function ExpenseCategory({
   cat,
   categoryGroup,
+  isLast,
   editingCell,
   dragState,
   onEditName,
@@ -73,6 +77,7 @@ export function ExpenseCategory({
   });
 
   const { ExpenseCategoryComponent: MonthComponent } = useBudgetComponents();
+  const [showProgressBars] = useLocalPref('budget.showProgressBars');
 
   return (
     <Row
@@ -118,6 +123,9 @@ export function ExpenseCategory({
             />
           )}
         </RenderMonths>
+        {showProgressBars && (
+          <LongGoalColumnCell category={cat} roundedBottomRight={isLast} />
+        )}
       </View>
     </Row>
   );
