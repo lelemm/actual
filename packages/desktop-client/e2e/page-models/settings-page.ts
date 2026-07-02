@@ -42,21 +42,24 @@ export class SettingsPage {
   }
 
   async enableExperimentalFeature(featureName: string) {
-    await this.advancedSettingsButton.waitFor({
-      state: 'visible',
-      timeout: 2000,
-    });
-    await this.advancedSettingsButton.click();
-
-    await this.experimentalSettingsButton.waitFor({
-      state: 'visible',
-      timeout: 2000,
-    });
-    await this.experimentalSettingsButton.click();
-
     const featureCheckbox = this.page.getByRole('checkbox', {
       name: featureName,
     });
+
+    if (!(await featureCheckbox.isVisible())) {
+      await this.advancedSettingsButton.waitFor({
+        state: 'visible',
+        timeout: 2000,
+      });
+      await this.advancedSettingsButton.click();
+
+      await this.experimentalSettingsButton.waitFor({
+        state: 'visible',
+        timeout: 2000,
+      });
+      await this.experimentalSettingsButton.click();
+    }
+
     await featureCheckbox.waitFor({ state: 'visible' });
     if (!(await featureCheckbox.isChecked())) {
       await featureCheckbox.click();

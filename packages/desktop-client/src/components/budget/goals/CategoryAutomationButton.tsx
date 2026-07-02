@@ -70,6 +70,7 @@ type CategoryAutomationButtonProps = {
   defaultColor?: string;
   style?: CSSProperties;
   showPlaceholder?: boolean;
+  month?: string;
 };
 export function CategoryAutomationButton({
   category,
@@ -78,11 +79,12 @@ export function CategoryAutomationButton({
   defaultColor = theme.buttonNormalText,
   style,
   showPlaceholder = false,
+  month: monthProp,
 }: CategoryAutomationButtonProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const monthsContext = useContext(MonthsContext);
-  const month = monthsContext?.months?.[0];
+  const month = monthProp ?? monthsContext?.months?.[0];
 
   const goalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const goalTemplatesUIEnabled = useFeatureFlag('goalTemplatesUIEnabled');

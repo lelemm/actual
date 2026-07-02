@@ -1,7 +1,9 @@
 // @ts-strict-ignore
 import React, { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { styles } from '@actual-app/components/styles';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
@@ -21,6 +23,7 @@ import {
   useSaveCategoryMutation,
   useSortCategoriesMutation,
 } from '#budget';
+import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
 import { useCategories } from '#hooks/useCategories';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useGlobalPref } from '#hooks/useGlobalPref';
@@ -53,11 +56,35 @@ export function Budget() {
   });
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
   const isModernBudgetPageEnabled = useFeatureFlag('modernBudgetPage');
-  const [maxMonthsPref] = useGlobalPref('maxMonths');
-  const maxMonths = maxMonthsPref || (isModernBudgetPageEnabled ? 2 : 1);
+  const { isNarrowWidth } = useResponsive();
+  const useModernBudgetPage = isModernBudgetPageEnabled && !isNarrowWidth;
+  const [maxMonthsPref, setMaxMonthsPref] = useGlobalPref('maxMonths');
+  const [modernDefaultsInitialized, setModernDefaultsInitialized] =
+    useLocalPref('budget.modernDefaultsInitialized');
+  const [, setShowProgressBarsPref] = useLocalPref('budget.showProgressBars');
+  const maxMonths =
+    useModernBudgetPage && !modernDefaultsInitialized
+      ? 2
+      : maxMonthsPref || (useModernBudgetPage ? 2 : 1);
   const [initialized, setInitialized] = useState(false);
   const { data: { grouped: categoryGroups } = { grouped: [] } } =
     useCategories();
+
+  useEffect(() => {
+    if (!useModernBudgetPage || modernDefaultsInitialized) {
+      return;
+    }
+
+    setMaxMonthsPref(2);
+    setShowProgressBarsPref(true);
+    setModernDefaultsInitialized(true);
+  }, [
+    modernDefaultsInitialized,
+    setMaxMonthsPref,
+    setModernDefaultsInitialized,
+    setShowProgressBarsPref,
+    useModernBudgetPage,
+  ]);
 
   const init = useEffectEvent(() => {
     async function run() {
@@ -182,31 +209,33 @@ export function Budget() {
     return null;
   }
 
-  if (isModernBudgetPageEnabled) {
+  if (useModernBudgetPage) {
     return (
       <SheetNameProvider name={monthUtils.sheetForMonth(startMonth)}>
-        <ModernBudgetPage
-          budgetType={budgetType}
-          categoryGroups={categoryGroups}
-          startMonth={startMonth}
-          maxMonths={maxMonths}
-          summaryCollapsed={summaryCollapsed}
-          monthBounds={bounds}
-          onMonthSelect={onMonthSelect}
-          onToggleSummaryCollapse={onToggleCollapse}
-          onBudgetAction={onBudgetAction}
-          onShowActivity={onShowActivity}
-          onSaveCategory={onSaveCategory}
-          onDeleteCategory={onDeleteCategory}
-          onSaveGroup={onSaveCategoryGroup}
-          onDeleteGroup={onDeleteCategoryGroup}
-          onApplyBudgetTemplatesInGroup={onApplyBudgetTemplatesInGroup}
-          onReorderCategory={reorderCategory.mutate}
-          onReorderGroup={reorderCategoryGroup.mutate}
-          onSortCategories={(groupId, direction) =>
-            sortCategories.mutate({ groupId, direction })
-          }
-        />
+        <ErrorBoundary FallbackComponent={FeatureErrorFallback}>
+          <ModernBudgetPage
+            budgetType={budgetType}
+            categoryGroups={categoryGroups}
+            startMonth={startMonth}
+            maxMonths={maxMonths}
+            summaryCollapsed={summaryCollapsed}
+            monthBounds={bounds}
+            onMonthSelect={onMonthSelect}
+            onToggleSummaryCollapse={onToggleCollapse}
+            onBudgetAction={onBudgetAction}
+            onShowActivity={onShowActivity}
+            onSaveCategory={onSaveCategory}
+            onDeleteCategory={onDeleteCategory}
+            onSaveGroup={onSaveCategoryGroup}
+            onDeleteGroup={onDeleteCategoryGroup}
+            onApplyBudgetTemplatesInGroup={onApplyBudgetTemplatesInGroup}
+            onReorderCategory={reorderCategory.mutate}
+            onReorderGroup={reorderCategoryGroup.mutate}
+            onSortCategories={(groupId, direction) =>
+              sortCategories.mutate({ groupId, direction })
+            }
+          />
+        </ErrorBoundary>
       </SheetNameProvider>
     );
   }

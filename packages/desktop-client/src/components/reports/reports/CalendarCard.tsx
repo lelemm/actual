@@ -47,6 +47,7 @@ import { useResizeObserver } from '#hooks/useResizeObserver';
 type CalendarCardProps = {
   widgetId: string;
   isEditing?: boolean;
+  disableClick?: boolean;
   meta?: CalendarWidget['meta'];
   onMetaChange: (newMeta: CalendarWidget['meta']) => void;
   onRemove: () => void;
@@ -57,6 +58,7 @@ type CalendarCardProps = {
 export function CalendarCard({
   widgetId,
   isEditing,
+  disableClick,
   meta = {},
   onMetaChange,
   onRemove,
@@ -173,7 +175,7 @@ export function CalendarCard({
   return (
     <ReportCard
       isEditing={isEditing}
-      disableClick={nameMenuOpen}
+      disableClick={disableClick || nameMenuOpen}
       to={`/reports/calendar/${widgetId}`}
       menuItems={[
         {

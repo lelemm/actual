@@ -177,7 +177,7 @@ async function loadGlobalPrefs(): Promise<GlobalPrefs> {
   return {
     floatingSidebar: floatingSidebar === 'true',
     categoryExpandedState: stringToInteger(categoryExpandedState || '') || 0,
-    maxMonths: stringToInteger(maxMonths || '') || 1,
+    maxMonths: stringToInteger(maxMonths || '') || undefined,
     documentDir: documentDir || getDefaultDocumentDir(),
     keyId: encryptKey && JSON.parse(encryptKey).id,
     language,

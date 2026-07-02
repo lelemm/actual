@@ -6,6 +6,46 @@ import {
   hasLongGoalTemplate,
   SPENDING_FULL_WIDTH,
 } from './BudgetProgressHelpers';
+import { getVisibleMonths } from './ModernBudgetPage';
+
+describe('getVisibleMonths', () => {
+  const bounds = { start: '2026-01', end: '2026-06' };
+
+  it('returns the requested month range inside budget bounds', () => {
+    expect(getVisibleMonths('2026-02', 3, bounds)).toEqual([
+      '2026-02',
+      '2026-03',
+      '2026-04',
+    ]);
+  });
+
+  it('shifts the range earlier when the request would pass the end bound', () => {
+    expect(getVisibleMonths('2026-05', 3, bounds)).toEqual([
+      '2026-04',
+      '2026-05',
+      '2026-06',
+    ]);
+  });
+
+  it('caps the range to the available budget bounds', () => {
+    expect(
+      getVisibleMonths('2026-01', 6, { start: '2026-03', end: '2026-04' }),
+    ).toEqual(['2026-03', '2026-04']);
+  });
+
+  it('caps the range to six visible months', () => {
+    expect(
+      getVisibleMonths('2026-01', 12, { start: '2026-01', end: '2026-12' }),
+    ).toEqual([
+      '2026-01',
+      '2026-02',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+      '2026-06',
+    ]);
+  });
+});
 
 describe('hasLongGoalTemplate', () => {
   it('detects a long-term goal template', () => {

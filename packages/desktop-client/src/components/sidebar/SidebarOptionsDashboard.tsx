@@ -4,6 +4,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import ReactGridLayout from 'react-grid-layout';
 import type { Layout } from 'react-grid-layout';
 import { Trans, useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
 import { SvgAdd, SvgCheveronDown } from '@actual-app/components/icons/v1';
@@ -49,12 +50,14 @@ import { useResizeObserver } from '#hooks/useResizeObserver';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import {
   useAddDashboardWidgetMutation,
+  useCopyDashboardWidgetMutation,
   useCreateDashboardPageMutation,
   useDeleteDashboardPageMutation,
   useRemoveDashboardWidgetMutation,
   useUpdateDashboardWidgetMutation,
   useUpdateDashboardWidgetsMutation,
 } from '#reports/mutations';
+import { getDashboardWidgetItems } from '../reports/getDashboardWidgetItems';
 
 import { Accounts } from './Accounts';
 
@@ -62,7 +65,7 @@ const SIDEBAR_DASHBOARD_KIND = 'sidebar-options';
 const GRID_COLUMNS = 10;
 const ROW_HEIGHT = 18;
 const SMALL_ACCOUNT_WIDGET_HEIGHT = 2;
-const ACCOUNT_LIST_WIDGET_HEIGHT = 5;
+const ACCOUNT_LIST_WIDGET_HEIGHT = 4;
 const SWIPE_THRESHOLD = 35;
 const palette = {
   page: '#07111C',
@@ -403,7 +406,7 @@ export function SidebarOptionsDashboard() {
         height: 0,
         flex: '1 1 0',
         flexDirection: 'column',
-        overflowX: 'hidden',
+        overflow: 'hidden',
         padding: '0 6px 8px',
       }}
     >
@@ -502,23 +505,13 @@ export function SidebarOptionsDashboard() {
       </View>
 
       <View
+        data-testid="sidebar-options-carousel"
         innerRef={containerRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        style={{
-          minHeight: 0,
-          flex: 1,
-          overflow: 'hidden',
-          overflowX: 'hidden',
-          backgroundColor: palette.panel,
-          border: '1px solid ' + palette.line,
-          borderRadius: 8,
-          boxShadow: styles.cardShadow,
-          padding: 6,
-          touchAction: isEditing ? undefined : 'pan-y',
-          userSelect: isEditing || swipeOffset !== 0 ? 'none' : undefined,
+        className={css({
           scrollbarColor: `${palette.muted} ${palette.panelAlt}`,
           '::-webkit-scrollbar': {
             width: 10,
@@ -529,88 +522,79 @@ export function SidebarOptionsDashboard() {
             border: '2px solid ' + palette.panelAlt,
             backgroundClip: 'padding-box',
           },
+        })}
+        style={{
+          minHeight: 0,
+          height: 0,
+          flex: 1,
+          flexDirection: 'column',
+          overflow: 'auto',
+          overscrollBehavior: 'contain',
+          backgroundColor: palette.panel,
+          border: '1px solid ' + palette.line,
+          borderRadius: 8,
+          boxShadow: styles.cardShadow,
+          padding: 6,
+          transform: `translateX(${swipeOffset}px)`,
+          transition: swipeOffset === 0 ? 'transform .18s ease' : 'none',
+          touchAction: isEditing ? undefined : 'pan-y',
+          userSelect: isEditing || swipeOffset !== 0 ? 'none' : undefined,
         }}
       >
-        <View
-          style={{
-            minHeight: 80,
-            height: '100%',
-            overflow: 'auto',
-            scrollbarColor: `${palette.muted} ${palette.panelAlt}`,
-            '::-webkit-scrollbar': {
-              width: 10,
-              backgroundColor: palette.panelAlt,
-            },
-            '::-webkit-scrollbar-thumb': {
-              backgroundColor: palette.muted,
-              border: '2px solid ' + palette.panelAlt,
-              backgroundClip: 'padding-box',
-            },
-          }}
-        >
-          {gridWidth > 0 && currentPage && (
-            <View
-              style={{
-                display: 'block',
-                transform: `translateX(${swipeOffset}px)`,
-                transition: swipeOffset === 0 ? 'transform .18s ease' : 'none',
-              }}
-            >
-              <ReactGridLayout
-                width={gridWidth}
-                layout={layout}
-                gridConfig={{ cols: GRID_COLUMNS, rowHeight: ROW_HEIGHT }}
-                dragConfig={{
-                  enabled: isEditing,
-                  cancel: `.${NON_DRAGGABLE_AREA_CLASS_NAME}`,
-                }}
-                resizeConfig={{ enabled: isEditing }}
-                onLayoutChange={onLayoutChange}
-              >
-                {layout.map(item => {
-                  const widget = widgetMap.get(item.i);
-                  if (!widget) {
-                    return null;
+        {gridWidth > 0 && currentPage && (
+          <ReactGridLayout
+            width={gridWidth}
+            layout={layout}
+            gridConfig={{ cols: GRID_COLUMNS, rowHeight: ROW_HEIGHT }}
+            dragConfig={{
+              enabled: isEditing,
+              cancel: `.${NON_DRAGGABLE_AREA_CLASS_NAME}`,
+            }}
+            resizeConfig={{ enabled: isEditing }}
+            onLayoutChange={onLayoutChange}
+          >
+            {layout.map(item => {
+              const widget = widgetMap.get(item.i);
+              if (!widget) {
+                return null;
+              }
+
+              const isAccountWidget = ACCOUNT_WIDGETS.includes(
+                widget.type as AccountWidgetType,
+              );
+
+              return (
+                <div
+                  key={item.i}
+                  className={
+                    isAccountWidget
+                      ? undefined
+                      : 'sidebar-options-report-widget'
                   }
-
-                  const isAccountWidget = ACCOUNT_WIDGETS.includes(
-                    widget.type as AccountWidgetType,
-                  );
-
-                  return (
-                    <div
-                      key={item.i}
-                      className={
-                        isAccountWidget
-                          ? undefined
-                          : 'sidebar-options-report-widget'
-                      }
-                    >
-                      <ErrorBoundary
-                        fallbackRender={() => (
-                          <MissingReportCard
-                            isEditing={isEditing}
-                            onRemove={() => removeWidget.mutate({ id: item.i })}
-                          >
-                            <Trans>This widget has failed to load.</Trans>
-                          </MissingReportCard>
-                        )}
+                >
+                  <ErrorBoundary
+                    fallbackRender={() => (
+                      <MissingReportCard
+                        isEditing={isEditing}
+                        onRemove={() => removeWidget.mutate({ id: item.i })}
                       >
-                        <SidebarWidget
-                          widget={widget}
-                          item={item}
-                          isEditing={isEditing}
-                          onRemove={() => removeWidget.mutate({ id: item.i })}
-                          onMetaChange={onMetaChange}
-                        />
-                      </ErrorBoundary>
-                    </div>
-                  );
-                })}
-              </ReactGridLayout>
-            </View>
-          )}
-        </View>
+                        <Trans>This widget has failed to load.</Trans>
+                      </MissingReportCard>
+                    )}
+                  >
+                    <SidebarWidget
+                      widget={widget}
+                      item={item}
+                      isEditing={isEditing}
+                      onRemove={() => removeWidget.mutate({ id: item.i })}
+                      onMetaChange={onMetaChange}
+                    />
+                  </ErrorBoundary>
+                </div>
+              );
+            })}
+          </ReactGridLayout>
+        )}
       </View>
 
       {pages.length > 1 && (
@@ -630,6 +614,7 @@ export function SidebarOptionsDashboard() {
               aria-label={t('Show options page {{number}}', {
                 number: index + 1,
               })}
+              aria-current={index === pageIndex ? 'page' : undefined}
               onPress={() => setPageIndex(index)}
               style={{
                 width: index === pageIndex ? 18 : 8,
@@ -657,6 +642,7 @@ function AddWidgetButton({
   ) => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { data: customReports = [] } = useReports();
   const ageOfMoneyReportEnabled = useFeatureFlag('ageOfMoneyReport');
   const budgetAnalysisReportEnabled = useFeatureFlag('budgetAnalysisReport');
@@ -669,48 +655,17 @@ function AddWidgetButton({
     { name: 'accounts-off-budget-card', text: t('Off budget accounts') },
     { name: 'accounts-add-card', text: t('Add account') },
     Menu.line,
-    { name: 'cash-flow-card', text: t('Cash flow graph') },
-    { name: 'net-worth-card', text: t('Net worth graph') },
-    { name: 'crossover-card', text: t('Crossover point') },
+    ...getDashboardWidgetItems({
+      t,
+      customReports,
+      ageOfMoneyReportEnabled,
+      formulaMode,
+      crossoverReportEnabled: true,
+      sankeyReportEnabled: sankeyFeatureFlag,
+      budgetAnalysisReportEnabled,
+      balanceForecastReportEnabled,
+    }),
   ];
-
-  if (ageOfMoneyReportEnabled) {
-    items.push({ name: 'age-of-money-card', text: t('Age of Money') });
-  }
-
-  items.push({ name: 'spending-card', text: t('Spending analysis') });
-
-  if (budgetAnalysisReportEnabled) {
-    items.push({ name: 'budget-analysis-card', text: t('Budget analysis') });
-  }
-
-  if (balanceForecastReportEnabled) {
-    items.push({ name: 'balance-forecast-card', text: t('Balance forecast') });
-  }
-
-  items.push(
-    { name: 'markdown-card', text: t('Text widget') },
-    { name: 'summary-card', text: t('Summary card') },
-    { name: 'calendar-card', text: t('Calendar card') },
-  );
-
-  if (formulaMode) {
-    items.push({ name: 'formula-card', text: t('Formula card') });
-  }
-
-  if (sankeyFeatureFlag) {
-    items.push({ name: 'sankey-card', text: t('Sankey card') });
-  }
-
-  if (customReports.length) {
-    items.push(Menu.line);
-    items.push(
-      ...customReports.map(report => ({
-        name: `custom-report-${report.id}`,
-        text: report.name,
-      })),
-    );
-  }
 
   return (
     <DialogTrigger>
@@ -740,6 +695,11 @@ function AddWidgetButton({
                 onAddWidget<CustomReportWidget>('custom-report', {
                   id: reportId,
                 });
+                return;
+              }
+
+              if (item === 'custom-report') {
+                void navigate('/reports/custom');
                 return;
               }
 
@@ -783,7 +743,13 @@ function SidebarWidget({
     () => new Map(customReports.map(report => [report.id, report])),
     [customReports],
   );
-  const onCopy = () => {};
+  const copyWidget = useCopyDashboardWidgetMutation();
+  const onCopy = (targetDashboardPageId: string) => {
+    copyWidget.mutate({
+      id: item.i,
+      targetDashboardPageId,
+    });
+  };
   const isSmallAccountWidget =
     widget.type === 'accounts-all-card' || widget.type === 'accounts-add-card';
 
@@ -922,6 +888,7 @@ function SidebarWidget({
     <CalendarCard
       widgetId={item.i}
       isEditing={isEditing}
+      disableClick
       meta={widget.meta}
       firstDayOfWeekIdx={firstDayOfWeekIdx}
       onMetaChange={newMeta => onMetaChange(item, newMeta)}

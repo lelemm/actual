@@ -1,11 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent, KeyboardEvent, PointerEvent, ReactNode } from 'react';
+import type {
+  DragEvent,
+  KeyboardEvent,
+  MouseEvent,
+  PointerEvent,
+  ReactNode,
+  RefObject,
+} from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import {
-  SvgChartPie,
   SvgCheveronDown,
   SvgDotsHorizontalTriple,
 } from '@actual-app/components/icons/v1';
@@ -29,6 +35,10 @@ import type {
 } from '@actual-app/core/types/models';
 
 import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import { CoverMenu } from '#components/budget/envelope/CoverMenu';
+import { HoldMenu } from '#components/budget/envelope/HoldMenu';
+import { TransferMenu } from '#components/budget/envelope/TransferMenu';
+import { CategoryAutomationButton } from '#components/budget/goals/CategoryAutomationButton';
 import { NotesButton } from '#components/NotesButton';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
@@ -47,13 +57,12 @@ import { useNotes } from '#hooks/useNotes';
 import { SheetNameProvider } from '#hooks/useSheetName';
 import { useSheetValue } from '#hooks/useSheetValue';
 import { useUndo } from '#hooks/useUndo';
-import { pushModal } from '#modals/modalsSlice';
-import { useDispatch } from '#redux';
 import type { Binding } from '#spreadsheet';
 import { envelopeBudget, trackingBudget } from '#spreadsheet/bindings';
 
 import { useBudgetMonthCount } from './BudgetMonthCountContext';
 import type { MonthBounds } from './MonthsContext';
+import { findSortDown, findSortUp } from './util';
 
 type MoneyBinding =
   | Binding<'envelope-budget', 'budget'>
@@ -208,10 +217,26 @@ function getBindings(budgetType: string) {
   return budgetType === 'tracking' ? trackingBudget : envelopeBudget;
 }
 
-function getVisibleMonths(startMonth: string, maxMonths: number) {
-  return Array.from(
-    { length: Math.min(Math.max(maxMonths, 1), 6) },
-    (_, index) => monthUtils.addMonths(startMonth, index),
+export function getVisibleMonths(
+  startMonth: string,
+  maxMonths: number,
+  monthBounds: MonthBounds,
+) {
+  const availableMonths =
+    monthUtils.differenceInCalendarMonths(monthBounds.end, monthBounds.start) +
+    1;
+  const count = Math.min(Math.max(maxMonths, 1), 6, availableMonths);
+  const lastStartMonth = monthUtils.subMonths(monthBounds.end, count - 1);
+  const validStartMonth =
+    startMonth < monthBounds.start
+      ? monthBounds.start
+      : startMonth > lastStartMonth
+        ? lastStartMonth
+        : startMonth;
+
+  return monthUtils.rangeInclusive(
+    validStartMonth,
+    monthUtils.addMonths(validStartMonth, count - 1),
   );
 }
 
@@ -220,9 +245,22 @@ function getDropTargetId<T extends { id: string }>(
   item: T,
   nextItem: T | undefined,
 ) {
+  const dropPosition = getDropPosition(event);
+  return dropPosition === 'bottom' ? (nextItem?.id ?? null) : item.id;
+}
+
+function getDropPosition(event: DragEvent): 'top' | 'bottom' {
   const bounds = event.currentTarget.getBoundingClientRect();
-  const isAfter = event.clientY > bounds.top + bounds.height / 2;
-  return isAfter ? (nextItem?.id ?? null) : item.id;
+  return event.clientY > bounds.top + bounds.height / 2 ? 'bottom' : 'top';
+}
+
+function isInteractiveDragTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest('button, a, input, textarea, select, [role="button"]'),
+    )
+  );
 }
 
 function InlineNameEditor({
@@ -285,6 +323,7 @@ function CategoryActionMenu({
   onMoveDown,
   onSave,
   onDelete,
+  children,
 }: {
   category: CategoryEntity;
   groupHidden?: boolean;
@@ -293,27 +332,33 @@ function CategoryActionMenu({
   onMoveDown?: () => void;
   onSave: ModernBudgetPageProps['onSaveCategory'];
   onDelete: ModernBudgetPageProps['onDeleteCategory'];
+  children: (props: {
+    menuButton: ReactNode;
+    triggerRef: RefObject<HTMLDivElement | null>;
+    handleContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  }) => ReactNode;
 }) {
   const { t } = useTranslation();
   const { menuOpen, setMenuOpen, position, handleContextMenu, resetPosition } =
     useContextMenu();
-  const triggerRef = useRef(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const menuButton = (
+    <Button
+      variant="bare"
+      aria-label={t('Category actions')}
+      onPress={() => {
+        resetPosition();
+        setMenuOpen(true);
+      }}
+      style={{ color: palette.muted, padding: 3 }}
+    >
+      <SvgCheveronDown width={13} height={13} />
+    </Button>
+  );
 
   return (
     <>
-      <Button
-        ref={triggerRef}
-        variant="bare"
-        aria-label={t('Category actions')}
-        onPress={() => {
-          resetPosition();
-          setMenuOpen(true);
-        }}
-        onContextMenu={handleContextMenu}
-        style={{ color: palette.muted, padding: 3 }}
-      >
-        <SvgCheveronDown width={13} height={13} />
-      </Button>
+      {children({ menuButton, triggerRef, handleContextMenu })}
       <Popover
         triggerRef={triggerRef}
         placement="bottom start"
@@ -360,58 +405,9 @@ function CategoryActionMenu({
   );
 }
 
-function ModernAutomationButton({
-  category,
-  month,
-  budgetType,
-}: {
-  category: CategoryEntity;
-  month: string;
-  budgetType: string;
-}) {
-  const { t } = useTranslation();
-  const dispatch = useDispatch();
-  const goalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
-  const goalTemplatesUIEnabled = useFeatureFlag('goalTemplatesUIEnabled');
-  const hasAutomations =
-    category.template_settings?.source === 'ui' &&
-    (!!category.goal_def?.length || !!category.cleanup_def?.length);
-
-  if (!goalTemplatesEnabled || !goalTemplatesUIEnabled) {
-    return null;
-  }
-
-  if (category.is_income && budgetType !== 'tracking') {
-    return null;
-  }
-
-  return (
-    <Button
-      variant="bare"
-      aria-label={t('Change category automations')}
-      onPress={() => {
-        dispatch(
-          pushModal({
-            modal: {
-              name: 'category-automations-edit',
-              options: { categoryId: category.id, month },
-            },
-          }),
-        );
-      }}
-      style={{
-        color: hasAutomations ? palette.amber : palette.muted,
-        opacity: hasAutomations ? 1 : 0.45,
-        padding: 3,
-      }}
-    >
-      <SvgChartPie width={13} height={13} />
-    </Button>
-  );
-}
-
 function GroupActionMenu({
   group,
+  budgetType,
   onRename,
   onAddCategory,
   onMoveUp,
@@ -420,8 +416,10 @@ function GroupActionMenu({
   onDelete,
   onApplyBudgetTemplatesInGroup,
   onSortCategories,
+  children,
 }: {
   group: CategoryGroupEntity;
+  budgetType: string;
   onRename: () => void;
   onAddCategory: () => void;
   onMoveUp?: () => void;
@@ -430,15 +428,22 @@ function GroupActionMenu({
   onDelete: ModernBudgetPageProps['onDeleteGroup'];
   onApplyBudgetTemplatesInGroup: ModernBudgetPageProps['onApplyBudgetTemplatesInGroup'];
   onSortCategories: ModernBudgetPageProps['onSortCategories'];
+  children: (props: {
+    menuButton: ReactNode;
+    triggerRef: RefObject<HTMLDivElement | null>;
+    handleContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  }) => ReactNode;
 }) {
   const { t } = useTranslation();
   const { showUndoNotification } = useUndo();
   const goalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const { menuOpen, setMenuOpen, position, handleContextMenu, resetPosition } =
     useContextMenu();
-  const triggerRef = useRef(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const canSortCategories =
     !!onSortCategories && (group.categories?.length ?? 0) > 1;
+  const canApplyTemplates =
+    goalTemplatesEnabled && (budgetType === 'tracking' || !group.is_income);
   type GroupAction =
     | 'rename'
     | 'add-category'
@@ -473,7 +478,7 @@ function GroupActionMenu({
           { name: 'sort-desc' as const, text: t('Sort Z to A') },
         ]
       : []),
-    ...(goalTemplatesEnabled && !group.is_income
+    ...(canApplyTemplates
       ? [
           {
             name: 'apply-templates' as const,
@@ -482,22 +487,23 @@ function GroupActionMenu({
         ]
       : []),
   ];
+  const menuButton = (
+    <Button
+      variant="bare"
+      aria-label={t('Group actions')}
+      onPress={() => {
+        resetPosition();
+        setMenuOpen(true);
+      }}
+      style={{ color: palette.muted, padding: 3 }}
+    >
+      <SvgCheveronDown width={13} height={13} />
+    </Button>
+  );
 
   return (
     <>
-      <Button
-        ref={triggerRef}
-        variant="bare"
-        aria-label={t('Group actions')}
-        onPress={() => {
-          resetPosition();
-          setMenuOpen(true);
-        }}
-        onContextMenu={handleContextMenu}
-        style={{ color: palette.muted, padding: 3 }}
-      >
-        <SvgCheveronDown width={13} height={13} />
-      </Button>
+      {children({ menuButton, triggerRef, handleContextMenu })}
       <Popover
         triggerRef={triggerRef}
         placement="bottom start"
@@ -537,6 +543,38 @@ function GroupActionMenu({
           items={items}
         />
       </Popover>
+    </>
+  );
+}
+
+function ModernCategoryRowActions({
+  category,
+  month,
+}: {
+  category: CategoryEntity;
+  month: string;
+}) {
+  const notes = useNotes(category.id) || '';
+  const isGoalTemplatesUIEnabled = useFeatureFlag('goalTemplatesUIEnabled');
+  const hasAutomations =
+    !!category.goal_def?.length || !!category.cleanup_def?.length;
+
+  return (
+    <>
+      <CategoryAutomationButton
+        category={category}
+        month={month}
+        width={13}
+        height={13}
+        defaultColor={palette.muted}
+        showPlaceholder={!!notes}
+        style={{ padding: 3 }}
+      />
+      <NotesButton
+        id={category.id}
+        defaultColor={palette.muted}
+        showPlaceholder={isGoalTemplatesUIEnabled && hasAutomations}
+      />
     </>
   );
 }
@@ -582,8 +620,14 @@ function CategoryHeaderMenu({
   const { menuOpen, setMenuOpen, position, handleContextMenu, resetPosition } =
     useContextMenu();
   const triggerRef = useRef(null);
+  const availableMonthCount = Math.min(
+    6,
+    monthUtils.differenceInCalendarMonths(monthBounds.end, monthBounds.start) +
+      1,
+  );
 
-  function changeMonthCount(count: number) {
+  function changeMonthCount(requestedCount: number) {
+    const count = Math.min(requestedCount, availableMonthCount);
     const end = monthUtils.subMonths(monthBounds.end, count - 1);
     const month =
       startMonth < monthBounds.start
@@ -670,13 +714,16 @@ function CategoryHeaderMenu({
             },
             { name: 'expand-all', text: t('Expand all') },
             { name: 'collapse-all', text: t('Collapse all') },
-            ...[1, 2, 3, 4, 5, 6].map(count => ({
-              name: `months-${count}`,
-              text:
-                maxMonths === count
-                  ? t('{{count}} months shown', { count })
-                  : t('Show {{count}} months', { count }),
-            })),
+            ...Array.from({ length: availableMonthCount }, (_, index) => {
+              const count = index + 1;
+              return {
+                name: `months-${count}`,
+                text:
+                  months.length === count
+                    ? t('{{count}} months shown', { count })
+                    : t('Show {{count}} months', { count }),
+              };
+            }),
           ]}
         />
       </Popover>
@@ -703,82 +750,107 @@ function BudgetAmountCell({
   const format = useFormat();
   const editing =
     editingCell?.id === category.id && editingCell?.month === month;
+  const triggerRef = useRef(null);
+  const { menuOpen, setMenuOpen, position, handleContextMenu } =
+    useContextMenu();
+  const { items, onMenuSelect } = useCategoryBudgetActions({
+    category,
+    month,
+    budgetType,
+    onBudgetAction,
+    onClose: () => setMenuOpen(false),
+  });
 
   return (
-    <SheetCell
-      name={`modern-budget-${category.id}-${month}`}
-      exposed={editing}
-      focused={editing}
-      width="flex"
-      textAlign="right"
-      onExpose={() => setEditingCell({ id: category.id, month })}
-      style={{
-        minHeight: 28,
-        borderColor: 'transparent',
-        backgroundColor: 'transparent',
+    <View
+      ref={triggerRef}
+      onClick={() => setEditingCell({ id: category.id, month })}
+      onContextMenu={event => {
+        if (!editing) {
+          handleContextMenu(event);
+        }
       }}
-      valueStyle={{
-        cursor: 'default',
-        justifyContent: 'flex-end',
-        padding: '0 4px',
-        color: palette.text,
-        fontWeight: 700,
-        ...styles.tnum,
-        ':hover': {
-          backgroundColor: palette.panelRaised,
-          boxShadow: 'inset 0 0 0 1px ' + palette.lineStrong,
-        },
-      }}
-      valueProps={{
-        binding: bindings.catBudgeted(category.id) as Binding<
-          'envelope-budget',
-          'budget'
-        >,
-        type: 'financial',
-        formatExpr: format.forEdit,
-        unformatExpr: format.fromEdit,
-      }}
-      inputProps={{
-        onBlur: () => setEditingCell(null),
-        style: {
-          backgroundColor: palette.panelRaised,
+      style={{ width: '100%' }}
+    >
+      <SheetCell
+        name="budget"
+        exposed={editing}
+        focused={editing}
+        width="flex"
+        textAlign="right"
+        onExpose={() => setEditingCell({ id: category.id, month })}
+        style={{
+          minHeight: 28,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+        }}
+        valueStyle={{
+          cursor: 'default',
+          justifyContent: 'flex-end',
+          padding: '0 4px',
           color: palette.text,
-          borderColor: palette.month,
-        },
-      }}
-      onSave={(amount: number | null) => {
-        onBudgetAction(month, 'budget-amount', {
-          category: category.id,
-          amount: amount ?? 0,
-        });
-      }}
-    />
+          fontWeight: 700,
+          ...styles.tnum,
+          ':hover': {
+            backgroundColor: palette.panelRaised,
+            boxShadow: 'inset 0 0 0 1px ' + palette.lineStrong,
+          },
+        }}
+        valueProps={{
+          binding: bindings.catBudgeted(category.id) as Binding<
+            'envelope-budget',
+            'budget'
+          >,
+          type: 'financial',
+          formatExpr: format.forEdit,
+          unformatExpr: format.fromEdit,
+        }}
+        inputProps={{
+          onBlur: () => setEditingCell(null),
+          style: {
+            backgroundColor: palette.panelRaised,
+            color: palette.text,
+            borderColor: palette.month,
+          },
+        }}
+        onSave={(amount: number | null) => {
+          onBudgetAction(month, 'budget-amount', {
+            category: category.id,
+            amount: amount ?? 0,
+          });
+        }}
+      />
+      <Popover
+        triggerRef={triggerRef}
+        placement="bottom start"
+        isOpen={menuOpen}
+        onOpenChange={() => setMenuOpen(false)}
+        style={{ width: 220, margin: 1 }}
+        isNonModal
+        {...position}
+      >
+        <Menu onMenuSelect={onMenuSelect} items={items} />
+      </Popover>
+    </View>
   );
 }
 
-function CategoryBudgetActionMenu({
+function useCategoryBudgetActions({
   category,
   month,
   budgetType,
   onBudgetAction,
+  onClose,
 }: {
   category: CategoryEntity;
   month: string;
   budgetType: string;
   onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
+  onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { showUndoNotification } = useUndo();
   const goalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
-  const {
-    menuOpen,
-    setMenuOpen,
-    position,
-    handleContextMenu,
-    resetPosition,
-    asContextMenu,
-  } = useContextMenu();
-  const triggerRef = useRef(null);
   const items: Array<{ name: string; text: string }> = [
     { name: 'copy-single-last', text: t("Copy last month's budget") },
     { name: 'set-single-3-avg', text: t('Set to 3 month average') },
@@ -796,6 +868,69 @@ function CategoryBudgetActionMenu({
         ]
       : []),
   ];
+
+  function onMenuSelect(name: string) {
+    onBudgetAction(month, name, { category: category.id });
+    if (name === 'copy-single-last') {
+      showUndoNotification({
+        message: t(`Budget set to last month's budget.`),
+      });
+    } else if (
+      name === 'set-single-3-avg' ||
+      name === 'set-single-6-avg' ||
+      name === 'set-single-12-avg'
+    ) {
+      showUndoNotification({
+        message: t('Budget set to {{numberOfMonths}}-month average.', {
+          numberOfMonths:
+            name === 'set-single-3-avg'
+              ? 3
+              : name === 'set-single-6-avg'
+                ? 6
+                : 12,
+        }),
+      });
+    } else if (name === 'apply-single-category-template') {
+      showUndoNotification({ message: t(`Budget template applied.`) });
+    } else if (name === 'copy-until-year-end') {
+      showUndoNotification({
+        message: t(`Budget copied until year end.`),
+      });
+    }
+    onClose();
+  }
+
+  return { items, onMenuSelect };
+}
+
+function CategoryBudgetActionMenu({
+  category,
+  month,
+  budgetType,
+  onBudgetAction,
+}: {
+  category: CategoryEntity;
+  month: string;
+  budgetType: string;
+  onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
+}) {
+  const {
+    menuOpen,
+    setMenuOpen,
+    position,
+    handleContextMenu,
+    resetPosition,
+    asContextMenu,
+  } = useContextMenu();
+  const triggerRef = useRef(null);
+  const { t } = useTranslation();
+  const { items, onMenuSelect } = useCategoryBudgetActions({
+    category,
+    month,
+    budgetType,
+    onBudgetAction,
+    onClose: () => setMenuOpen(false),
+  });
 
   return (
     <>
@@ -821,39 +956,7 @@ function CategoryBudgetActionMenu({
         isNonModal
         {...position}
       >
-        <Menu
-          onMenuSelect={name => {
-            onBudgetAction(month, name, { category: category.id });
-            if (name === 'copy-single-last') {
-              showUndoNotification({
-                message: t(`Budget set to last month's budget.`),
-              });
-            } else if (
-              name === 'set-single-3-avg' ||
-              name === 'set-single-6-avg' ||
-              name === 'set-single-12-avg'
-            ) {
-              showUndoNotification({
-                message: t('Budget set to {{numberOfMonths}}-month average.', {
-                  numberOfMonths:
-                    name === 'set-single-3-avg'
-                      ? 3
-                      : name === 'set-single-6-avg'
-                        ? 6
-                        : 12,
-                }),
-              });
-            } else if (name === 'apply-single-category-template') {
-              showUndoNotification({ message: t(`Budget template applied.`) });
-            } else if (name === 'copy-until-year-end') {
-              showUndoNotification({
-                message: t(`Budget copied until year end.`),
-              });
-            }
-            setMenuOpen(false);
-          }}
-          items={items}
-        />
+        <Menu onMenuSelect={onMenuSelect} items={items} />
       </Popover>
     </>
   );
@@ -980,6 +1083,43 @@ function SummaryValue({
   );
 }
 
+function TrackingTargetSummaryValue({
+  current,
+  target,
+  tone = 'default',
+}: {
+  current: Binding<'tracking-budget', 'total-income' | 'total-spent'>;
+  target: Binding<'tracking-budget', 'total-budget-income' | 'total-budgeted'>;
+  tone?: 'default' | 'negative';
+}) {
+  const format = useFormat();
+  const currentValue = Number(useSheetValue(current) ?? 0);
+  const targetValue = Number(useSheetValue(target) ?? 0);
+
+  return (
+    <Text
+      style={{
+        color:
+          tone === 'negative' && currentValue < 0
+            ? palette.danger
+            : palette.muted,
+        fontWeight: 700,
+        ...styles.tnum,
+      }}
+    >
+      <PrivacyFilter>
+        <Trans
+          i18nKey="{{current}} of {{target}}"
+          values={{
+            current: format(currentValue, 'financial'),
+            target: format(targetValue, 'financial'),
+          }}
+        />
+      </PrivacyFilter>
+    </Text>
+  );
+}
+
 function MonthActionMenu({
   month,
   budgetType,
@@ -994,7 +1134,14 @@ function MonthActionMenu({
   const { showUndoNotification } = useUndo();
   const displayMonth = monthUtils.format(month, 'MMMM', locale);
   const goalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
-  const [menuOpen, setMenuOpen] = useState(false);
+  const {
+    menuOpen,
+    setMenuOpen,
+    position,
+    handleContextMenu,
+    resetPosition,
+    asContextMenu,
+  } = useContextMenu();
   const triggerRef = useRef(null);
   const items: Array<{ name: string; text: string }> = [
     { name: 'copy-last', text: t("Copy last month's budget") },
@@ -1028,18 +1175,23 @@ function MonthActionMenu({
         ref={triggerRef}
         variant="bare"
         aria-label={t('Month actions')}
-        onPress={() => setMenuOpen(true)}
+        onPress={() => {
+          resetPosition();
+          setMenuOpen(true);
+        }}
+        onContextMenu={handleContextMenu}
         style={{ color: palette.muted, padding: 3 }}
       >
         <SvgDotsHorizontalTriple width={14} height={14} />
       </Button>
       <Popover
         triggerRef={triggerRef}
-        placement="bottom end"
+        placement={asContextMenu ? 'bottom start' : 'bottom end'}
         isOpen={menuOpen}
         onOpenChange={() => setMenuOpen(false)}
         style={{ width: 250, margin: 1 }}
         isNonModal
+        {...position}
       >
         <Menu
           onMenuSelect={name => {
@@ -1110,19 +1262,20 @@ function MonthActionMenu({
 
 function MonthSummaryLane({
   month,
+  selectedMonth,
   budgetType,
   collapsed,
-  categoryGroups,
   onBudgetAction,
 }: {
   month: string;
+  selectedMonth: string;
   budgetType: string;
   collapsed: boolean;
-  categoryGroups: CategoryGroupEntity[];
   onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
 }) {
   const { t } = useTranslation();
   const locale = useLocale();
+  const prevMonthName = monthUtils.format(monthUtils.prevMonth(month), 'MMM');
   const isTracking = budgetType === 'tracking';
   const isProjectedTrackingMonth =
     isTracking && month >= monthUtils.currentMonth();
@@ -1130,12 +1283,12 @@ function MonthSummaryLane({
   return (
     <SheetNameProvider name={monthUtils.sheetForMonth(month)}>
       <View
+        data-testid="month-summary-lane"
+        data-month={month}
         style={{
           flex: monthLaneFlex,
           borderLeft: '1px solid ' + palette.line,
-          backgroundColor: monthUtils.isCurrentMonth(month)
-            ? '#122B44'
-            : palette.panel,
+          backgroundColor: month === selectedMonth ? '#122B44' : palette.panel,
           padding: '8px 10px 9px',
           gap: 6,
         }}
@@ -1197,7 +1350,6 @@ function MonthSummaryLane({
             <LaneMetricRow label={<Trans>To budget</Trans>} emphasized>
               <ToBudgetSummaryValue
                 month={month}
-                categoryGroups={categoryGroups}
                 onBudgetAction={onBudgetAction}
               />
             </LaneMetricRow>
@@ -1205,23 +1357,15 @@ function MonthSummaryLane({
         ) : isTracking ? (
           <>
             <LaneMetricRow label={<Trans>Income</Trans>}>
-              <SummaryValue
-                binding={
-                  trackingBudget.totalIncome as Binding<
-                    'envelope-budget',
-                    'budget'
-                  >
-                }
+              <TrackingTargetSummaryValue
+                current={trackingBudget.totalIncome}
+                target={trackingBudget.totalBudgetedIncome}
               />
             </LaneMetricRow>
-            <LaneMetricRow label={<Trans>Spent</Trans>}>
-              <SummaryValue
-                binding={
-                  trackingBudget.totalSpent as Binding<
-                    'envelope-budget',
-                    'budget'
-                  >
-                }
+            <LaneMetricRow label={<Trans>Expenses</Trans>}>
+              <TrackingTargetSummaryValue
+                current={trackingBudget.totalSpent}
+                target={trackingBudget.totalBudgetedExpense}
                 tone="negative"
               />
             </LaneMetricRow>
@@ -1254,7 +1398,7 @@ function MonthSummaryLane({
           </>
         ) : (
           <>
-            <LaneMetricRow label={<Trans>Funds</Trans>}>
+            <LaneMetricRow label={<Trans>Available funds</Trans>}>
               <SummaryValue
                 binding={
                   envelopeBudget.incomeAvailable as Binding<
@@ -1264,7 +1408,9 @@ function MonthSummaryLane({
                 }
               />
             </LaneMetricRow>
-            <LaneMetricRow label={<Trans>Overspent</Trans>}>
+            <LaneMetricRow
+              label={<Trans>Overspent in {{ prevMonthName }}</Trans>}
+            >
               <SummaryValue
                 binding={
                   envelopeBudget.lastMonthOverspent as Binding<
@@ -1285,7 +1431,7 @@ function MonthSummaryLane({
                 }
               />
             </LaneMetricRow>
-            <LaneMetricRow label={<Trans>Next</Trans>}>
+            <LaneMetricRow label={<Trans>For next month</Trans>}>
               <SummaryValue
                 binding={
                   envelopeBudget.forNextMonth as Binding<
@@ -1298,7 +1444,6 @@ function MonthSummaryLane({
             <LaneMetricRow label={<Trans>To budget</Trans>} emphasized>
               <ToBudgetSummaryValue
                 month={month}
-                categoryGroups={categoryGroups}
                 onBudgetAction={onBudgetAction}
               />
             </LaneMetricRow>
@@ -1311,11 +1456,9 @@ function MonthSummaryLane({
 
 function ToBudgetSummaryValue({
   month,
-  categoryGroups,
   onBudgetAction,
 }: {
   month: string;
-  categoryGroups: CategoryGroupEntity[];
   onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
 }) {
   const { t } = useTranslation();
@@ -1331,8 +1474,14 @@ function ToBudgetSummaryValue({
   const [pickerMode, setPickerMode] = useState<
     'actions' | 'transfer' | 'cover' | 'hold'
   >('actions');
-  const [amountInput, setAmountInput] = useState('');
   const triggerRef = useRef(null);
+  const popoverFocusRef = useRef<HTMLSpanElement>(null);
+  function setPickerModeAndFocus(
+    mode: 'actions' | 'transfer' | 'cover' | 'hold',
+  ) {
+    popoverFocusRef.current?.focus();
+    setPickerMode(mode);
+  }
   const toBudget = Number(
     useSheetValue(
       envelopeBudget.toBudget as Binding<'envelope-budget', 'budget'>,
@@ -1401,263 +1550,105 @@ function ToBudgetSummaryValue({
           setPickerMode('actions');
         }}
         style={{ width: 280, margin: 1 }}
+        isNonModal
         {...position}
       >
-        {pickerMode === 'actions' ? (
-          <Menu
-            onMenuSelect={name => {
-              if (name === 'transfer' || name === 'cover') {
-                setAmountInput(format.forEdit(Math.abs(toBudget)));
-                setPickerMode(name);
-                return;
+        <span tabIndex={-1} ref={popoverFocusRef}>
+          {pickerMode === 'actions' ? (
+            <Menu
+              onMenuSelect={name => {
+                if (name === 'transfer' || name === 'cover') {
+                  setPickerModeAndFocus(name);
+                  return;
+                }
+                if (name === 'buffer') {
+                  onBudgetAction(month, 'reset-income-carryover', {});
+                  setPickerModeAndFocus('hold');
+                  return;
+                } else if (name === 'reset-buffer') {
+                  onBudgetAction(month, 'reset-hold', null);
+                } else if (name === 'disable-auto-buffer') {
+                  onBudgetAction(month, 'reset-income-carryover', {});
+                }
+                setMenuOpen(false);
+              }}
+              items={
+                items.length > 0
+                  ? items
+                  : [
+                      {
+                        name: 'none',
+                        text: t('No actions available'),
+                        disabled: true,
+                      },
+                    ]
               }
-              if (name === 'buffer') {
-                setAmountInput(format.forEdit(Math.max(toBudget, 0)));
-                onBudgetAction(month, 'reset-income-carryover', {});
-                setPickerMode('hold');
-                return;
-              } else if (name === 'reset-buffer') {
-                onBudgetAction(month, 'reset-hold', null);
-              } else if (name === 'disable-auto-buffer') {
-                onBudgetAction(month, 'reset-income-carryover', {});
-              }
-              setMenuOpen(false);
-            }}
-            items={
-              items.length > 0
-                ? items
-                : [
-                    {
-                      name: 'none',
-                      text: t('No actions available'),
-                      disabled: true,
-                    },
-                  ]
-            }
-          />
-        ) : pickerMode === 'hold' ? (
-          <ToBudgetHoldPicker
-            amountInput={amountInput}
-            setAmountInput={setAmountInput}
-            onBack={() => setPickerMode('actions')}
-            onSubmit={() => {
-              onBudgetAction(month, 'hold', {
-                amount:
-                  format.fromEdit(amountInput, Math.max(toBudget, 0)) ??
-                  Math.max(toBudget, 0),
-              });
-              setMenuOpen(false);
-              setPickerMode('actions');
-            }}
-          />
-        ) : (
-          <ToBudgetCategoryPicker
-            mode={pickerMode}
-            amountInput={amountInput}
-            setAmountInput={setAmountInput}
-            categoryGroups={categoryGroups}
-            onBack={() => setPickerMode('actions')}
-            onPick={categoryId => {
-              const amount = format.fromEdit(amountInput, Math.abs(toBudget));
-              if (pickerMode === 'transfer') {
+            />
+          ) : pickerMode === 'hold' ? (
+            <HoldMenu
+              onClose={() => {
+                setMenuOpen(false);
+                setPickerMode('actions');
+              }}
+              onSubmit={amount => {
+                onBudgetAction(month, 'hold', {
+                  amount,
+                });
+              }}
+            />
+          ) : pickerMode === 'transfer' ? (
+            <TransferMenu
+              initialAmount={toBudget}
+              onClose={() => {
+                setMenuOpen(false);
+                setPickerMode('actions');
+              }}
+              onSubmit={(amount, categoryId) => {
                 onBudgetAction(month, 'transfer-available', {
-                  amount: amount ?? toBudget,
+                  amount,
                   category: categoryId,
                 });
-              } else {
+              }}
+            />
+          ) : (
+            <CoverMenu
+              showToBeBudgeted={false}
+              initialAmount={toBudget}
+              onClose={() => {
+                setMenuOpen(false);
+                setPickerMode('actions');
+              }}
+              onSubmit={(amount, categoryId) => {
                 onBudgetAction(month, 'cover-overbudgeted', {
-                  amount: amount ?? Math.abs(toBudget),
+                  amount,
                   category: categoryId,
                   currencyCode: format.currency.code,
                 });
-              }
-              setMenuOpen(false);
-              setPickerMode('actions');
-            }}
-          />
-        )}
+              }}
+            />
+          )}
+        </span>
       </Popover>
     </>
   );
 }
 
-function ToBudgetHoldPicker({
-  amountInput,
-  setAmountInput,
-  onBack,
-  onSubmit,
-}: {
-  amountInput: string;
-  setAmountInput: (amount: string) => void;
-  onBack: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <View style={{ padding: 10, gap: 8 }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Text style={{ color: palette.text, fontWeight: 850 }}>
-          <Trans>Hold for next month</Trans>
-        </Text>
-        <Button
-          variant="bare"
-          onPress={onBack}
-          style={{ color: palette.muted, padding: 0, fontWeight: 700 }}
-        >
-          <Trans>Back</Trans>
-        </Button>
-      </View>
-      <Input
-        value={amountInput}
-        onUpdate={setAmountInput}
-        style={{
-          backgroundColor: palette.panel,
-          borderColor: palette.lineStrong,
-          color: palette.text,
-          ...styles.tnum,
-        }}
-      />
-      <View style={{ alignItems: 'flex-end' }}>
-        <Button variant="primary" onPress={onSubmit}>
-          <Trans>Hold</Trans>
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-function ToBudgetCategoryPicker({
-  mode,
-  amountInput,
-  setAmountInput,
-  categoryGroups,
-  onBack,
-  onPick,
-}: {
-  mode: 'transfer' | 'cover';
-  amountInput: string;
-  setAmountInput: (amount: string) => void;
-  categoryGroups: CategoryGroupEntity[];
-  onBack: () => void;
-  onPick: (categoryId: CategoryEntity['id']) => void;
-}) {
-  const categories = categoryGroups.flatMap(group =>
-    group.is_income
-      ? []
-      : (group.categories || [])
-          .filter(
-            category =>
-              mode === 'transfer' || (!category.hidden && !group.hidden),
-          )
-          .map(category => ({
-            ...category,
-            groupName: group.name,
-          })),
-  );
-
-  return (
-    <View style={{ padding: 10, gap: 8 }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Text style={{ color: palette.text, fontWeight: 850 }}>
-          {mode === 'transfer' ? (
-            <Trans>Move to category</Trans>
-          ) : (
-            <Trans>Cover from category</Trans>
-          )}
-        </Text>
-        <Button
-          variant="bare"
-          onPress={onBack}
-          style={{ color: palette.muted, padding: 0, fontWeight: 700 }}
-        >
-          <Trans>Back</Trans>
-        </Button>
-      </View>
-      <Input
-        value={amountInput}
-        onUpdate={setAmountInput}
-        style={{
-          backgroundColor: palette.panel,
-          borderColor: palette.lineStrong,
-          color: palette.text,
-          ...styles.tnum,
-        }}
-      />
-      <View style={{ maxHeight: 220, overflow: 'auto', gap: 2 }}>
-        {categories.length === 0 ? (
-          <Text style={{ color: palette.muted }}>
-            <Trans>No categories available</Trans>
-          </Text>
-        ) : (
-          categories.map(category => (
-            <Button
-              key={category.id}
-              variant="bare"
-              onPress={() => onPick(category.id)}
-              style={{
-                alignItems: 'flex-start',
-                padding: '6px 4px',
-                color: palette.text,
-                borderRadius: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: palette.text,
-                  fontWeight: 750,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {category.name}
-              </Text>
-              <Text
-                style={{
-                  color: palette.muted,
-                  fontSize: 11,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {category.groupName}
-              </Text>
-            </Button>
-          ))
-        )}
-      </View>
-    </View>
-  );
-}
-
 function MonthSummaryStrip({
   months,
+  selectedMonth,
   budgetType,
   categoryWidth,
   showProgressBars,
   collapsed,
-  categoryGroups,
   onToggleCollapse,
   onBudgetAction,
 }: {
   months: string[];
+  selectedMonth: string;
   budgetType: string;
   categoryWidth: number;
   showProgressBars: boolean;
   collapsed: boolean;
-  categoryGroups: CategoryGroupEntity[];
   onToggleCollapse: () => void;
   onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
 }) {
@@ -1666,6 +1657,7 @@ function MonthSummaryStrip({
 
   return (
     <View
+      data-testid="budget-summary"
       style={{
         flexDirection: 'row',
         backgroundColor: palette.panel,
@@ -1710,9 +1702,9 @@ function MonthSummaryStrip({
         <MonthSummaryLane
           key={month}
           month={month}
+          selectedMonth={selectedMonth}
           budgetType={budgetType}
           collapsed={collapsed}
-          categoryGroups={categoryGroups}
           onBudgetAction={onBudgetAction}
         />
       ))}
@@ -1729,21 +1721,78 @@ function MonthSummaryStrip({
   );
 }
 
+function ModernBudgetTotalsHooks({
+  month,
+  budgetType,
+}: {
+  month: string;
+  budgetType: string;
+}) {
+  return (
+    <SheetNameProvider name={monthUtils.sheetForMonth(month)}>
+      <ModernBudgetTotalsValues budgetType={budgetType} />
+    </SheetNameProvider>
+  );
+}
+
+function ModernBudgetTotalsValues({ budgetType }: { budgetType: string }) {
+  const format = useFormat();
+  const isTracking = budgetType === 'tracking';
+  const totalBudgeted = Number(
+    useSheetValue(
+      (isTracking
+        ? trackingBudget.totalBudgetedExpense
+        : envelopeBudget.totalBudgeted) as Binding<'envelope-budget', 'budget'>,
+    ) ?? 0,
+  );
+  const totalSpent = Number(
+    useSheetValue(
+      (isTracking
+        ? trackingBudget.totalSpent
+        : envelopeBudget.totalSpent) as Binding<'envelope-budget', 'budget'>,
+    ) ?? 0,
+  );
+  const totalLeftover = Number(
+    useSheetValue(
+      (isTracking
+        ? trackingBudget.totalLeftover
+        : envelopeBudget.totalBalance) as Binding<'envelope-budget', 'budget'>,
+    ) ?? 0,
+  );
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        overflow: 'hidden',
+        clipPath: 'inset(50%)',
+      }}
+    >
+      <Text data-testid="total-budgeted">
+        {format(isTracking ? totalBudgeted : -totalBudgeted, 'financial')}
+      </Text>
+      <Text data-testid="total-spent">{format(totalSpent, 'financial')}</Text>
+      <Text data-testid="total-leftover">
+        {format(totalLeftover, 'financial')}
+      </Text>
+    </View>
+  );
+}
+
 function ModernBalanceValue({
   category,
   month,
   budgetType,
-  categoryGroups,
   onBudgetAction,
 }: {
   category: CategoryEntity;
   month: string;
   budgetType: string;
-  categoryGroups: CategoryGroupEntity[];
   onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
 }) {
   const { t } = useTranslation();
-  const format = useFormat();
   const bindings = getBindings(budgetType);
   const {
     menuOpen,
@@ -1756,7 +1805,6 @@ function ModernBalanceValue({
   const [pickerMode, setPickerMode] = useState<
     'actions' | 'transfer' | 'cover'
   >('actions');
-  const [amountInput, setAmountInput] = useState('');
   const triggerRef = useRef(null);
   const isEnvelope = budgetType === 'envelope';
   const balance = Number(
@@ -1780,6 +1828,7 @@ function ModernBalanceValue({
     <>
       <Button
         ref={triggerRef}
+        data-testid="balance"
         variant="bare"
         onPress={() => {
           resetPosition();
@@ -1793,16 +1842,18 @@ function ModernBalanceValue({
           color: palette.text,
         }}
       >
-        <BalanceWithCarryover
-          carryover={bindings.catCarryover(category.id) as CarryoverBinding}
-          balance={bindings.catBalance(category.id) as BalanceBinding}
-          goal={bindings.catGoal(category.id) as GoalBinding}
-          budgeted={bindings.catBudgeted(category.id) as BudgetBinding}
-          longGoal={bindings.catLongGoal(category.id) as LongGoalBinding}
-          tooltipDisabled={menuOpen}
-        >
-          {props => <ModernBalanceText {...props} />}
-        </BalanceWithCarryover>
+        <View data-testid={`budget-balance-${category.id}-${month}`}>
+          <BalanceWithCarryover
+            carryover={bindings.catCarryover(category.id) as CarryoverBinding}
+            balance={bindings.catBalance(category.id) as BalanceBinding}
+            goal={bindings.catGoal(category.id) as GoalBinding}
+            budgeted={bindings.catBudgeted(category.id) as BudgetBinding}
+            longGoal={bindings.catLongGoal(category.id) as LongGoalBinding}
+            tooltipDisabled={menuOpen}
+          >
+            {props => <ModernBalanceText {...props} />}
+          </BalanceWithCarryover>
+        </View>
       </Button>
       <Popover
         triggerRef={triggerRef}
@@ -1819,7 +1870,6 @@ function ModernBalanceValue({
           <Menu
             onMenuSelect={type => {
               if (type === 'transfer' || type === 'cover') {
-                setAmountInput(format.forEdit(Math.abs(balance)));
                 setPickerMode(type);
                 return;
               }
@@ -1847,30 +1897,13 @@ function ModernBalanceValue({
             ]}
           />
         ) : (
-          <BalanceCategoryPicker
+          <ModernBalanceMovementMenu
             mode={pickerMode}
-            amountInput={amountInput}
-            setAmountInput={setAmountInput}
-            categoryGroups={categoryGroups}
-            currentCategoryId={category.id}
-            onBack={() => setPickerMode('actions')}
-            onPick={categoryId => {
-              const amount = format.fromEdit(amountInput, Math.abs(balance));
-              if (pickerMode === 'transfer') {
-                onBudgetAction(month, 'transfer-category', {
-                  amount: amount ?? Math.abs(balance),
-                  from: category.id,
-                  to: categoryId,
-                  currencyCode: format.currency.code,
-                });
-              } else {
-                onBudgetAction(month, 'cover-overspending', {
-                  amount: amount ?? Math.abs(balance),
-                  from: categoryId,
-                  to: category.id,
-                  currencyCode: format.currency.code,
-                });
-              }
+            category={category}
+            month={month}
+            balance={balance}
+            onBudgetAction={onBudgetAction}
+            onClose={() => {
               setMenuOpen(false);
               setPickerMode('actions');
             }}
@@ -1881,114 +1914,52 @@ function ModernBalanceValue({
   );
 }
 
-function BalanceCategoryPicker({
+function ModernBalanceMovementMenu({
   mode,
-  amountInput,
-  setAmountInput,
-  categoryGroups,
-  currentCategoryId,
-  onBack,
-  onPick,
+  category,
+  month,
+  balance,
+  onBudgetAction,
+  onClose,
 }: {
   mode: 'transfer' | 'cover';
-  amountInput: string;
-  setAmountInput: (amount: string) => void;
-  categoryGroups: CategoryGroupEntity[];
-  currentCategoryId: CategoryEntity['id'];
-  onBack: () => void;
-  onPick: (categoryId: CategoryEntity['id']) => void;
+  category: CategoryEntity;
+  month: string;
+  balance: number;
+  onBudgetAction: ModernBudgetPageProps['onBudgetAction'];
+  onClose: () => void;
 }) {
-  const categories = [
-    { id: 'to-budget', name: 'To Budget', groupName: 'Budget' },
-    ...categoryGroups.flatMap(group =>
-      group.is_income
-        ? []
-        : (group.categories || [])
-            .filter(
-              category =>
-                (mode === 'transfer' || (!category.hidden && !group.hidden)) &&
-                category.id !== currentCategoryId,
-            )
-            .map(category => ({
-              ...category,
-              groupName: group.name,
-            })),
-    ),
-  ];
+  const format = useFormat();
 
-  return (
-    <View style={{ padding: 10, gap: 8 }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Text style={{ color: palette.text, fontWeight: 850 }}>
-          {mode === 'transfer' ? (
-            <Trans>Move balance</Trans>
-          ) : (
-            <Trans>Cover overspending</Trans>
-          )}
-        </Text>
-        <Button
-          variant="bare"
-          onPress={onBack}
-          style={{ color: palette.muted, padding: 0, fontWeight: 700 }}
-        >
-          <Trans>Back</Trans>
-        </Button>
-      </View>
-      <Input
-        value={amountInput}
-        onUpdate={setAmountInput}
-        style={{
-          backgroundColor: palette.panel,
-          borderColor: palette.lineStrong,
-          color: palette.text,
-          ...styles.tnum,
-        }}
-      />
-      <View style={{ maxHeight: 220, overflow: 'auto', gap: 2 }}>
-        {categories.map(category => (
-          <Button
-            key={category.id}
-            variant="bare"
-            onPress={() => onPick(category.id)}
-            style={{
-              alignItems: 'flex-start',
-              padding: '6px 4px',
-              color: palette.text,
-              borderRadius: 4,
-            }}
-          >
-            <Text
-              style={{
-                color: palette.text,
-                fontWeight: 750,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {category.name}
-            </Text>
-            <Text
-              style={{
-                color: palette.muted,
-                fontSize: 11,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {category.groupName}
-            </Text>
-          </Button>
-        ))}
-      </View>
-    </View>
+  return mode === 'transfer' ? (
+    <TransferMenu
+      categoryId={category.id}
+      initialAmount={balance}
+      showToBeBudgeted
+      onClose={onClose}
+      onSubmit={(amount, toCategoryId) => {
+        onBudgetAction(month, 'transfer-category', {
+          amount,
+          from: category.id,
+          to: toCategoryId,
+          currencyCode: format.currency.code,
+        });
+      }}
+    />
+  ) : (
+    <CoverMenu
+      categoryId={category.id}
+      initialAmount={balance}
+      onClose={onClose}
+      onSubmit={(amount, fromCategoryId) => {
+        onBudgetAction(month, 'cover-overspending', {
+          amount,
+          from: fromCategoryId,
+          to: category.id,
+          currencyCode: format.currency.code,
+        });
+      }}
+    />
   );
 }
 
@@ -2029,6 +2000,7 @@ function ModernIncomeBalanceValue({
     <>
       <Button
         ref={triggerRef}
+        data-testid="balance"
         variant="bare"
         onPress={() => {
           resetPosition();
@@ -2111,15 +2083,17 @@ function SpendingProgressDashes({
     return null;
   }
 
+  const dashCount = 10;
   const percent = spentAmount / budgetAmount;
-  const normalFilled = Math.min(Math.ceil(percent * 12), 12);
+  const normalFilled = Math.min(Math.ceil(percent * dashCount), dashCount);
   const overflowPercent = Math.max(
     (spentAmount - budgetAmount) / budgetAmount,
     0,
   );
   const overflowLines = Array.from(
     { length: Math.min(Math.ceil(overflowPercent), 4) },
-    (_, index) => Math.min(Math.ceil((overflowPercent - index) * 12), 12),
+    (_, index) =>
+      Math.min(Math.ceil((overflowPercent - index) * dashCount), dashCount),
   );
   const isOverflowing = overflowLines.length > 0;
   const dashHeight = isOverflowing ? 6 : 14;
@@ -2128,9 +2102,10 @@ function SpendingProgressDashes({
     : 18;
 
   function renderDashes(filled: number, color: string, height: number) {
-    return Array.from({ length: 12 }, (_, index) => (
+    return Array.from({ length: dashCount }, (_, index) => (
       <View
         key={index}
+        data-testid="usage-dash"
         style={{
           width: 3,
           height,
@@ -2319,6 +2294,7 @@ function GoalStripMonth({
         {Array.from({ length: dashCount }, (_, index) => (
           <View
             key={index}
+            data-testid="goal-dash"
             style={{
               width: 3,
               height: 14,
@@ -2427,6 +2403,7 @@ function GoalPopoverMonth({
 function MonthCategoryCell({
   category,
   month,
+  selectedMonth,
   budgetType,
   showProgressBars,
   categoryGroups,
@@ -2437,6 +2414,7 @@ function MonthCategoryCell({
 }: {
   category: CategoryEntity;
   month: string;
+  selectedMonth: string;
   budgetType: string;
   showProgressBars: boolean;
   categoryGroups: CategoryGroupEntity[];
@@ -2447,6 +2425,7 @@ function MonthCategoryCell({
 }) {
   const bindings = getBindings(budgetType);
   const isEnvelopeIncome = budgetType === 'envelope' && category.is_income;
+  const isTrackingIncome = budgetType === 'tracking' && category.is_income;
   const showBalance = budgetType === 'envelope' || !category.is_income;
   const showProgress = showProgressBars && !category.is_income;
   const showThirdColumn = showProgress || showBalance;
@@ -2459,9 +2438,7 @@ function MonthCategoryCell({
         style={{
           flex: monthLaneFlex,
           borderLeft: '1px solid ' + palette.line,
-          backgroundColor: monthUtils.isCurrentMonth(month)
-            ? '#122B44'
-            : palette.panel,
+          backgroundColor: month === selectedMonth ? '#122B44' : palette.panel,
         }}
       >
         <View
@@ -2511,6 +2488,18 @@ function MonthCategoryCell({
                 />
               </View>
               <View style={{ minWidth: 0, alignItems: 'flex-end' }}>
+                {isTrackingIncome && (
+                  <Text
+                    style={{
+                      color: palette.textMuted,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <Trans>Budgeted</Trans>
+                  </Text>
+                )}
                 <BudgetAmountCell
                   category={category}
                   month={month}
@@ -2521,6 +2510,18 @@ function MonthCategoryCell({
                 />
               </View>
               <View style={{ minWidth: 0, alignItems: 'flex-end' }}>
+                {isTrackingIncome && (
+                  <Text
+                    style={{
+                      color: palette.textMuted,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <Trans>Received</Trans>
+                  </Text>
+                )}
                 <View
                   style={{
                     width: '100%',
@@ -2532,6 +2533,7 @@ function MonthCategoryCell({
                 >
                   <ScheduleIndicator category={category} month={month} />
                   <Button
+                    data-testid="category-month-spent"
                     variant="bare"
                     onPress={() => onShowActivity(category.id, month)}
                     style={{
@@ -2591,6 +2593,7 @@ function MonthCategoryCell({
                         />
                       </View>
                       <View
+                        data-testid="balance"
                         className="month-cell-balance-action"
                         style={{
                           gridArea: '1 / 1',
@@ -2602,19 +2605,19 @@ function MonthCategoryCell({
                           category={category}
                           month={month}
                           budgetType={budgetType}
-                          categoryGroups={categoryGroups}
                           onBudgetAction={onBudgetAction}
                         />
                       </View>
                     </View>
                   ) : (
-                    <ModernBalanceValue
-                      category={category}
-                      month={month}
-                      budgetType={budgetType}
-                      categoryGroups={categoryGroups}
-                      onBudgetAction={onBudgetAction}
-                    />
+                    <View data-testid="balance" style={{ width: '100%' }}>
+                      <ModernBalanceValue
+                        category={category}
+                        month={month}
+                        budgetType={budgetType}
+                        onBudgetAction={onBudgetAction}
+                      />
+                    </View>
                   )}
                 </View>
               )}
@@ -2650,6 +2653,7 @@ function MonthGroupCell({
 }) {
   const bindings = getBindings(budgetType);
   const isEnvelopeIncome = budgetType === 'envelope' && group.is_income;
+  const isTrackingIncome = budgetType === 'tracking' && group.is_income;
   const showBalance = budgetType === 'envelope' || !group.is_income;
   const showProgress = showProgressBars && !group.is_income;
   const showThirdColumn = showProgress || showBalance;
@@ -2657,6 +2661,7 @@ function MonthGroupCell({
   return (
     <SheetNameProvider name={monthUtils.sheetForMonth(month)}>
       <View
+        data-testid="group-month-cell"
         style={{
           flex: monthLaneFlex,
           borderLeft: '1px solid ' + palette.line,
@@ -2694,6 +2699,18 @@ function MonthGroupCell({
             >
               <View />
               <View style={{ minWidth: 0, alignItems: 'flex-end' }}>
+                {isTrackingIncome && (
+                  <Text
+                    style={{
+                      color: palette.textMuted,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <Trans>Budgeted</Trans>
+                  </Text>
+                )}
                 <MoneyValue
                   binding={
                     bindings.groupBudgeted(group.id) as Binding<
@@ -2704,6 +2721,18 @@ function MonthGroupCell({
                 />
               </View>
               <View style={{ minWidth: 0, alignItems: 'flex-end' }}>
+                {isTrackingIncome && (
+                  <Text
+                    style={{
+                      color: palette.textMuted,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <Trans>Received</Trans>
+                  </Text>
+                )}
                 <MoneyValue
                   binding={
                     bindings.groupSumAmount(group.id) as Binding<
@@ -2892,24 +2921,35 @@ function ModernHeader({
             height: 30,
           }}
         >
-          <Button
-            variant="bare"
-            onPress={() => selectMonth(monthUtils.prevMonth(startMonth))}
-            style={{ color: palette.text, padding: '2px 8px' }}
-          >
-            <Trans>Prev</Trans>
-          </Button>
+          <View title={t('Previous month')}>
+            <Button
+              variant="bare"
+              onPress={() => selectMonth(monthUtils.prevMonth(startMonth))}
+              style={{ color: palette.text, padding: '2px 8px' }}
+            >
+              <Trans>Prev</Trans>
+            </Button>
+          </View>
           {months.map(month => {
             const isCurrent = monthUtils.isCurrentMonth(month);
+            const displayMonth = monthUtils.format(month, 'MMM/yy', locale);
 
             return (
-              <View
+              <Button
                 key={month}
+                variant="bare"
+                data-testid={
+                  month === startMonth ? 'selected-budget-month' : undefined
+                }
+                data-month={month === startMonth ? month : undefined}
+                aria-label={monthUtils.format(month, 'MMMM yyyy', locale)}
+                onPress={() => selectMonth(month)}
                 style={{
                   flex: 1,
                   minWidth: 0,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  padding: 0,
                   borderRadius: 6,
                   backgroundColor: isCurrent ? palette.month : palette.panelAlt,
                   border:
@@ -2924,18 +2964,20 @@ function ModernHeader({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {monthUtils.format(month, 'MMM/yy', locale)}
+                  {displayMonth}
                 </Text>
-              </View>
+              </Button>
             );
           })}
-          <Button
-            variant="bare"
-            onPress={() => selectMonth(monthUtils.nextMonth(startMonth))}
-            style={{ color: palette.text, padding: '2px 8px' }}
-          >
-            <Trans>Next</Trans>
-          </Button>
+          <View title={t('Next month')}>
+            <Button
+              variant="bare"
+              onPress={() => selectMonth(monthUtils.nextMonth(startMonth))}
+              style={{ color: palette.text, padding: '2px 8px' }}
+            >
+              <Trans>Next</Trans>
+            </Button>
+          </View>
         </View>
       </View>
     </View>
@@ -2964,7 +3006,9 @@ export function ModernBudgetPage({
 }: ModernBudgetPageProps) {
   const { t } = useTranslation();
   const { setDisplayMax } = useBudgetMonthCount();
-  const months = getVisibleMonths(startMonth, maxMonths);
+  const months = getVisibleMonths(startMonth, maxMonths, monthBounds);
+  const visibleStartMonth = months[0] ?? startMonth;
+  const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const [, setMaxMonthsPref] = useGlobalPref('maxMonths');
   const [categoryExpandedStatePref, setCategoryExpandedStatePref] =
     useGlobalPref('categoryExpandedState');
@@ -2991,12 +3035,16 @@ export function ModernBudgetPage({
   const [newCategoryForGroup, setNewCategoryForGroup] = useState<string | null>(
     null,
   );
-  const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
   const [isPanningBudget, setIsPanningBudget] = useState(false);
   const summaryScrollRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dragItemRef = useRef<DragItem | null>(null);
   const panStateRef = useRef<PanState | null>(null);
+  const longHoverGroupRef = useRef<{
+    id: CategoryGroupEntity['id'];
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const blockClickUntilRef = useRef(0);
   const bodyUserSelectRef = useRef<string | null>(null);
   const schedulesQuery = useMemo(() => q('schedules').select('*'), []);
@@ -3013,11 +3061,26 @@ export function ModernBudgetPage({
   }, []);
 
   useEffect(() => {
-    setDisplayMax(6);
-  }, [setDisplayMax]);
+    setDisplayMax(months.length);
+  }, [months.length, setDisplayMax]);
+  useHotkeys(
+    'shift+t',
+    () => {
+      onBudgetAction(visibleStartMonth, 'overwrite-goal-template', null);
+    },
+    {
+      preventDefault: true,
+      scopes: ['app'],
+      enabled: isGoalTemplatesEnabled,
+    },
+    [onBudgetAction, visibleStartMonth, isGoalTemplatesEnabled],
+  );
 
   useEffect(() => {
     return () => {
+      if (longHoverGroupRef.current) {
+        clearTimeout(longHoverGroupRef.current.timer);
+      }
       if (bodyUserSelectRef.current != null) {
         document.body.style.userSelect = bodyUserSelectRef.current;
       }
@@ -3030,6 +3093,30 @@ export function ModernBudgetPage({
         ? collapsedGroupIds.filter(groupId => groupId !== id)
         : [...collapsedGroupIds, id],
     );
+  };
+  const clearLongHoverGroup = () => {
+    if (!longHoverGroupRef.current) {
+      return;
+    }
+
+    clearTimeout(longHoverGroupRef.current.timer);
+    longHoverGroupRef.current = null;
+  };
+  const startLongHoverGroup = (group: CategoryGroupEntity) => {
+    if (longHoverGroupRef.current?.id === group.id) {
+      return;
+    }
+
+    clearLongHoverGroup();
+    longHoverGroupRef.current = {
+      id: group.id,
+      timer: setTimeout(() => {
+        setCollapsedGroupIdsPref(
+          collapsedGroupIds.filter(groupId => groupId !== group.id),
+        );
+        longHoverGroupRef.current = null;
+      }, 650),
+    };
   };
   const cycleCategoryWidth = () => {
     setCategoryExpandedStatePref((categoryExpandedState + 1) % 3);
@@ -3052,7 +3139,7 @@ export function ModernBudgetPage({
   };
 
   const visibleGroups = categoryGroups.filter(
-    group => showHiddenCategories || !group.hidden,
+    group => group.is_income || showHiddenCategories || !group.hidden,
   );
   const sortableGroups = visibleGroups.filter(group => !group.is_income);
 
@@ -3152,7 +3239,9 @@ export function ModernBudgetPage({
     if (
       isStickyCategory ||
       isStickyGoal ||
-      target.closest('input, textarea, select, [contenteditable="true"]')
+      target.closest(
+        'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-testid="budget"]',
+      )
     ) {
       return;
     }
@@ -3195,6 +3284,7 @@ export function ModernBudgetPage({
 
   return (
     <View
+      data-testid="budget-table"
       style={{
         ...styles.page,
         padding: 12,
@@ -3205,7 +3295,7 @@ export function ModernBudgetPage({
       <View style={{ flex: 1, minHeight: 0, gap: 10 }}>
         <ModernHeader
           budgetType={budgetType}
-          startMonth={startMonth}
+          startMonth={visibleStartMonth}
           months={months}
           monthBounds={monthBounds}
           onMonthSelect={onMonthSelect}
@@ -3232,11 +3322,11 @@ export function ModernBudgetPage({
             >
               <MonthSummaryStrip
                 months={months}
+                selectedMonth={visibleStartMonth}
                 budgetType={budgetType}
                 categoryWidth={categoryWidth}
                 showProgressBars={showProgressBars}
                 collapsed={summaryCollapsed}
-                categoryGroups={categoryGroups}
                 onToggleCollapse={onToggleSummaryCollapse}
                 onBudgetAction={onBudgetAction}
               />
@@ -3245,7 +3335,7 @@ export function ModernBudgetPage({
 
           <View
             ref={scrollContainerRef}
-            data-testid="modern-budget-scroll-container"
+            data-testid="budget-table-scroll-container"
             onScroll={syncSummaryScroll}
             onPointerDown={onBudgetPanStart}
             onPointerMove={onBudgetPanMove}
@@ -3271,7 +3361,7 @@ export function ModernBudgetPage({
               overflow: 'auto',
               boxShadow: styles.cardShadow,
               cursor: isPanningBudget ? 'grabbing' : 'grab',
-              userSelect: isPanningBudget ? 'none' : 'auto',
+              userSelect: 'none',
               scrollbarColor: `${palette.muted} ${palette.panelAlt}`,
               '::-webkit-scrollbar': {
                 width: 12,
@@ -3295,6 +3385,7 @@ export function ModernBudgetPage({
               }}
             >
               <View
+                data-testid="budget-totals"
                 style={{
                   position: 'sticky',
                   top: 0,
@@ -3306,6 +3397,10 @@ export function ModernBudgetPage({
                   borderBottom: '1px solid ' + palette.lineStrong,
                 }}
               >
+                <ModernBudgetTotalsHooks
+                  month={visibleStartMonth}
+                  budgetType={budgetType}
+                />
                 <View
                   style={{
                     ...stickyCategoryColumnStyle(palette.panelAlt, 11),
@@ -3328,7 +3423,7 @@ export function ModernBudgetPage({
                     <Trans>Category</Trans>
                   </Text>
                   <CategoryHeaderMenu
-                    startMonth={startMonth}
+                    startMonth={visibleStartMonth}
                     maxMonths={maxMonths}
                     months={months}
                     monthBounds={monthBounds}
@@ -3456,57 +3551,105 @@ export function ModernBudgetPage({
                 const afterNextGroup = sortableGroups[groupIndex + 2];
                 const groupDragKey = `group:${group.id}`;
                 const startGroupDrag = (event: DragEvent) => {
-                  if (group.is_income) {
+                  if (
+                    group.is_income ||
+                    isInteractiveDragTarget(event.target)
+                  ) {
+                    event.preventDefault();
                     return;
                   }
                   event.dataTransfer.effectAllowed = 'move';
                   event.dataTransfer.setData('text/plain', group.id);
-                  setDragItem({ type: 'group', id: group.id });
+                  const item: DragItem = { type: 'group', id: group.id };
+                  dragItemRef.current = item;
                 };
 
                 return (
                   <View key={group.id} style={{ flexShrink: 0 }}>
                     <View
                       onDragEnd={() => {
-                        setDragItem(null);
+                        clearLongHoverGroup();
+                        dragItemRef.current = null;
                         setDragTarget(null);
                       }}
                       onDragOver={event => {
+                        const activeDragItem = dragItemRef.current;
                         if (
-                          !dragItem ||
-                          (dragItem.type === 'group' && group.is_income) ||
-                          (dragItem.type === 'category' &&
-                            dragItem.isIncome !== group.is_income)
+                          !activeDragItem ||
+                          (activeDragItem.type === 'group' &&
+                            group.is_income) ||
+                          (activeDragItem.type === 'category' &&
+                            activeDragItem.isIncome !== group.is_income)
                         ) {
                           return;
                         }
                         event.preventDefault();
                         setDragTarget(groupDragKey);
+                        if (
+                          isCollapsed &&
+                          activeDragItem.type === 'category' &&
+                          activeDragItem.groupId !== group.id
+                        ) {
+                          startLongHoverGroup(group);
+                        }
+                      }}
+                      onDragLeave={event => {
+                        if (
+                          event.relatedTarget instanceof Node &&
+                          event.currentTarget.contains(event.relatedTarget)
+                        ) {
+                          return;
+                        }
+
+                        clearLongHoverGroup();
                       }}
                       onDrop={event => {
                         event.preventDefault();
+                        clearLongHoverGroup();
                         setDragTarget(null);
+                        const activeDragItem = dragItemRef.current;
 
-                        if (dragItem?.type === 'group') {
-                          const targetId = getDropTargetId(
-                            event,
-                            group,
-                            nextGroup,
+                        if (activeDragItem?.type === 'group') {
+                          const { targetId } = findSortDown(
+                            sortableGroups,
+                            getDropPosition(event),
+                            group.id,
                           );
-                          if (dragItem.id !== group.id) {
-                            onReorderGroup?.({ id: dragItem.id, targetId });
+                          if (activeDragItem.id !== group.id) {
+                            onReorderGroup?.({
+                              id: activeDragItem.id,
+                              targetId,
+                            });
                           }
                         } else if (
-                          dragItem?.type === 'category' &&
-                          dragItem.isIncome === group.is_income
+                          activeDragItem?.type === 'category' &&
+                          activeDragItem.isIncome === group.is_income
                         ) {
-                          onReorderCategory?.({
-                            id: dragItem.id,
-                            groupId: group.id,
-                            targetId: null,
-                          });
-                          if (isCollapsed) {
-                            toggleGroup(group.id);
+                          const dropPosition = getDropPosition(event);
+                          const { targetId: groupId } = findSortUp(
+                            visibleGroups,
+                            dropPosition,
+                            group.id,
+                          );
+                          const targetGroup = visibleGroups.find(
+                            group => group.id === groupId,
+                          );
+
+                          if (targetGroup) {
+                            const targetCategories =
+                              targetGroup.categories || [];
+                            onReorderCategory?.({
+                              id: activeDragItem.id,
+                              groupId: targetGroup.id,
+                              targetId:
+                                targetCategories.length === 0 ||
+                                dropPosition === 'top'
+                                  ? null
+                                  : targetCategories[0].id,
+                            });
+                            if (isCollapsed) {
+                              toggleGroup(group.id);
+                            }
                           }
                         }
                       }}
@@ -3523,111 +3666,124 @@ export function ModernBudgetPage({
                         cursor: 'default',
                         opacity: group.hidden ? 0.5 : 1,
                       }}
+                      data-testid="row"
                     >
-                      <View
-                        draggable={!group.is_income}
-                        onDragStart={startGroupDrag}
-                        style={{
-                          ...stickyCategoryColumnStyle(palette.panelRaised),
-                          width: categoryWidth,
-                          flexShrink: 0,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '0 14px',
-                          color: palette.text,
-                          cursor: group.is_income ? 'default' : 'grab',
+                      <GroupActionMenu
+                        group={group}
+                        budgetType={budgetType}
+                        onRename={() =>
+                          setEditingName({ type: 'group', id: group.id })
+                        }
+                        onMoveUp={
+                          onReorderGroup && previousGroup
+                            ? () =>
+                                onReorderGroup({
+                                  id: group.id,
+                                  targetId: previousGroup.id,
+                                })
+                            : undefined
+                        }
+                        onMoveDown={
+                          onReorderGroup && nextGroup
+                            ? () =>
+                                onReorderGroup({
+                                  id: group.id,
+                                  targetId: afterNextGroup?.id ?? null,
+                                })
+                            : undefined
+                        }
+                        onAddCategory={() => {
+                          setNewCategoryForGroup(group.id);
+                          if (isCollapsed) {
+                            toggleGroup(group.id);
+                          }
                         }}
+                        onSave={onSaveGroup}
+                        onDelete={onDeleteGroup}
+                        onApplyBudgetTemplatesInGroup={
+                          onApplyBudgetTemplatesInGroup
+                        }
+                        onSortCategories={onSortCategories}
                       >
-                        <Button
-                          variant="bare"
-                          aria-label={isCollapsed ? t('Expand') : t('Collapse')}
-                          onPress={() => toggleGroup(group.id)}
-                          style={{
-                            color: palette.text,
-                            padding: 2,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {isCollapsed ? (
-                            <SvgArrowButtonRight1
-                              style={{ width: 10, height: 10 }}
-                            />
-                          ) : (
-                            <SvgArrowButtonDown1
-                              style={{ width: 10, height: 10 }}
-                            />
-                          )}
-                        </Button>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          {editingName?.type === 'group' &&
-                          editingName.id === group.id ? (
-                            <InlineNameEditor
-                              defaultValue={group.name}
-                              placeholder={t('Group name')}
-                              onCancel={() => setEditingName(null)}
-                              onSave={name => {
-                                onSaveGroup({ ...group, name });
-                                setEditingName(null);
-                              }}
-                            />
-                          ) : (
-                            <Text
-                              onClick={() => toggleGroup(group.id)}
+                        {({ menuButton, triggerRef, handleContextMenu }) => (
+                          <View
+                            innerRef={triggerRef}
+                            data-testid="group-header"
+                            draggable={!group.is_income}
+                            onDragStart={startGroupDrag}
+                            onContextMenu={handleContextMenu}
+                            style={{
+                              ...stickyCategoryColumnStyle(palette.panelRaised),
+                              width: categoryWidth,
+                              flexShrink: 0,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '0 14px',
+                              color: palette.text,
+                              cursor: group.is_income ? 'default' : 'grab',
+                              userSelect: 'none',
+                            }}
+                          >
+                            <Button
+                              variant="bare"
+                              aria-label={
+                                isCollapsed ? t('Expand') : t('Collapse')
+                              }
+                              onPress={() => toggleGroup(group.id)}
                               style={{
                                 color: palette.text,
-                                fontWeight: 800,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
+                                padding: 2,
+                                flexShrink: 0,
                               }}
                             >
-                              {group.name}
-                            </Text>
-                          )}
-                        </View>
-                        <GroupActionMenu
-                          group={group}
-                          onRename={() =>
-                            setEditingName({ type: 'group', id: group.id })
-                          }
-                          onMoveUp={
-                            onReorderGroup && previousGroup
-                              ? () =>
-                                  onReorderGroup({
-                                    id: group.id,
-                                    targetId: previousGroup.id,
-                                  })
-                              : undefined
-                          }
-                          onMoveDown={
-                            onReorderGroup && nextGroup
-                              ? () =>
-                                  onReorderGroup({
-                                    id: group.id,
-                                    targetId: afterNextGroup?.id ?? null,
-                                  })
-                              : undefined
-                          }
-                          onAddCategory={() => {
-                            setNewCategoryForGroup(group.id);
-                            if (isCollapsed) {
-                              toggleGroup(group.id);
-                            }
-                          }}
-                          onSave={onSaveGroup}
-                          onDelete={onDeleteGroup}
-                          onApplyBudgetTemplatesInGroup={
-                            onApplyBudgetTemplatesInGroup
-                          }
-                          onSortCategories={onSortCategories}
-                        />
-                        <NotesButton
-                          id={group.id}
-                          defaultColor={palette.muted}
-                          showPlaceholder
-                        />
-                      </View>
+                              {isCollapsed ? (
+                                <SvgArrowButtonRight1
+                                  style={{ width: 10, height: 10 }}
+                                />
+                              ) : (
+                                <SvgArrowButtonDown1
+                                  style={{ width: 10, height: 10 }}
+                                />
+                              )}
+                            </Button>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              {editingName?.type === 'group' &&
+                              editingName.id === group.id ? (
+                                <InlineNameEditor
+                                  defaultValue={group.name}
+                                  placeholder={t('Group name')}
+                                  onCancel={() => setEditingName(null)}
+                                  onSave={name => {
+                                    onSaveGroup({ ...group, name });
+                                    setEditingName(null);
+                                  }}
+                                />
+                              ) : (
+                                <Text
+                                  data-testid="category-name"
+                                  onClick={() => toggleGroup(group.id)}
+                                  style={{
+                                    color: palette.text,
+                                    fontWeight: 800,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
+                                  {group.name}
+                                </Text>
+                              )}
+                            </View>
+                            {menuButton}
+                            <NotesButton
+                              id={group.id}
+                              defaultColor={palette.muted}
+                              showPlaceholder
+                            />
+                          </View>
+                        )}
+                      </GroupActionMenu>
                       {months.map(month => (
                         <MonthGroupCell
                           key={month}
@@ -3687,13 +3843,14 @@ export function ModernBudgetPage({
                           <View
                             key={category.id}
                             onDragEnd={() => {
-                              setDragItem(null);
+                              dragItemRef.current = null;
                               setDragTarget(null);
                             }}
                             onDragOver={event => {
+                              const activeDragItem = dragItemRef.current;
                               if (
-                                dragItem?.type !== 'category' ||
-                                dragItem.isIncome !== category.is_income
+                                activeDragItem?.type !== 'category' ||
+                                activeDragItem.isIncome !== category.is_income
                               ) {
                                 return;
                               }
@@ -3703,9 +3860,10 @@ export function ModernBudgetPage({
                             onDrop={event => {
                               event.preventDefault();
                               setDragTarget(null);
+                              const activeDragItem = dragItemRef.current;
                               if (
-                                dragItem?.type !== 'category' ||
-                                dragItem.isIncome !== category.is_income
+                                activeDragItem?.type !== 'category' ||
+                                activeDragItem.isIncome !== category.is_income
                               ) {
                                 return;
                               }
@@ -3716,11 +3874,11 @@ export function ModernBudgetPage({
                                 nextCategory,
                               );
                               if (
-                                dragItem.id !== category.id ||
-                                dragItem.groupId !== group.id
+                                activeDragItem.id !== category.id ||
+                                activeDragItem.groupId !== group.id
                               ) {
                                 onReorderCategory?.({
-                                  id: dragItem.id,
+                                  id: activeDragItem.id,
                                   groupId: group.id,
                                   targetId,
                                 });
@@ -3736,110 +3894,127 @@ export function ModernBudgetPage({
                                   : '0 solid transparent',
                               borderBottom: '1px solid ' + palette.line,
                               cursor: 'default',
-                              opacity: category.hidden ? 0.5 : 1,
+                              opacity:
+                                category.hidden || group.hidden ? 0.5 : 1,
                             }}
+                            data-testid="row"
                           >
-                            <View
-                              draggable
-                              onDragStart={event => {
-                                event.dataTransfer.effectAllowed = 'move';
-                                event.dataTransfer.setData(
-                                  'text/plain',
-                                  category.id,
-                                );
-                                setDragItem({
+                            <CategoryActionMenu
+                              category={category}
+                              groupHidden={group.hidden}
+                              onRename={() =>
+                                setEditingName({
                                   type: 'category',
                                   id: category.id,
-                                  groupId: group.id,
-                                  isIncome: Boolean(category.is_income),
-                                });
-                              }}
-                              style={{
-                                ...stickyCategoryColumnStyle(palette.panel),
-                                width: categoryWidth,
-                                flexShrink: 0,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '0 14px',
-                                cursor: 'grab',
-                              }}
+                                })
+                              }
+                              onMoveUp={
+                                onReorderCategory && previousCategory
+                                  ? () =>
+                                      onReorderCategory({
+                                        id: category.id,
+                                        groupId: group.id,
+                                        targetId: previousCategory.id,
+                                      })
+                                  : undefined
+                              }
+                              onMoveDown={
+                                onReorderCategory && nextCategory
+                                  ? () =>
+                                      onReorderCategory({
+                                        id: category.id,
+                                        groupId: group.id,
+                                        targetId: afterNextCategory?.id ?? null,
+                                      })
+                                  : undefined
+                              }
+                              onSave={onSaveCategory}
+                              onDelete={onDeleteCategory}
                             >
-                              <View style={{ flex: 1, minWidth: 0 }}>
-                                {editingName?.type === 'category' &&
-                                editingName.id === category.id ? (
-                                  <InlineNameEditor
-                                    defaultValue={category.name}
-                                    placeholder={t('Category name')}
-                                    onCancel={() => setEditingName(null)}
-                                    onSave={name => {
-                                      onSaveCategory({ ...category, name });
-                                      setEditingName(null);
-                                    }}
+                              {({
+                                menuButton,
+                                triggerRef,
+                                handleContextMenu,
+                              }) => (
+                                <View
+                                  innerRef={triggerRef}
+                                  data-testid="category-header"
+                                  draggable
+                                  onDragStart={event => {
+                                    if (isInteractiveDragTarget(event.target)) {
+                                      event.preventDefault();
+                                      return;
+                                    }
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    event.dataTransfer.setData(
+                                      'text/plain',
+                                      category.id,
+                                    );
+                                    const item: DragItem = {
+                                      type: 'category',
+                                      id: category.id,
+                                      groupId: group.id,
+                                      isIncome: Boolean(category.is_income),
+                                    };
+                                    dragItemRef.current = item;
+                                  }}
+                                  onContextMenu={handleContextMenu}
+                                  style={{
+                                    ...stickyCategoryColumnStyle(palette.panel),
+                                    width: categoryWidth,
+                                    flexShrink: 0,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '0 14px',
+                                    cursor: 'grab',
+                                    userSelect: 'none',
+                                  }}
+                                >
+                                  <View style={{ flex: 1, minWidth: 0 }}>
+                                    {editingName?.type === 'category' &&
+                                    editingName.id === category.id ? (
+                                      <InlineNameEditor
+                                        defaultValue={category.name}
+                                        placeholder={t('Category name')}
+                                        onCancel={() => setEditingName(null)}
+                                        onSave={name => {
+                                          onSaveCategory({
+                                            ...category,
+                                            name,
+                                          });
+                                          setEditingName(null);
+                                        }}
+                                      />
+                                    ) : (
+                                      <Text
+                                        data-testid="category-name"
+                                        style={{
+                                          color: palette.text,
+                                          fontWeight: 650,
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                        }}
+                                      >
+                                        {category.name}
+                                      </Text>
+                                    )}
+                                  </View>
+                                  {menuButton}
+                                  <ModernCategoryRowActions
+                                    category={category}
+                                    month={months[0]}
                                   />
-                                ) : (
-                                  <Text
-                                    style={{
-                                      color: palette.text,
-                                      fontWeight: 650,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                    }}
-                                  >
-                                    {category.name}
-                                  </Text>
-                                )}
-                              </View>
-                              <CategoryActionMenu
-                                category={category}
-                                groupHidden={group.hidden}
-                                onRename={() =>
-                                  setEditingName({
-                                    type: 'category',
-                                    id: category.id,
-                                  })
-                                }
-                                onMoveUp={
-                                  onReorderCategory && previousCategory
-                                    ? () =>
-                                        onReorderCategory({
-                                          id: category.id,
-                                          groupId: group.id,
-                                          targetId: previousCategory.id,
-                                        })
-                                    : undefined
-                                }
-                                onMoveDown={
-                                  onReorderCategory && nextCategory
-                                    ? () =>
-                                        onReorderCategory({
-                                          id: category.id,
-                                          groupId: group.id,
-                                          targetId:
-                                            afterNextCategory?.id ?? null,
-                                        })
-                                    : undefined
-                                }
-                                onSave={onSaveCategory}
-                                onDelete={onDeleteCategory}
-                              />
-                              <ModernAutomationButton
-                                category={category}
-                                month={months[0]}
-                                budgetType={budgetType}
-                              />
-                              <NotesButton
-                                id={category.id}
-                                defaultColor={palette.muted}
-                                showPlaceholder
-                              />
-                            </View>
+                                </View>
+                              )}
+                            </CategoryActionMenu>
                             {months.map(month => (
                               <MonthCategoryCell
                                 key={month}
                                 category={category}
                                 month={month}
+                                selectedMonth={visibleStartMonth}
                                 budgetType={budgetType}
                                 showProgressBars={showProgressBars}
                                 categoryGroups={categoryGroups}

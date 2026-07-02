@@ -3,6 +3,10 @@ import type { Locator, Page } from '@playwright/test';
 
 import { AccountPage } from './account-page';
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export class BudgetPage {
   readonly page: Page;
   readonly budgetSummary: Locator;
@@ -27,6 +31,10 @@ export class BudgetPage {
 
   async getScrollTop() {
     return this.budgetTableScrollContainer.evaluate(el => el.scrollTop);
+  }
+
+  async getScrollLeft() {
+    return this.budgetTableScrollContainer.evaluate(el => el.scrollLeft);
   }
 
   async scrollToBottom() {
@@ -148,6 +156,7 @@ export class BudgetPage {
       .getByTestId('row')
       .nth(idx)
       .getByTestId('balance')
+      .first()
       .textContent();
 
     if (!balanceText) {
@@ -176,6 +185,7 @@ export class BudgetPage {
       .getByTestId('row')
       .nth(idx)
       .getByTestId('category-month-spent')
+      .first()
       .click();
     return new AccountPage(this.page);
   }
@@ -220,12 +230,36 @@ export class BudgetPage {
       throw new Error(`Unable to get category name of row index ${toIdx}.`);
     }
 
-    await this.budgetTable
+    const balanceCell = this.budgetTable
       .getByTestId('row')
       .nth(fromIdx)
       .getByTestId('balance')
-      .getByTestId(/^budget/)
-      .click();
+      .first();
+    await balanceCell.hover();
+
+    const modernBalanceButton = balanceCell.locator(
+      '[data-testid^="budget-balance-"]',
+    );
+    if ((await modernBalanceButton.count()) > 0) {
+      await modernBalanceButton.first().click();
+      await this.page.getByText('Move balance', { exact: true }).click();
+      const categoryInput = this.page.getByPlaceholder('(none)');
+      if ((await categoryInput.count()) > 0) {
+        await categoryInput.click();
+        await this.page.keyboard.type(toName);
+        await this.page.keyboard.press('Enter');
+        await this.page.getByRole('button', { name: 'Transfer' }).click();
+      } else {
+        await this.page
+          .locator('button')
+          .filter({ hasText: new RegExp(`^${escapeRegExp(toName)}`) })
+          .last()
+          .click();
+      }
+      return;
+    }
+
+    await balanceCell.getByTestId(/^budget/).click();
 
     await this.page
       .getByRole('button', { name: 'Transfer to another category' })

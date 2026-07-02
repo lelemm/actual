@@ -55,6 +55,7 @@ import { NON_DRAGGABLE_AREA_CLASS_NAME } from './constants';
 import { DashboardHeader } from './DashboardHeader';
 import './overview.scss';
 import { DashboardSelector } from './DashboardSelector';
+import { getDashboardWidgetItems } from './getDashboardWidgetItems';
 import { LoadingIndicator } from './LoadingIndicator';
 import { AgeOfMoneyCard } from './reports/AgeOfMoneyCard';
 import { BalanceForecastCard } from './reports/BalanceForecastCard';
@@ -593,87 +594,16 @@ export function Overview({ dashboard }: OverviewProps) {
 
                             onAddWidget(item);
                           }}
-                          items={[
-                            {
-                              name: 'cash-flow-card' as const,
-                              text: t('Cash flow graph'),
-                            },
-                            {
-                              name: 'net-worth-card' as const,
-                              text: t('Net worth graph'),
-                            },
-                            {
-                              name: 'crossover-card' as const,
-                              text: t('Crossover point'),
-                            },
-                            ...(ageOfMoneyReportEnabled
-                              ? [
-                                  {
-                                    name: 'age-of-money-card' as const,
-                                    text: t('Age of Money'),
-                                  },
-                                ]
-                              : []),
-                            {
-                              name: 'spending-card' as const,
-                              text: t('Spending analysis'),
-                            },
-                            ...(budgetAnalysisReportEnabled
-                              ? [
-                                  {
-                                    name: 'budget-analysis-card' as const,
-                                    text: t('Budget analysis'),
-                                  },
-                                ]
-                              : []),
-                            ...(balanceForecastReportEnabled
-                              ? [
-                                  {
-                                    name: 'balance-forecast-card' as const,
-                                    text: t('Balance forecast'),
-                                  },
-                                ]
-                              : []),
-                            {
-                              name: 'markdown-card' as const,
-                              text: t('Text widget'),
-                            },
-                            {
-                              name: 'summary-card' as const,
-                              text: t('Summary card'),
-                            },
-                            {
-                              name: 'calendar-card' as const,
-                              text: t('Calendar card'),
-                            },
-                            ...(formulaMode
-                              ? [
-                                  {
-                                    name: 'formula-card' as const,
-                                    text: t('Formula card'),
-                                  },
-                                ]
-                              : []),
-                            ...(sankeyFeatureFlag
-                              ? [
-                                  {
-                                    name: 'sankey-card' as const,
-                                    text: t('Sankey card'),
-                                  },
-                                ]
-                              : []),
-                            {
-                              name: 'custom-report' as const,
-                              text: t('New custom report'),
-                            },
-                            ...(customReports.length
-                              ? ([Menu.line] satisfies Array<typeof Menu.line>)
-                              : []),
-                            ...customReports.map(report => ({
-                              name: `custom-report-${report.id}` as const,
-                              text: report.name,
-                            })),
-                          ]}
+                          items={getDashboardWidgetItems({
+                            t,
+                            customReports,
+                            ageOfMoneyReportEnabled,
+                            formulaMode,
+                            crossoverReportEnabled: true,
+                            sankeyReportEnabled: sankeyFeatureFlag,
+                            budgetAnalysisReportEnabled,
+                            balanceForecastReportEnabled,
+                          })}
                         />
                       </Dialog>
                     </Popover>

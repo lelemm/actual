@@ -27,6 +27,7 @@ import { BalanceHistoryGraph } from '#components/accounts/BalanceHistoryGraph';
 import { Link } from '#components/common/Link';
 import { Notes } from '#components/Notes';
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
+import type { DropPosition } from '#components/sort';
 import type { OnDragChangeCallback, OnDropCallback } from '#components/sort';
 import { CellValue } from '#components/spreadsheet/CellValue';
 import { useContextMenu } from '#hooks/useContextMenu';
@@ -67,6 +68,7 @@ type AccountProps<FieldName extends SheetFields<'account'>> = {
   titleAccount?: boolean;
   isExactPathMatch?: boolean;
   balanceTestId?: string;
+  nativeReorderFallback?: boolean;
 };
 
 export function Account<FieldName extends SheetFields<'account'>>({
@@ -85,6 +87,7 @@ export function Account<FieldName extends SheetFields<'account'>>({
   titleAccount,
   isExactPathMatch,
   balanceTestId,
+  nativeReorderFallback = false,
 }: AccountProps<FieldName>) {
   const isTestEnv = useIsTestEnv();
   const { t } = useTranslation();
@@ -104,7 +107,7 @@ export function Account<FieldName extends SheetFields<'account'>>({
     type,
     onDragChange,
     item: { id: account && account.id },
-    canDrag: account != null,
+    canDrag: account != null && onDragChange != null && onDrop != null,
   });
   const handleDragRef = useDragRef(dragRef);
 
@@ -113,6 +116,9 @@ export function Account<FieldName extends SheetFields<'account'>>({
     id: account && account.id,
     onDrop,
   });
+  const [nativeDropPos, setNativeDropPos] = useState<DropPosition | null>(null);
+  const canReorder = account != null && onDragChange != null && onDrop != null;
+  const useNativeReorder = nativeReorderFallback && canReorder;
 
   const [showBalanceHistory, setShowBalanceHistory] = useSyncedPref(
     `side-nav.show-balance-history-${account?.id}`,
@@ -137,13 +143,70 @@ export function Account<FieldName extends SheetFields<'account'>>({
       innerRef={dropRef}
       style={{ flexShrink: 0, ...outerStyle }}
       onContextMenu={needsTooltip ? handleContextMenu : undefined}
+      onDragOver={
+        useNativeReorder
+          ? event => {
+              event.preventDefault();
+              const rect = event.currentTarget.getBoundingClientRect();
+              setNativeDropPos(
+                event.clientY - rect.top < rect.height / 2 ? 'top' : 'bottom',
+              );
+            }
+          : undefined
+      }
+      onDragLeave={useNativeReorder ? () => setNativeDropPos(null) : undefined}
+      onDrop={
+        useNativeReorder
+          ? event => {
+              event.preventDefault();
+              const id = event.dataTransfer.getData(
+                'application/actual-account',
+              );
+              if (id && account && id !== account.id) {
+                void onDrop(id, nativeDropPos, account.id);
+              }
+              setNativeDropPos(null);
+            }
+          : undefined
+      }
     >
       <View innerRef={triggerRef}>
-        <DropHighlight pos={dropPos} />
-        <View innerRef={handleDragRef}>
+        <DropHighlight pos={dropPos ?? nativeDropPos} />
+        <View
+          innerRef={handleDragRef}
+          draggable={useNativeReorder || undefined}
+          onDragStart={
+            useNativeReorder && account
+              ? event => {
+                  event.dataTransfer.setData(
+                    'application/actual-account',
+                    account.id,
+                  );
+                  void onDragChange({
+                    state: 'start',
+                    type,
+                    item: { id: account.id },
+                  });
+                }
+              : undefined
+          }
+          onDragEnd={
+            useNativeReorder && account
+              ? () => {
+                  setNativeDropPos(null);
+                  void onDragChange({
+                    state: 'end',
+                    type,
+                    item: { id: account.id },
+                  });
+                }
+              : undefined
+          }
+        >
           <Link
             variant="internal"
             to={to}
+            draggable={false}
             isDisabled={isEditing}
             isExactPathMatch={isExactPathMatch}
             style={{

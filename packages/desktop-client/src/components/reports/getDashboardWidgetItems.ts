@@ -11,13 +11,16 @@ type Translate = (key: string) => string;
 type GetDashboardWidgetItemsParams = {
   t: Translate;
   customReports: CustomReportSummary[];
+  ageOfMoneyReportEnabled: boolean;
   formulaMode: boolean;
   crossoverReportEnabled: boolean;
+  sankeyReportEnabled: boolean;
   budgetAnalysisReportEnabled: boolean;
   balanceForecastReportEnabled: boolean;
 };
 
 type DashboardWidgetMenuName =
+  | 'age-of-money-card'
   | 'balance-forecast-card'
   | 'budget-analysis-card'
   | 'calendar-card'
@@ -27,6 +30,7 @@ type DashboardWidgetMenuName =
   | 'formula-card'
   | 'markdown-card'
   | 'net-worth-card'
+  | 'sankey-card'
   | 'spending-card'
   | 'summary-card'
   | `custom-report-${string}`;
@@ -44,8 +48,10 @@ function findItemIndex(
 export function getDashboardWidgetItems({
   t,
   customReports,
+  ageOfMoneyReportEnabled,
   formulaMode,
   crossoverReportEnabled,
+  sankeyReportEnabled,
   budgetAnalysisReportEnabled,
   balanceForecastReportEnabled,
 }: GetDashboardWidgetItemsParams): MenuItem<DashboardWidgetMenuName>[] {
@@ -87,6 +93,13 @@ export function getDashboardWidgetItems({
     });
   }
 
+  if (ageOfMoneyReportEnabled) {
+    items.splice(findItemIndex(items, 'spending-card'), 0, {
+      name: 'age-of-money-card',
+      text: t('Age of Money'),
+    });
+  }
+
   if (budgetAnalysisReportEnabled) {
     items.splice(findItemIndex(items, 'markdown-card'), 0, {
       name: 'budget-analysis-card',
@@ -105,6 +118,13 @@ export function getDashboardWidgetItems({
     items.splice(findItemIndex(items, 'custom-report'), 0, {
       name: 'formula-card',
       text: t('Formula card'),
+    });
+  }
+
+  if (sankeyReportEnabled) {
+    items.splice(findItemIndex(items, 'custom-report'), 0, {
+      name: 'sankey-card',
+      text: t('Sankey card'),
     });
   }
 

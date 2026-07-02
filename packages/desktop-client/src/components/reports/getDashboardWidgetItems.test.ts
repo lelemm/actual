@@ -12,8 +12,10 @@ describe('getDashboardWidgetItems', () => {
     const disabled = getDashboardWidgetItems({
       t: value => value,
       customReports: [],
+      ageOfMoneyReportEnabled: false,
       formulaMode: false,
       crossoverReportEnabled: false,
+      sankeyReportEnabled: false,
       budgetAnalysisReportEnabled: false,
       balanceForecastReportEnabled: false,
     });
@@ -21,8 +23,10 @@ describe('getDashboardWidgetItems', () => {
     const enabled = getDashboardWidgetItems({
       t: value => value,
       customReports: [],
+      ageOfMoneyReportEnabled: false,
       formulaMode: false,
       crossoverReportEnabled: false,
+      sankeyReportEnabled: false,
       budgetAnalysisReportEnabled: false,
       balanceForecastReportEnabled: true,
     });
@@ -35,13 +39,44 @@ describe('getDashboardWidgetItems', () => {
     const items = getDashboardWidgetItems({
       t: value => value,
       customReports: [{ id: 'abc', name: 'Custom Budget Review' }],
+      ageOfMoneyReportEnabled: false,
       formulaMode: false,
       crossoverReportEnabled: false,
+      sankeyReportEnabled: false,
       budgetAnalysisReportEnabled: false,
       balanceForecastReportEnabled: false,
     });
 
     expect(items).toContain(Menu.line);
     expect(getNames(items)).toContain('custom-report-abc');
+  });
+
+  it('gates experimental report widgets', () => {
+    const disabled = getDashboardWidgetItems({
+      t: value => value,
+      customReports: [],
+      ageOfMoneyReportEnabled: false,
+      formulaMode: false,
+      crossoverReportEnabled: true,
+      sankeyReportEnabled: false,
+      budgetAnalysisReportEnabled: false,
+      balanceForecastReportEnabled: false,
+    });
+
+    const enabled = getDashboardWidgetItems({
+      t: value => value,
+      customReports: [],
+      ageOfMoneyReportEnabled: true,
+      formulaMode: false,
+      crossoverReportEnabled: true,
+      sankeyReportEnabled: true,
+      budgetAnalysisReportEnabled: false,
+      balanceForecastReportEnabled: false,
+    });
+
+    expect(getNames(disabled)).not.toContain('age-of-money-card');
+    expect(getNames(disabled)).not.toContain('sankey-card');
+    expect(getNames(enabled)).toContain('age-of-money-card');
+    expect(getNames(enabled)).toContain('sankey-card');
   });
 });

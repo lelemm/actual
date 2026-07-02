@@ -34,6 +34,7 @@ type InternalLinkProps = {
   children?: ReactNode;
   isDisabled?: boolean;
   isExactPathMatch?: boolean;
+  draggable?: boolean;
 };
 
 const externalLinkColors = {
@@ -126,6 +127,7 @@ const InternalLink = ({
   children,
   isDisabled,
   isExactPathMatch = false,
+  draggable,
 }: InternalLinkProps) => {
   const path = to ?? '';
   const match = useMatch({ path, end: isExactPathMatch });
@@ -134,6 +136,7 @@ const InternalLink = ({
     <NavLink
       to={path}
       className={css([styles.smallText, style, match ? activeStyle : null])}
+      draggable={draggable}
       onClick={e => {
         if (isDisabled) {
           e.preventDefault();

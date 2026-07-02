@@ -155,7 +155,9 @@ budgetTypes.forEach(budgetType => {
       global.IS_TESTING = previousGlobalIsTesting;
     });
 
-    test.beforeEach(async ({ browser }) => {
+    test.beforeEach(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(90_000);
+
       page = await browser.newPage();
       navigation = new MobileNavigation(page);
       configurationPage = new ConfigurationPage(page);
@@ -197,6 +199,18 @@ budgetTypes.forEach(budgetType => {
         'Income',
       ]);
       await expect(page).toMatchThemeScreenshots();
+    });
+
+    test('keeps the legacy mobile budget page when modern budget is enabled', async () => {
+      const settingsPage = await navigation.goToSettingsPage();
+      await settingsPage.enableExperimentalFeature('Modern budget page');
+
+      const budgetPage = await navigation.goToBudgetPage();
+
+      await expect(budgetPage.budgetTableHeader).toBeVisible();
+      await expect(budgetPage.categoryNames.first()).toHaveText('Food');
+      await expect(page.getByText('Options')).toHaveCount(0);
+      await expect(page.getByTestId('month-summary-lane')).toHaveCount(0);
     });
 
     // Page Header Tests

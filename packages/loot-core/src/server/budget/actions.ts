@@ -225,19 +225,19 @@ export async function copyPreviousMonth({
   const budgetData = await getBudgetData(table, prevMonth.toString());
 
   await batchMessages(async () => {
-    budgetData.forEach(prevBudget => {
+    for (const prevBudget of budgetData) {
       if (prevBudget.is_income === 1 && !isTrackingBudget()) {
-        return;
+        continue;
       }
       if (prevBudget.hidden === 1 || prevBudget.group_hidden === 1) {
-        return;
+        continue;
       }
-      void setBudget({
+      await setBudget({
         category: prevBudget.category,
         month,
         amount: prevBudget.amount,
       });
-    });
+    }
   });
 }
 
@@ -254,7 +254,7 @@ export async function copySinglePreviousMonth({
     'budget-' + category,
   );
   await batchMessages(async () => {
-    void setBudget({ category, month, amount: newAmount });
+    await setBudget({ category, month, amount: newAmount });
   });
 }
 
@@ -264,12 +264,12 @@ export async function setZero({ month }: { month: string }): Promise<void> {
   );
 
   await batchMessages(async () => {
-    categories.forEach(cat => {
+    for (const cat of categories) {
       if (cat.is_income === 1 && !isTrackingBudget()) {
-        return;
+        continue;
       }
-      void setBudget({ category: cat.id, month, amount: 0 });
-    });
+      await setBudget({ category: cat.id, month, amount: 0 });
+    }
   });
 }
 
@@ -303,7 +303,7 @@ export async function set3MonthAvg({
         avg *= -1;
       }
 
-      void setBudget({ category: cat.id, month, amount: avg });
+      await setBudget({ category: cat.id, month, amount: avg });
     }
   });
 }
@@ -327,7 +327,7 @@ export async function set12MonthAvg({
       if (cat.is_income === 1 && !isTrackingBudget()) {
         continue;
       }
-      void setNMonthAvg({ month, N: 12, category: cat.id });
+      await setNMonthAvg({ month, N: 12, category: cat.id });
     }
   });
 }
@@ -351,7 +351,7 @@ export async function set6MonthAvg({
       if (cat.is_income === 1 && !isTrackingBudget()) {
         continue;
       }
-      void setNMonthAvg({ month, N: 6, category: cat.id });
+      await setNMonthAvg({ month, N: 6, category: cat.id });
     }
   });
 }
@@ -381,7 +381,7 @@ export async function setNMonthAvg({
       avg *= -1;
     }
 
-    void setBudget({ category, month, amount: avg });
+    await setBudget({ category, month, amount: avg });
   });
 }
 

@@ -133,7 +133,7 @@ export function Accounts({
 
       <View
         style={{
-          overflow: shouldCenterCompact ? 'visible' : 'auto',
+          overflow: compact || shouldCenterCompact ? 'visible' : 'auto',
           flexShrink: 0,
         }}
       >
@@ -182,6 +182,7 @@ export function Accounts({
                 style={compact ? compactAccountStyle : undefined}
                 onDragChange={disableAccountReorder ? undefined : onDragChange}
                 onDrop={disableAccountReorder ? undefined : onReorder}
+                nativeReorderFallback={compact}
                 outerStyle={makeDropPadding(i)}
               />
             ))}
@@ -218,6 +219,7 @@ export function Accounts({
                 style={compact ? compactAccountStyle : undefined}
                 onDragChange={disableAccountReorder ? undefined : onDragChange}
                 onDrop={disableAccountReorder ? undefined : onReorder}
+                nativeReorderFallback={compact}
                 outerStyle={makeDropPadding(i)}
               />
             ))}
@@ -249,6 +251,7 @@ export function Accounts({
               style={compact ? compactAccountStyle : undefined}
               onDragChange={disableAccountReorder ? undefined : onDragChange}
               onDrop={disableAccountReorder ? undefined : onReorder}
+              nativeReorderFallback={compact}
             />
           ))}
 
