@@ -25,6 +25,7 @@ import { css } from '@emotion/css';
 
 import { sync } from '#app/appSlice';
 import { SharedArrayBufferWarning } from '#components/SharedArrayBufferWarning';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useIsTestEnv } from '#hooks/useIsTestEnv';
 import { useMetadataPref } from '#hooks/useMetadataPref';
@@ -253,6 +254,11 @@ function ServerSyncButton({ style, isMobile = false }: ServerSyncButtonProps) {
 
 function BudgetTitlebar() {
   const [maxMonths, setMaxMonthsPref] = useGlobalPref('maxMonths');
+  const isModernBudgetPageEnabled = useFeatureFlag('modernBudgetPage');
+
+  if (isModernBudgetPageEnabled) {
+    return null;
+  }
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>

@@ -22,6 +22,7 @@ import {
   useSortCategoriesMutation,
 } from '#budget';
 import { useCategories } from '#hooks/useCategories';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useNavigate } from '#hooks/useNavigate';
@@ -32,6 +33,7 @@ import { useSyncedPref } from '#hooks/useSyncedPref';
 import { AutoSizingBudgetTable } from './DynamicBudgetTable';
 import * as envelopeBudget from './envelope/EnvelopeBudgetComponents';
 import { EnvelopeBudgetProvider } from './envelope/EnvelopeBudgetContext';
+import { ModernBudgetPage } from './ModernBudgetPage';
 import * as trackingBudget from './tracking/TrackingBudgetComponents';
 import { TrackingBudgetProvider } from './tracking/TrackingBudgetContext';
 import { prewarmAllMonths, prewarmMonth } from './util';
@@ -50,6 +52,7 @@ export function Budget() {
     end: startMonth,
   });
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
+  const isModernBudgetPageEnabled = useFeatureFlag('modernBudgetPage');
   const [maxMonthsPref] = useGlobalPref('maxMonths');
   const maxMonths = maxMonthsPref || 1;
   const [initialized, setInitialized] = useState(false);
@@ -179,9 +182,37 @@ export function Budget() {
     return null;
   }
 
-  let table;
-  if (budgetType === 'tracking') {
-    table = (
+  if (isModernBudgetPageEnabled) {
+    return (
+      <SheetNameProvider name={monthUtils.sheetForMonth(startMonth)}>
+        <ModernBudgetPage
+          budgetType={budgetType}
+          categoryGroups={categoryGroups}
+          startMonth={startMonth}
+          maxMonths={maxMonths}
+          summaryCollapsed={summaryCollapsed}
+          monthBounds={bounds}
+          onMonthSelect={onMonthSelect}
+          onToggleSummaryCollapse={onToggleCollapse}
+          onBudgetAction={onBudgetAction}
+          onShowActivity={onShowActivity}
+          onSaveCategory={onSaveCategory}
+          onDeleteCategory={onDeleteCategory}
+          onSaveGroup={onSaveCategoryGroup}
+          onDeleteGroup={onDeleteCategoryGroup}
+          onApplyBudgetTemplatesInGroup={onApplyBudgetTemplatesInGroup}
+          onReorderCategory={reorderCategory.mutate}
+          onReorderGroup={reorderCategoryGroup.mutate}
+          onSortCategories={(groupId, direction) =>
+            sortCategories.mutate({ groupId, direction })
+          }
+        />
+      </SheetNameProvider>
+    );
+  }
+
+  const table =
+    budgetType === 'tracking' ? (
       <TrackingBudgetProvider
         summaryCollapsed={summaryCollapsed}
         onBudgetAction={onBudgetAction}
@@ -208,9 +239,7 @@ export function Budget() {
           }
         />
       </TrackingBudgetProvider>
-    );
-  } else {
-    table = (
+    ) : (
       <EnvelopeBudgetProvider
         summaryCollapsed={summaryCollapsed}
         onBudgetAction={onBudgetAction}
@@ -238,7 +267,6 @@ export function Budget() {
         />
       </EnvelopeBudgetProvider>
     );
-  }
 
   return (
     <SheetNameProvider name={monthUtils.sheetForMonth(startMonth)}>
