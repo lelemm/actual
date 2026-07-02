@@ -2976,7 +2976,7 @@ export function ModernBudgetPage({
   const [showHiddenCategories = false, setShowHiddenCategories] = useLocalPref(
     'budget.showHiddenCategories',
   );
-  const [showProgressBars = false, setShowProgressBars] = useLocalPref(
+  const [showProgressBars = true, setShowProgressBars] = useLocalPref(
     'budget.showProgressBars',
   );
   const [editingCell, setEditingCell] = useState<{

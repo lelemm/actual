@@ -54,7 +54,7 @@ export function Budget() {
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
   const isModernBudgetPageEnabled = useFeatureFlag('modernBudgetPage');
   const [maxMonthsPref] = useGlobalPref('maxMonths');
-  const maxMonths = maxMonthsPref || 1;
+  const maxMonths = maxMonthsPref || (isModernBudgetPageEnabled ? 2 : 1);
   const [initialized, setInitialized] = useState(false);
   const { data: { grouped: categoryGroups } = { grouped: [] } } =
     useCategories();

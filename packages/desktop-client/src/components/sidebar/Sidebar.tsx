@@ -117,6 +117,8 @@ export function Sidebar() {
               width: hasWindowButtons ? null : 'auto',
             } as CSSProperties,
             flex: 1,
+            flexDirection: 'column',
+            minHeight: 0,
             ...styles.darkScrollbar,
           })}
         >

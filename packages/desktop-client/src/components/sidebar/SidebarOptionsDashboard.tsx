@@ -400,7 +400,8 @@ export function SidebarOptionsDashboard() {
       })}
       style={{
         minHeight: 0,
-        flex: 1,
+        height: 0,
+        flex: '1 1 0',
         flexDirection: 'column',
         overflowX: 'hidden',
         padding: '0 6px 8px',
@@ -509,7 +510,7 @@ export function SidebarOptionsDashboard() {
         style={{
           minHeight: 0,
           flex: 1,
-          overflowY: 'auto',
+          overflow: 'hidden',
           overflowX: 'hidden',
           backgroundColor: palette.panel,
           border: '1px solid ' + palette.line,
@@ -533,7 +534,18 @@ export function SidebarOptionsDashboard() {
         <View
           style={{
             minHeight: 80,
-            overflow: 'hidden',
+            height: '100%',
+            overflow: 'auto',
+            scrollbarColor: `${palette.muted} ${palette.panelAlt}`,
+            '::-webkit-scrollbar': {
+              width: 10,
+              backgroundColor: palette.panelAlt,
+            },
+            '::-webkit-scrollbar-thumb': {
+              backgroundColor: palette.muted,
+              border: '2px solid ' + palette.panelAlt,
+              backgroundClip: 'padding-box',
+            },
           }}
         >
           {gridWidth > 0 && currentPage && (
