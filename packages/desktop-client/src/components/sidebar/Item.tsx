@@ -15,6 +15,13 @@ import { View } from '@actual-app/components/view';
 
 import { ItemContent } from './ItemContent';
 
+const modernPalette = {
+  panelRaised: '#1B3850',
+  lineStrong: '#42617B',
+  text: '#EAF2FA',
+  textMuted: '#A9BAD0',
+};
+
 type ItemProps = {
   title: string;
   Icon:
@@ -27,6 +34,7 @@ type ItemProps = {
   onClick?: ComponentProps<typeof ItemContent>['onClick'];
   forceHover?: boolean;
   forceActive?: boolean;
+  modern?: boolean;
 };
 
 export function Item({
@@ -39,9 +47,12 @@ export function Item({
   indent = 0,
   forceHover = false,
   forceActive = false,
+  modern = false,
 }: ItemProps) {
   const hoverStyle = {
-    backgroundColor: theme.sidebarItemBackgroundHover,
+    backgroundColor: modern
+      ? modernPalette.panelRaised
+      : theme.sidebarItemBackgroundHover,
   };
 
   const content = (
@@ -59,25 +70,37 @@ export function Item({
   );
 
   return (
-    <View style={{ flexShrink: 0, ...style }}>
+    <View style={{ flexShrink: 0, marginBottom: modern ? 3 : 0, ...style }}>
       <ItemContent
         style={{
           ...styles.mediumText,
-          paddingTop: 9,
-          paddingBottom: 9,
-          paddingLeft: 19 + indent,
-          paddingRight: 10,
+          paddingTop: modern ? 7 : 9,
+          paddingBottom: modern ? 7 : 9,
+          paddingLeft: modern ? 10 + indent : 19 + indent,
+          paddingRight: modern ? 10 : 10,
           textDecoration: 'none',
-          color: theme.sidebarItemText,
+          color: modern ? modernPalette.textMuted : theme.sidebarItemText,
+          borderRadius: modern ? 6 : 0,
+          transition: modern
+            ? 'background-color .15s, color .15s, box-shadow .15s'
+            : undefined,
           ...(forceHover ? hoverStyle : {}),
           ':hover': hoverStyle,
         }}
         forceActive={forceActive}
-        activeStyle={{
-          borderLeft: '4px solid ' + theme.sidebarItemTextSelected,
-          paddingLeft: 19 + indent - 4,
-          color: theme.sidebarItemTextSelected,
-        }}
+        activeStyle={
+          modern
+            ? {
+                backgroundColor: modernPalette.panelRaised,
+                boxShadow: 'inset 0 0 0 1px ' + modernPalette.lineStrong,
+                color: modernPalette.text,
+              }
+            : {
+                borderLeft: '4px solid ' + theme.sidebarItemTextSelected,
+                paddingLeft: 19 + indent - 4,
+                color: theme.sidebarItemTextSelected,
+              }
+        }
         to={to}
         onClick={onClick}
       >

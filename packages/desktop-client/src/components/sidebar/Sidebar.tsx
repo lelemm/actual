@@ -13,6 +13,7 @@ import { css } from '@emotion/css';
 import { Resizable } from 're-resizable';
 
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useResizeObserver } from '#hooks/useResizeObserver';
@@ -23,8 +24,13 @@ import { Accounts } from './Accounts';
 import { BudgetName } from './BudgetName';
 import { PrimaryButtons } from './PrimaryButtons';
 import { SecondaryButtons } from './SecondaryButtons';
+import { SidebarOptionsDashboard } from './SidebarOptionsDashboard';
 import { useSidebar } from './SidebarProvider';
 import { ToggleButton } from './ToggleButton';
+
+const modernSidebarPalette = {
+  page: '#07111C',
+};
 
 export function Sidebar() {
   const hasWindowButtons = !Platform.isBrowser && Platform.OS === 'mac';
@@ -35,6 +41,7 @@ export function Sidebar() {
   const { width } = useResponsive();
   const [isFloating = false, setFloatingSidebarPref] =
     useGlobalPref('floatingSidebar');
+  const modernBudgetPage = useFeatureFlag('modernBudgetPage');
 
   const [sidebarWidthLocalPref, setSidebarWidthLocalPref] =
     useLocalPref('sidebarWidth');
@@ -94,7 +101,12 @@ export function Sidebar() {
           className={css({
             color: theme.sidebarItemText,
             height: '100%',
-            backgroundColor: theme.sidebarBackground,
+            backgroundColor: modernBudgetPage
+              ? modernSidebarPalette.page
+              : theme.sidebarBackground,
+            ...(modernBudgetPage && {
+              boxShadow: '2px 0 12px rgba(0, 0, 0, .18)',
+            }),
             '& .float': {
               opacity: isFloating ? 1 : 0,
               transition: 'opacity .25s, width .25s',
@@ -116,25 +128,33 @@ export function Sidebar() {
 
           <View
             style={{
-              flexGrow: 1,
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
               '@media screen and (max-height: 480px)': {
                 overflowY: 'auto',
               },
             }}
           >
-            <PrimaryButtons />
+            <PrimaryButtons modern={modernBudgetPage} />
 
-            <Accounts />
+            {modernBudgetPage ? (
+              <SidebarOptionsDashboard />
+            ) : (
+              <>
+                <Accounts />
 
-            <SecondaryButtons
-              buttons={[
-                {
-                  title: t('Add account'),
-                  Icon: SvgAdd,
-                  onClick: onAddAccount,
-                },
-              ]}
-            />
+                <SecondaryButtons
+                  buttons={[
+                    {
+                      title: t('Add account'),
+                      Icon: SvgAdd,
+                      onClick: onAddAccount,
+                    },
+                  ]}
+                />
+              </>
+            )}
           </View>
         </View>
       </Resizable>

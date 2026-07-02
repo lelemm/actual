@@ -2,6 +2,7 @@ import { send } from '@actual-app/core/platform/client/connection';
 import { q } from '@actual-app/core/shared/query';
 import type {
   CustomReportEntity,
+  DashboardPageKind,
   DashboardPageEntity,
   DashboardWidgetEntity,
 } from '@actual-app/core/types/models';
@@ -43,14 +44,18 @@ export const dashboardQueries = {
         widgets.filter(w => w.dashboard_page_id === dashboardPageId),
       enabled: !!dashboardPageId,
     }),
-  listDashboardPages: () =>
+  listDashboardPages: (kind: DashboardPageKind = 'reports') =>
     queryOptions<DashboardPageEntity[]>({
-      queryKey: [...dashboardQueries.lists(), 'pages'],
+      queryKey: [...dashboardQueries.lists(), 'pages', kind],
       queryFn: async () => {
-        const { data }: { data: DashboardPageEntity[] } = await aqlQuery(
-          q('dashboard_pages').select('*'),
-        );
-        return data.map(page => ({ ...page, name: page.name ?? '' }));
+        const data: DashboardPageEntity[] = await send('dashboard-list-pages', {
+          kind,
+        });
+        return data.map(page => ({
+          ...page,
+          kind: page.kind ?? 'reports',
+          name: page.name ?? '',
+        }));
       },
     }),
 };

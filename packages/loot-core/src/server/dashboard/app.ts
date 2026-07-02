@@ -15,6 +15,8 @@ import { undoable } from '#server/undo';
 import { DEFAULT_DASHBOARD_STATE } from '#shared/dashboard';
 import { q } from '#shared/query';
 import type {
+  DashboardPageEntity,
+  DashboardPageKind,
   DashboardWidgetEntity,
   ExportImportCustomReportWidget,
   ExportImportDashboard,
@@ -45,6 +47,10 @@ export function isWidgetType(
     'sankey-card',
     'balance-forecast-card',
     'age-of-money-card',
+    'accounts-all-card',
+    'accounts-on-budget-card',
+    'accounts-off-budget-card',
+    'accounts-add-card',
   ].includes(type);
 }
 
@@ -105,16 +111,68 @@ const exportModel = {
   },
 };
 
-async function createDashboardPage({ name }: { name: string }) {
+function ensureDashboardPageKindColumn() {
+  const columns = db.runQuery<{ name: string }>(
+    'PRAGMA table_info(dashboard_pages)',
+    [],
+    true,
+  );
+
+  if (!columns.some(column => column.name === 'kind')) {
+    db.execQuery(
+      "ALTER TABLE dashboard_pages ADD COLUMN kind TEXT DEFAULT 'reports'",
+    );
+    db.runQuery(
+      "UPDATE dashboard_pages SET kind = 'reports' WHERE kind IS NULL",
+    );
+  }
+}
+
+async function listDashboardPages({
+  kind = 'reports',
+}: {
+  kind?: DashboardPageKind;
+}) {
+  ensureDashboardPageKindColumn();
+
+  return db.all<DashboardPageEntity>(
+    'SELECT * FROM dashboard_pages WHERE kind = ? AND tombstone = 0',
+    [kind],
+  );
+}
+
+async function createDashboardPage({
+  name,
+  kind = 'reports',
+}: {
+  name: string;
+  kind?: DashboardPageKind;
+}) {
+  ensureDashboardPageKindColumn();
+
   const id = uuidv4();
-  await db.insertWithSchema('dashboard_pages', { id, name });
+  await db.insertWithSchema('dashboard_pages', { id, name, kind });
 
   return id;
 }
 
-async function deleteDashboardPage(id: string) {
+async function deleteDashboardPage({
+  id,
+  kind,
+}: {
+  id: string;
+  kind?: DashboardPageKind;
+}) {
+  ensureDashboardPageKindColumn();
+
+  const page = await db.first<Pick<db.DbDashboardPage, 'kind'>>(
+    'SELECT kind FROM dashboard_pages WHERE id = ? AND tombstone = 0',
+    [id],
+  );
+  const pageKind = kind ?? page?.kind ?? 'reports';
   const res = await db.first<{ c: number }>(
-    'SELECT count(*) as c FROM dashboard_pages WHERE tombstone = 0',
+    'SELECT count(*) as c FROM dashboard_pages WHERE kind = ? AND tombstone = 0',
+    [pageKind],
   );
 
   if ((res?.c ?? 0) <= 1) {
@@ -352,6 +410,7 @@ async function importDashboard({
 }
 
 export type DashboardHandlers = {
+  'dashboard-list-pages': typeof listDashboardPages;
   'dashboard-create': typeof createDashboardPage;
   'dashboard-delete': typeof deleteDashboardPage;
   'dashboard-rename': typeof renameDashboardPage;
@@ -366,6 +425,7 @@ export type DashboardHandlers = {
 
 export const app = createApp<DashboardHandlers>();
 
+app.method('dashboard-list-pages', listDashboardPages);
 app.method('dashboard-create', mutator(undoable(createDashboardPage)));
 app.method('dashboard-delete', mutator(undoable(deleteDashboardPage)));
 app.method('dashboard-rename', mutator(undoable(renameDashboardPage)));

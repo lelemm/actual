@@ -1,4 +1,5 @@
 import type {
+  DashboardPageKind,
   DashboardPageEntity,
   DashboardWidgetEntity,
 } from '@actual-app/core/types/models';
@@ -6,8 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { dashboardQueries } from '#reports';
 
-export function useDashboardPages() {
-  return useQuery(dashboardQueries.listDashboardPages());
+export function useDashboardPages(kind?: DashboardPageKind) {
+  return useQuery(dashboardQueries.listDashboardPages(kind));
 }
 
 export function useDashboardPageWidgets<W extends DashboardWidgetEntity>(

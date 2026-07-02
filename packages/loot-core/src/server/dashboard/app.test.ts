@@ -25,6 +25,10 @@ const ALL_WIDGET_TYPES = allWidgetTypes(
   'sankey-card',
   'balance-forecast-card',
   'age-of-money-card',
+  'accounts-all-card',
+  'accounts-on-budget-card',
+  'accounts-off-budget-card',
+  'accounts-add-card',
 );
 
 describe('isWidgetType', () => {

@@ -15,6 +15,12 @@ import { accountNameStyle } from './Account';
 import { ItemContent } from './ItemContent';
 
 const fontWeight = 600;
+const modernPalette = {
+  panelRaised: '#1B3850',
+  lineStrong: '#42617B',
+  text: '#EAF2FA',
+  textMuted: '#A9BAD0',
+};
 
 type SecondaryItemProps = {
   title: string;
@@ -26,6 +32,7 @@ type SecondaryItemProps = {
   onClick?: ComponentProps<typeof ItemContent>['onClick'];
   bold?: boolean;
   indent?: number;
+  modern?: boolean;
 };
 
 export function SecondaryItem({
@@ -36,6 +43,7 @@ export function SecondaryItem({
   onClick,
   bold,
   indent = 0,
+  modern = false,
 }: SecondaryItemProps) {
   const content = (
     <View
@@ -53,23 +61,40 @@ export function SecondaryItem({
   );
 
   return (
-    <View style={{ flexShrink: 0, ...style }}>
+    <View style={{ flexShrink: 0, marginBottom: modern ? 2 : 0, ...style }}>
       <ItemContent
         style={{
           ...accountNameStyle,
-          color: theme.sidebarItemText,
-          paddingLeft: 14 + indent,
+          color: modern ? modernPalette.textMuted : theme.sidebarItemText,
+          paddingTop: modern ? 5 : accountNameStyle.paddingTop,
+          paddingBottom: modern ? 5 : accountNameStyle.paddingBottom,
+          paddingLeft: modern ? 10 + indent : 14 + indent,
+          paddingRight: modern ? 10 : accountNameStyle.paddingRight,
+          borderRadius: modern ? 6 : 0,
           fontWeight: bold ? fontWeight : null,
-          ':hover': { backgroundColor: theme.sidebarItemBackgroundHover },
+          ':hover': {
+            backgroundColor: modern
+              ? modernPalette.panelRaised
+              : theme.sidebarItemBackgroundHover,
+          },
         }}
         to={to}
         onClick={onClick}
-        activeStyle={{
-          borderLeft: '4px solid ' + theme.sidebarItemTextSelected,
-          paddingLeft: 14 - 4 + indent,
-          color: theme.sidebarItemTextSelected,
-          fontWeight: bold ? fontWeight : null,
-        }}
+        activeStyle={
+          modern
+            ? {
+                backgroundColor: modernPalette.panelRaised,
+                boxShadow: 'inset 0 0 0 1px ' + modernPalette.lineStrong,
+                color: modernPalette.text,
+                fontWeight: bold ? fontWeight : null,
+              }
+            : {
+                borderLeft: '4px solid ' + theme.sidebarItemTextSelected,
+                paddingLeft: 14 - 4 + indent,
+                color: theme.sidebarItemTextSelected,
+                fontWeight: bold ? fontWeight : null,
+              }
+        }
       >
         {content}
       </ItemContent>

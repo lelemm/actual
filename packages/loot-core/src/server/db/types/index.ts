@@ -262,6 +262,7 @@ export type DbCustomReport = {
 export type DbDashboardPage = {
   id: string;
   name: string;
+  kind: string;
   tombstone: 1 | 0;
 };
 

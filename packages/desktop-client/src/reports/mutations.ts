@@ -4,6 +4,7 @@ import { sendCatch } from '@actual-app/core/platform/client/connection';
 import type { send } from '@actual-app/core/platform/client/connection';
 import type {
   CustomReportEntity,
+  DashboardPageKind,
   DashboardPageEntity,
   DashboardWidgetEntity,
 } from '@actual-app/core/types/models';
@@ -141,6 +142,7 @@ export function useCreateReportMutation() {
 
 type CreateDashboardPageMutationPayload = {
   name: DashboardPageEntity['name'];
+  kind?: DashboardPageKind;
 };
 
 export function useCreateDashboardPageMutation() {
@@ -149,8 +151,8 @@ export function useCreateDashboardPageMutation() {
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async ({ name }: CreateDashboardPageMutationPayload) => {
-      return await sendThrow('dashboard-create', { name });
+    mutationFn: async ({ name, kind }: CreateDashboardPageMutationPayload) => {
+      return await sendThrow('dashboard-create', { name, kind });
     },
     onSuccess: () => invalidateDashboardQueries(queryClient),
     onError: error => {
@@ -166,6 +168,7 @@ export function useCreateDashboardPageMutation() {
 
 type DeleteDashboardPageMutationPayload = {
   id: DashboardPageEntity['id'];
+  kind?: DashboardPageKind;
 };
 
 export function useDeleteDashboardPageMutation() {
@@ -174,8 +177,8 @@ export function useDeleteDashboardPageMutation() {
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async ({ id }: DeleteDashboardPageMutationPayload) => {
-      return await sendThrow('dashboard-delete', id);
+    mutationFn: async ({ id, kind }: DeleteDashboardPageMutationPayload) => {
+      return await sendThrow('dashboard-delete', { id, kind });
     },
     onSuccess: () => invalidateDashboardQueries(queryClient),
     onError: error => {

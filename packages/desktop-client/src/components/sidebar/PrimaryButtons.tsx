@@ -22,7 +22,17 @@ import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
 import { Item } from './Item';
 import { SecondaryItem } from './SecondaryItem';
 
-export function PrimaryButtons() {
+const modernPalette = {
+  panel: '#102337',
+  panelRaised: '#1B3850',
+  line: '#2B4861',
+};
+
+type PrimaryButtonsProps = {
+  modern?: boolean;
+};
+
+export function PrimaryButtons({ modern = false }: PrimaryButtonsProps) {
   const { t } = useTranslation();
   const [isOpen, setOpen] = useState(false);
   const onToggle = useCallback(() => setOpen(open => !open), []);
@@ -47,16 +57,38 @@ export function PrimaryButtons() {
   }, [isActive, location.pathname]);
 
   return (
-    <View style={{ flexShrink: 0 }}>
-      <Item title={t('Budget')} Icon={SvgWallet} to="/budget" />
-      <Item title={t('Reports')} Icon={SvgReports} to="/reports" />
-      <Item title={t('Schedules')} Icon={SvgCalendar3} to="/schedules" />
+    <View
+      style={{
+        flexShrink: 0,
+        ...(modern && {
+          margin: '0 6px 8px',
+          padding: 6,
+          backgroundColor: modernPalette.panel,
+          border: '1px solid ' + modernPalette.line,
+          borderRadius: 8,
+        }),
+      }}
+    >
+      <Item title={t('Budget')} Icon={SvgWallet} to="/budget" modern={modern} />
+      <Item
+        title={t('Reports')}
+        Icon={SvgReports}
+        to="/reports"
+        modern={modern}
+      />
+      <Item
+        title={t('Schedules')}
+        Icon={SvgCalendar3}
+        to="/schedules"
+        modern={modern}
+      />
       <Item
         title={t('More')}
         Icon={isOpen ? SvgCheveronDown : SvgCheveronRight}
         onClick={onToggle}
-        style={{ marginBottom: isOpen ? 8 : 0 }}
+        style={{ marginBottom: isOpen ? (modern ? 4 : 8) : 0 }}
         forceActive={!isOpen && isActive}
+        modern={modern}
       />
       {isOpen && (
         <>
@@ -65,12 +97,14 @@ export function PrimaryButtons() {
             Icon={SvgStoreFront}
             to="/payees"
             indent={15}
+            modern={modern}
           />
           <SecondaryItem
             title={t('Rules')}
             Icon={SvgTuning}
             to="/rules"
             indent={15}
+            modern={modern}
           />
           {isUsingServer && (
             <SecondaryItem
@@ -78,6 +112,7 @@ export function PrimaryButtons() {
               Icon={SvgCreditCard}
               to="/bank-sync"
               indent={15}
+              modern={modern}
             />
           )}
           <SecondaryItem
@@ -85,12 +120,14 @@ export function PrimaryButtons() {
             Icon={SvgTag}
             to="/tags"
             indent={15}
+            modern={modern}
           />
           <SecondaryItem
             title={t('Settings')}
             Icon={SvgCog}
             to="/settings"
             indent={15}
+            modern={modern}
           />
         </>
       )}

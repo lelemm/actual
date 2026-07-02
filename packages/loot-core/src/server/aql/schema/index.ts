@@ -194,6 +194,7 @@ export const schema = {
   dashboard_pages: {
     id: f('id'),
     name: f('string'),
+    kind: f('string'),
     tombstone: f('boolean'),
   },
   dashboard: {

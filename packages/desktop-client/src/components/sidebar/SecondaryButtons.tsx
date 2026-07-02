@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ComponentType, SVGProps } from 'react';
+import type { ComponentType, CSSProperties, SVGProps } from 'react';
 
 import { View } from '@actual-app/components/view';
 
@@ -15,14 +15,16 @@ type SecondaryButtonItems = {
 
 type SecondaryButtonsProps = {
   buttons: Array<SecondaryButtonItems>;
+  style?: CSSProperties;
 };
 
-export function SecondaryButtons({ buttons }: SecondaryButtonsProps) {
+export function SecondaryButtons({ buttons, style }: SecondaryButtonsProps) {
   return (
     <View
       style={{
         flexShrink: 0,
         padding: '5px 0',
+        ...style,
       }}
     >
       {buttons.map(item => (

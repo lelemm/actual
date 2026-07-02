@@ -5,8 +5,11 @@ import type { RuleConditionEntity } from './rule';
 export type DashboardPageEntity = {
   id: string;
   name: string;
+  kind: DashboardPageKind;
   tombstone: boolean;
 };
+
+export type DashboardPageKind = 'reports' | 'sidebar-options';
 
 export type TimeFrame = {
   start: string;
@@ -147,7 +150,8 @@ type SpecializedWidget =
   | FormulaWidget
   | SankeyWidget
   | AgeOfMoneyWidget
-  | BalanceForecastWidget;
+  | BalanceForecastWidget
+  | AccountsWidget;
 export type DashboardWidgetEntity = SpecializedWidget | CustomReportWidget;
 export type NewDashboardWidgetEntity = Omit<
   DashboardWidgetEntity,
@@ -261,4 +265,11 @@ export type BalanceForecastWidget = AbstractWidget<
     granularity?: 'Daily' | 'Monthly';
     source?: ForecastSource;
   } | null
+>;
+
+export type AccountsWidget = AbstractWidget<
+  | 'accounts-all-card'
+  | 'accounts-on-budget-card'
+  | 'accounts-off-budget-card'
+  | 'accounts-add-card'
 >;
