@@ -12,6 +12,7 @@ const DEFAULT_FEATURE_FLAG_STATE: Record<FeatureFlag, boolean> = {
   customThemes: false,
   budgetAnalysisReport: false,
   enableBanking: false,
+  plugins: false,
   sankeyReport: false,
   akahuBankSync: false,
   mobileCalculator: false,

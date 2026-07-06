@@ -1,0 +1,46 @@
+{
+  "name": "@actual-app/plugins-core",
+  "version": "0.0.0-stub",
+  "description": "Temporary plugin core stubs for Actual Budget",
+  "type": "module",
+  "exports": {
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "development": "./src/middleware.ts",
+      "import": "./src/middleware.ts"
+    },
+    "./types/actualPlugin": {
+      "types": "./src/types/actualPlugin.ts",
+      "development": "./src/types/actualPlugin.ts",
+      "import": "./src/types/actualPlugin.ts"
+    },
+    "./types/actualPluginEntry": {
+      "types": "./src/types/actualPluginEntry.ts",
+      "development": "./src/types/actualPluginEntry.ts",
+      "import": "./src/types/actualPluginEntry.ts"
+    },
+    "./types/actualPluginManifest": {
+      "types": "./src/types/actualPluginManifest.ts",
+      "development": "./src/types/actualPluginManifest.ts",
+      "import": "./src/types/actualPluginManifest.ts"
+    },
+    "./types/modalProps": {
+      "types": "./src/types/modalProps.ts",
+      "development": "./src/types/modalProps.ts",
+      "import": "./src/types/modalProps.ts"
+    },
+    "./types/plugin-files": {
+      "types": "./src/types/plugin-files.ts",
+      "development": "./src/types/plugin-files.ts",
+      "import": "./src/types/plugin-files.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "i18next": "^26.3.1",
+    "typescript": "^6.0.3"
+  }
+}

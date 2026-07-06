@@ -2,7 +2,11 @@ import path from 'path';
 
 import { normalizeDevPluginLocator } from './dev-plugin-locator.js';
 import { validateManifest } from './plugin-manifest.js';
-import { resolvePluginPath, sanitizePluginSlug } from './plugin-paths.js';
+import {
+  isPluginPathInsideDir,
+  resolvePluginPath,
+  sanitizePluginSlug,
+} from './plugin-paths.js';
 
 describe('plugin manifest validation', () => {
   describe('validateManifest', () => {
@@ -44,7 +48,16 @@ describe('plugin manifest validation', () => {
           version: '1.0.0',
           type: false,
         }),
-      ).toThrow(/type must be 'syncserver'/);
+      ).toThrow(/type must be 'frontend', 'syncserver', or 'mixed'/);
+
+      expect(() =>
+        validateManifest({
+          name: 'test-plugin',
+          version: '1.0.0',
+          type: 'frontend',
+          frontend: {},
+        }),
+      ).toThrow(/frontend.entry/);
     });
   });
 });
@@ -75,6 +88,15 @@ describe('plugin paths', () => {
       expect(() => resolvePluginPath(pluginPath, '../outside.js')).toThrow(
         /inside the plugin directory/,
       );
+    });
+
+    it('checks that capability entries stay in their capability directory', () => {
+      expect(
+        isPluginPathInsideDir(pluginPath, 'frontend', 'frontend/index.js'),
+      ).toBe(true);
+      expect(
+        isPluginPathInsideDir(pluginPath, 'frontend', 'other/index.js'),
+      ).toBe(false);
     });
   });
 });

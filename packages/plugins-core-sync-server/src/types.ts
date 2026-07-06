@@ -119,7 +119,10 @@ export type PluginManifest = {
   name: string;
   version: string;
   description?: string;
-  type?: 'syncserver';
+  type?: 'frontend' | 'syncserver' | 'mixed';
+  frontend?: {
+    entry: string;
+  };
   syncserver?: {
     entry: string;
     routes?: PluginRoute[];

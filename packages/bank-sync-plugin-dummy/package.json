@@ -6,9 +6,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "yarn clean && yarn build:compile && yarn build:manifest && yarn build:bundle && yarn package:zip",
+    "build": "yarn clean && yarn build:compile && yarn build:manifest && yarn build:bundle && yarn build:frontend && yarn package:zip",
     "build:bundle": "node scripts/build-bundle.cjs",
     "build:compile": "tsc -b",
+    "build:frontend": "vite build",
     "build:manifest": "node scripts/build-manifest.cjs",
     "build:zip": "yarn build",
     "clean": "rm -rf dist manifest.json",
@@ -16,9 +17,15 @@
     "package:zip": "node scripts/build-zip.cjs"
   },
   "devDependencies": {
+    "@actual-app/plugins-core": "workspace:*",
     "@actual-app/plugins-core-sync-server": "workspace:*",
+    "@module-federation/vite": "^1.4.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "esbuild": "^0.28.1",
     "fflate": "^0.8.3",
-    "typescript": "^6.0.3"
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
   }
 }

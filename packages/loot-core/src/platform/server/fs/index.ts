@@ -19,7 +19,7 @@ export const bundledDatabasePath: string = '/default-db.sqlite';
 export const migrationsPath: string = '/migrations';
 export const demoBudgetPath: string = '/demo-budget';
 export { join };
-export { getDocumentDir, getBudgetDir } from './shared';
+export { getDocumentDir, getBudgetDir, getPluginDir } from './shared';
 export const getDataDir = () => process.env.ACTUAL_DATA_DIR;
 
 // The active document dir is persisted alongside the built-in /documents

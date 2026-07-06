@@ -24,7 +24,11 @@
       ]
     },
     "packages/bank-sync-plugin-dummy": {
-      "entry": ["src/manifest.ts", "syncserver/index.ts"]
+      "entry": [
+        "frontend/src/index.{ts,tsx}",
+        "src/manifest.ts",
+        "syncserver/index.ts"
+      ]
     },
     "packages/ci-actions": {
       "entry": ["bin/*.ts"],

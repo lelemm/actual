@@ -39,12 +39,17 @@ import {
 } from './plugin-loader.js';
 import type { PluginSourceCandidate } from './plugin-loader.js';
 import {
+  isFrontendPlugin,
   isSyncServerPlugin,
   toRuntimeManifest,
   validateManifest,
 } from './plugin-manifest.js';
 import type { Manifest, RuntimeManifest } from './plugin-manifest.js';
-import { isPluginPathInsideDir, sanitizePluginSlug } from './plugin-paths.js';
+import {
+  isPluginPathInsideDir,
+  resolvePluginPath,
+  sanitizePluginSlug,
+} from './plugin-paths.js';
 
 type PluginSource = {
   slug: string;
@@ -62,6 +67,12 @@ type BankSyncPluginInfo = {
   endpoints: NonNullable<RuntimeManifest['bankSync']>['endpoints'];
   requiresAuth: boolean;
   setup: NonNullable<NonNullable<RuntimeManifest['bankSync']>['setup']>;
+};
+
+type FrontendPluginFile = {
+  name: string;
+  content: string;
+  encoding: 'base64';
 };
 
 const debug = createDebug('actual:plugins');
@@ -224,6 +235,42 @@ function createPluginManager(pluginsDir: string) {
     }));
   }
 
+  function getFrontendPluginFiles(pluginSlug: string): FrontendPluginFile[] {
+    const source = pluginSources.get(pluginSlug);
+    if (!source) {
+      throw new Error(`Plugin '${pluginSlug}' is not installed`);
+    }
+
+    if (!isFrontendPlugin(source.manifest)) {
+      throw new Error(`Plugin '${pluginSlug}' has no frontend capability`);
+    }
+
+    const frontendDir = path.join(source.path, 'frontend');
+    if (!fs.existsSync(frontendDir)) {
+      throw new Error(`Plugin '${pluginSlug}' has no frontend directory`);
+    }
+
+    const files: FrontendPluginFile[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(entryPath);
+        } else {
+          const relativePath = path.relative(frontendDir, entryPath);
+          files.push({
+            name: relativePath,
+            content: fs.readFileSync(entryPath).toString('base64'),
+            encoding: 'base64',
+          });
+        }
+      }
+    };
+
+    walk(frontendDir);
+    return files;
+  }
+
   async function installPluginZip(zipBuffer: Buffer): Promise<Manifest> {
     return enqueue(() => installPluginZipNow(zipBuffer));
   }
@@ -247,6 +294,27 @@ function createPluginManager(pluginsDir: string) {
 
       if (pluginSources.has(pluginSlug)) {
         throw new Error(`Plugin ${pluginSlug} is already installed`);
+      }
+
+      if (isFrontendPlugin(manifest)) {
+        const frontendDir = resolvePluginPath(extractedPath, 'frontend');
+        const frontendEntry = resolvePluginPath(
+          extractedPath,
+          manifest.frontend.entry,
+        );
+        if (
+          !isPluginPathInsideDir(
+            extractedPath,
+            'frontend',
+            manifest.frontend.entry,
+          ) ||
+          !fs.existsSync(frontendDir) ||
+          !fs.existsSync(frontendEntry)
+        ) {
+          throw new Error(
+            `Plugin ${manifest.name} frontend files must live under frontend/`,
+          );
+        }
       }
 
       const zipPath = getPluginZipPath(pluginSlug, manifest.version);
@@ -349,10 +417,10 @@ function createPluginManager(pluginsDir: string) {
    * Get all bank sync plugins
    * Returns plugins that have bankSync configuration enabled
    */
-  getBankSyncPlugins(): BankSyncPluginInfo[] {
+  function getBankSyncPlugins(): BankSyncPluginInfo[] {
     const bankSyncPlugins: BankSyncPluginInfo[] = [];
 
-    for (const [slug, plugin] of this.onlinePlugins) {
+    for (const [slug, plugin] of onlinePlugins) {
       if (plugin.manifest?.bankSync?.enabled) {
         bankSyncPlugins.push({
           slug,
@@ -534,9 +602,11 @@ function createPluginManager(pluginsDir: string) {
     getPlugin,
     getOnlinePlugins,
     getInstalledPluginManifests,
+    getFrontendPluginFiles,
     installPluginZip,
     registerDevPlugin,
     reloadPlugins,
+    getBankSyncPlugins,
     debugPluginMetadata,
     shutdown,
   };

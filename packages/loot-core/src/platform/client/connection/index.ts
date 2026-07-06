@@ -92,6 +92,7 @@ function handleMessage(msg) {
 // I don't think a worker should ever die due to a system error.
 function connectWorker(worker, onOpen, onError) {
   globalWorker = worker;
+  let isOpen = false;
 
   worker.onmessage = event => {
     const msg = event.data;
@@ -101,6 +102,11 @@ function connectWorker(worker, onOpen, onError) {
     // available, but we don't know when the backend is actually
     // ready to handle messages.
     if (msg.type === 'connect') {
+      if (isOpen) {
+        return;
+      }
+      isOpen = true;
+
       // Null the queue so later sends post directly instead of queueing.
       messageQueue?.forEach(msg => worker.postMessage(msg));
       messageQueue = null;

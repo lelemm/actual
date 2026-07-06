@@ -112,6 +112,7 @@
     "glob-hasher-linux-arm64-gnu": "1.4.2"
   },
   "resolutions": {
+    "adm-zip": "^0.6.0",
     "minimatch@3.1.2": "3.1.5",
     "serialize-javascript": "^7.0.5",
     "socks": ">=2.8.3",

@@ -15,9 +15,14 @@
       // Allow importing from hyperformula's internal typings for custom function plugins
       "hyperformula/typings/*": ["../../node_modules/hyperformula/typings/*"]
     },
-    "plugins": [{ "name": "typescript-strict-plugin", "paths": ["."] }]
+    "plugins": [
+      {
+        "name": "typescript-strict-plugin",
+        "paths": ["."]
+      }
+    ]
   },
-  "references": [{ "path": "../crdt" }],
+  "references": [{ "path": "../crdt" }, { "path": "../plugins-core" }],
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",

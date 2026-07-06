@@ -24,17 +24,30 @@ function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
 }
 
-function writePlugin(pluginPath: string, name = 'test-plugin'): void {
+function writeFrontendPlugin(
+  pluginPath: string,
+  name = 'frontend-plugin',
+): void {
   writeJson(path.join(pluginPath, 'manifest.json'), {
     name,
     version: '1.0.0',
-    type: 'syncserver',
-    syncserver: { entry: 'syncserver/index.js' },
+    type: 'frontend',
+    frontend: { entry: 'frontend/index.js' },
   });
-  fs.mkdirSync(path.join(pluginPath, 'syncserver'), { recursive: true });
+  fs.mkdirSync(path.join(pluginPath, 'frontend', 'nested'), {
+    recursive: true,
+  });
   fs.writeFileSync(
-    path.join(pluginPath, 'syncserver', 'index.js'),
-    'export const plugin = { routes: [] };',
+    path.join(pluginPath, 'frontend', 'index.js'),
+    'export default {};',
+  );
+  fs.writeFileSync(
+    path.join(pluginPath, 'frontend', 'nested', 'style.css'),
+    '',
+  );
+  fs.writeFileSync(
+    path.join(pluginPath, 'frontend', 'nested', 'logo.bin'),
+    Buffer.from([0, 159, 255]),
   );
 }
 
@@ -93,12 +106,12 @@ describe('plugin loader', () => {
 
   it('reads plugin slugs and validates manifests from plugin directories', () => {
     const pluginPath = path.join(trackedTempDir(), 'plugin');
-    writePlugin(pluginPath, 'manifest-name');
+    writeFrontendPlugin(pluginPath, 'manifest-name');
 
     expect(getPluginSlugFromManifest(pluginPath)).toBe('manifest-name');
     expect(readPluginManifest('manifest-name', pluginPath)).toMatchObject({
       name: 'manifest-name',
-      type: 'syncserver',
+      type: 'frontend',
     });
   });
 
@@ -117,7 +130,7 @@ describe('plugin loader', () => {
 
   it('discovers directory plugins and zip plugins', () => {
     const pluginsDir = trackedTempDir();
-    writePlugin(path.join(pluginsDir, 'directory-plugin'), 'from-dir');
+    writeFrontendPlugin(path.join(pluginsDir, 'directory-plugin'), 'from-dir');
 
     fs.writeFileSync(
       path.join(pluginsDir, 'archive-plugin.1.2.3.zip'),
@@ -125,9 +138,10 @@ describe('plugin loader', () => {
         'manifest.json': JSON.stringify({
           name: 'from-zip',
           version: '1.0.0',
-          type: 'syncserver',
-          syncserver: { entry: 'syncserver/index.js' },
+          type: 'frontend',
+          frontend: { entry: 'frontend/index.js' },
         }),
+        'frontend/index.js': 'export default {};',
       }),
     );
 
@@ -172,10 +186,10 @@ describe('plugin loader', () => {
       'manifest.json': JSON.stringify({
         name: 'safe-zip',
         version: '1.0.0',
-        type: 'syncserver',
-        syncserver: { entry: 'syncserver/index.js' },
+        type: 'frontend',
+        frontend: { entry: 'frontend/index.js' },
       }),
-      'syncserver/index.js': 'export const plugin = { routes: [] };',
+      'frontend/index.js': 'export default {};',
     });
     tempDirs.push(path.dirname(zipPath));
 
@@ -226,9 +240,10 @@ describe('plugin loader', () => {
         'manifest.json': JSON.stringify({
           name: 'manifest-slug',
           version: '1.0.0',
-          type: 'syncserver',
-          syncserver: { entry: 'syncserver/index.js' },
+          type: 'frontend',
+          frontend: { entry: 'frontend/index.js' },
         }),
+        'frontend/index.js': 'export default {};',
       }),
     );
 
@@ -380,7 +395,7 @@ describe('plugin loader', () => {
   });
 });
 
-describe('PluginManager plugin loading', () => {
+describe('PluginManager frontend plugin loading', () => {
   let pluginsDir: string;
   const pluginManagers: Array<ReturnType<typeof createPluginManager>> = [];
 
@@ -401,20 +416,58 @@ describe('PluginManager plugin loading', () => {
     return pluginManager;
   }
 
-  it('loads sync-server plugins after their runner signals ready', async () => {
-    writePlugin(path.join(pluginsDir, 'test-plugin'));
+  it('loads frontend-only plugins without starting a sync-server runner', async () => {
+    writeFrontendPlugin(path.join(pluginsDir, 'frontend-plugin'));
 
     const pluginManager = makePluginManager();
     await pluginManager.loadPlugins();
 
     expect(pluginManager.getInstalledPluginManifests()).toEqual([
       expect.objectContaining({
-        name: 'test-plugin',
+        name: 'frontend-plugin',
         source: 'sync-server',
       }),
     ]);
-    expect(pluginManager.isPluginOnline('test-plugin')).toBe(true);
-    await pluginManager.shutdown();
+    expect(pluginManager.getFrontendPluginFiles('frontend-plugin')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'index.js' }),
+        expect.objectContaining({ name: path.join('nested', 'style.css') }),
+        expect.objectContaining({
+          name: path.join('nested', 'logo.bin'),
+          content: Buffer.from([0, 159, 255]).toString('base64'),
+          encoding: 'base64',
+        }),
+      ]),
+    );
+  });
+
+  it('loads mixed plugins as frontend and sync-server plugins', async () => {
+    const pluginPath = path.join(pluginsDir, 'mixed-plugin');
+    writeJson(path.join(pluginPath, 'manifest.json'), {
+      name: 'mixed-plugin',
+      version: '1.0.0',
+      type: 'mixed',
+      frontend: { entry: 'frontend/index.js' },
+      syncserver: { entry: 'syncserver/index.js' },
+    });
+    fs.mkdirSync(path.join(pluginPath, 'frontend'), { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginPath, 'frontend', 'index.js'),
+      'export default {};',
+    );
+    fs.mkdirSync(path.join(pluginPath, 'syncserver'), { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginPath, 'syncserver', 'index.js'),
+      'export const plugin = { routes: [] };',
+    );
+
+    const pluginManager = makePluginManager();
+    await pluginManager.loadPlugins();
+
+    expect(pluginManager.isPluginOnline('mixed-plugin')).toBe(true);
+    expect(pluginManager.getFrontendPluginFiles('mixed-plugin')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'index.js' })]),
+    );
   });
 
   it('cleans old zip extractions when plugins are loaded repeatedly', async () => {
@@ -441,19 +494,19 @@ describe('PluginManager plugin loading', () => {
   });
 
   it('keeps the first plugin when duplicate manifest slugs are found', async () => {
-    writePlugin(path.join(pluginsDir, 'first'), 'duplicate-plugin');
+    writeFrontendPlugin(path.join(pluginsDir, 'first'), 'duplicate-plugin');
     writeJson(path.join(pluginsDir, 'first', 'manifest.json'), {
       name: 'duplicate-plugin',
       version: '1.0.0',
-      type: 'syncserver',
-      syncserver: { entry: 'syncserver/index.js' },
+      type: 'frontend',
+      frontend: { entry: 'frontend/index.js' },
     });
-    writePlugin(path.join(pluginsDir, 'second'), 'duplicate-plugin');
+    writeFrontendPlugin(path.join(pluginsDir, 'second'), 'duplicate-plugin');
     writeJson(path.join(pluginsDir, 'second', 'manifest.json'), {
       name: 'duplicate-plugin',
       version: '2.0.0',
-      type: 'syncserver',
-      syncserver: { entry: 'syncserver/index.js' },
+      type: 'frontend',
+      frontend: { entry: 'frontend/index.js' },
     });
 
     const pluginManager = makePluginManager();
@@ -463,7 +516,6 @@ describe('PluginManager plugin loading', () => {
     expect(pluginManager.getInstalledPluginManifests()[0].version).toBe(
       '1.0.0',
     );
-    await pluginManager.shutdown();
   });
 
   it('rejects uploaded plugin versions with path separators', async () => {
@@ -471,10 +523,10 @@ describe('PluginManager plugin loading', () => {
       'manifest.json': JSON.stringify({
         name: 'unsafe-version',
         version: '../evil',
-        type: 'syncserver',
-        syncserver: { entry: 'syncserver/index.js' },
+        type: 'frontend',
+        frontend: { entry: 'frontend/index.js' },
       }),
-      'syncserver/index.js': 'export const plugin = { routes: [] };',
+      'frontend/index.js': 'export default {};',
     });
 
     const pluginManager = makePluginManager();
@@ -490,10 +542,10 @@ describe('PluginManager plugin loading', () => {
       'manifest.json': JSON.stringify({
         name: 'build-metadata-version',
         version: '1.0.0+build.5',
-        type: 'syncserver',
-        syncserver: { entry: 'syncserver/index.js' },
+        type: 'frontend',
+        frontend: { entry: 'frontend/index.js' },
       }),
-      'syncserver/index.js': 'export const plugin = { routes: [] };',
+      'frontend/index.js': 'export default {};',
     });
 
     const pluginManager = makePluginManager();
@@ -516,9 +568,10 @@ describe('PluginManager plugin loading', () => {
       'manifest.json': JSON.stringify({
         name: 'already-installed',
         version: '1.0.0',
-        type: 'syncserver',
-        syncserver: { entry: 'syncserver/index.js' },
+        type: 'frontend',
+        frontend: { entry: 'frontend/index.js' },
       }),
+      'frontend/index.js': 'export default {};',
     });
     const zipPath = path.join(pluginsDir, 'already-installed-1.0.0.zip');
     fs.writeFileSync(zipPath, 'existing plugin');
@@ -570,10 +623,10 @@ describe('PluginManager plugin loading', () => {
         'manifest.json': JSON.stringify({
           name,
           version: '1.0.0',
-          type: 'syncserver',
-          syncserver: { entry: 'syncserver/index.js' },
+          type: 'frontend',
+          frontend: { entry: 'frontend/index.js' },
         }),
-        'syncserver/index.js': 'export const plugin = { routes: [] };',
+        'frontend/index.js': 'export default {};',
       });
     }
 

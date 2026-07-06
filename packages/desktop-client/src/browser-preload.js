@@ -66,17 +66,12 @@ const isUpdateReadyForDownloadPromise = new Promise(resolve => {
     resolve(true);
   };
 });
-// Skip SW registration in dev so stale cached assets don't override edits
-// between page loads. Plugin code that needs a SW can register one itself.
-// In dev there is no SW to install, so applyAppUpdate() can't rely on the
-// SW lifecycle to swap the page — fall back to a plain reload so callers
-// don't hang on the never-resolving promise inside applyAppUpdate.
-const updateSW = IS_DEV
-  ? () => window.location.reload()
-  : registerSW({
-      immediate: true,
-      onNeedRefresh: markUpdateReadyForDownload,
-    });
+// Plugin loading depends on this worker even in dev because plugin assets are
+// served through plugin-data/* requests.
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh: markUpdateReadyForDownload,
+});
 
 global.Actual = {
   IS_DEV,

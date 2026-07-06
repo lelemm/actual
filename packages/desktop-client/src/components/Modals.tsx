@@ -74,6 +74,7 @@ import { PayeeAutocompleteModal } from './modals/PayeeAutocompleteModal';
 import { PluggyAiInitialiseModal } from './modals/PluggyAiInitialiseModal';
 import { ScheduledTransactionMenuModal } from './modals/ScheduledTransactionMenuModal';
 import { SelectLinkedAccountsModal } from './modals/SelectLinkedAccountsModal';
+import { SelectNewPluginModal } from './modals/SelectNewPluginModal';
 import { SimpleFinInitialiseModal } from './modals/SimpleFinInitialiseModal';
 import { TrackingBalanceMenuModal } from './modals/TrackingBalanceMenuModal';
 import { TrackingBudgetMenuModal } from './modals/TrackingBudgetMenuModal';
@@ -190,9 +191,6 @@ export function Modals() {
 
         case 'pluggyai-init':
           return <PluggyAiInitialiseModal key={key} {...modal.options} />;
-
-        case 'akahu-init':
-          return <AkahuInitialiseModal key={key} {...modal.options} />;
 
         case 'enablebanking-init':
           return <EnableBankingInitialiseModal key={key} {...modal.options} />;
@@ -426,6 +424,9 @@ export function Modals() {
 
         case 'enable-password-auth':
           return <PasswordEnableModal key={key} {...modal.options} />;
+
+        case 'select-new-plugin':
+          return <SelectNewPluginModal key={key} {...modal.options} />;
 
         default:
           throw new Error('Unknown modal');

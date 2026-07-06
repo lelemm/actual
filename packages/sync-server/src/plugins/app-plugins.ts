@@ -67,6 +67,21 @@ app.get('/list', async (req, res) => {
   }
 });
 
+app.get('/files/:pluginName', async (req, res) => {
+  if (!(await requirePluginAuth(req, res))) return;
+
+  try {
+    res.json({
+      status: 'ok',
+      data: {
+        files: pluginManager.getFrontendPluginFiles(req.params.pluginName),
+      },
+    });
+  } catch (error) {
+    sendPluginError(res, error);
+  }
+});
+
 app.post(
   '/install',
   express.raw({ type: 'application/zip', limit: '100mb' }),

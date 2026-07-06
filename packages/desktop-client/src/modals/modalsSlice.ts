@@ -669,6 +669,12 @@ export type Modal =
         templates: Template[];
         cleanup: CleanupTemplate[];
       };
+    }
+  | {
+      name: 'select-new-plugin';
+      options: {
+        onSave: () => void | Promise<void>;
+      };
     };
 
 type OpenAccountCloseModalPayload = {

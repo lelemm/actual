@@ -4,7 +4,10 @@ export const manifest: PluginManifest = {
   name: 'dummy-bank-sync',
   version: '0.0.1',
   description: 'Dummy bank sync provider for validating plugin loading.',
-  type: 'syncserver',
+  type: 'mixed',
+  frontend: {
+    entry: 'frontend/mf-manifest.json',
+  },
   syncserver: {
     entry: 'syncserver/index.js',
     routes: [
