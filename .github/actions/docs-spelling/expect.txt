@@ -1,0 +1,3 @@
+enablebanking
+installable
+syncserver

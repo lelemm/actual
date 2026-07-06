@@ -220,6 +220,8 @@ const sidebars = {
             'experimental/balance-forecast-report',
             'experimental/budget-analysis-report',
             'experimental/sankey-report',
+            'experimental/payee-locations',
+            'experimental/plugins',
           ],
         },
         'getting-started/tips-tricks',
