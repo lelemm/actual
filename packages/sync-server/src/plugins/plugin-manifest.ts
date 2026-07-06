@@ -1,4 +1,5 @@
 import type {
+  BankSyncConfig,
   PluginManifest,
   PluginRoute,
 } from '@actual-app/plugins-core-sync-server/types';
@@ -9,6 +10,7 @@ import type {
 type JsonRecord = Record<string, unknown>;
 type SyncServerManifestConfig = NonNullable<PluginManifest['syncserver']>;
 export type PluginRouteManifest = PluginRoute;
+export type BankSyncManifest = BankSyncConfig;
 export type Manifest = PluginManifest & {
   type: 'syncserver';
   frontend?: never;
@@ -18,6 +20,7 @@ export type SyncServerManifest = Manifest;
 export type RuntimeManifest = Manifest & {
   entry?: string;
   routes?: SyncServerManifestConfig['routes'];
+  bankSync?: SyncServerManifestConfig['bankSync'];
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -64,5 +67,6 @@ export function toRuntimeManifest(manifest: Manifest): RuntimeManifest {
     ...manifest,
     entry: manifest.syncserver.entry,
     routes: manifest.syncserver.routes,
+    bankSync: manifest.syncserver.bankSync,
   };
 }

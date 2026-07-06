@@ -1,9 +1,14 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
+import { secretsService } from '#services/secrets-service';
 import { errorMiddleware, requestLoggerMiddleware } from '#util/middlewares';
 
-import { checkAuth, extractUserFromHeaders } from './auth-checker.js';
+import {
+  checkAuth,
+  extractUserFromHeaders,
+  getRouteAuthLevel,
+} from './auth-checker.js';
 import type { AuthLevel } from './auth-checker.js';
 import { createPluginMiddleware } from './plugin-middleware.js';
 import { pluginManager } from './plugins-bootstrap.js';
@@ -14,6 +19,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLoggerMiddleware);
 
 export { app as handlers };
+
+type BankSyncEndpointName = 'status' | 'accounts' | 'transactions';
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -109,6 +116,306 @@ app.post('/dev/register', async (req, res) => {
   }
 });
 
+app.get('/bank-sync/list', (_req, res) => {
+  try {
+    const bankSyncPlugins = pluginManager.getBankSyncPlugins();
+    res.json({
+      status: 'ok',
+      data: {
+        providers: bankSyncPlugins,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: getErrorMessage(error),
+    });
+  }
+});
+
+function getBankSyncPluginEndpoint(
+  res: Response,
+  providerSlug: string,
+  endpointName: BankSyncEndpointName,
+): string | null {
+  const plugin = pluginManager.getPlugin(providerSlug);
+  if (!plugin || !plugin.manifest?.bankSync?.enabled) {
+    res.status(404).json({
+      error_code: 'PLUGIN_NOT_FOUND',
+      reason: `Bank sync plugin '${providerSlug}' not found`,
+    });
+    return null;
+  }
+
+  const endpoint = plugin.manifest.bankSync.endpoints?.[endpointName];
+  if (!endpoint) {
+    res.status(500).json({
+      error_code: 'ENDPOINT_NOT_FOUND',
+      reason: `Plugin '${providerSlug}' does not define a ${endpointName} endpoint`,
+    });
+    return null;
+  }
+
+  return endpoint;
+}
+
+function getFileIdFromReq(req: Request): string | undefined {
+  const rawFileId = req.body?.fileId || req.headers['x-actual-file-id'];
+  if (typeof rawFileId === 'string') {
+    return rawFileId;
+  }
+  if (Array.isArray(rawFileId) && typeof rawFileId[0] === 'string') {
+    return rawFileId[0];
+  }
+
+  return undefined;
+}
+
+async function forwardToBankSyncPluginEndpoint(
+  req: Request,
+  res: Response,
+  providerSlug: string,
+  endpoint: string,
+): Promise<void> {
+  const plugin = pluginManager.getPlugin(providerSlug);
+  if (!plugin || !plugin.manifest) {
+    res.status(500).json({
+      error_code: 'PLUGIN_NOT_CONFIGURED',
+      reason: `Plugin '${providerSlug}' configuration not found`,
+    });
+    return;
+  }
+
+  const authLevel = getRouteAuthLevel(plugin.manifest, req.method, endpoint);
+  const user = await extractUserFromHeaders(req.headers);
+  const authCheck = checkAuth(user, authLevel);
+  if (authCheck.allowed === false) {
+    res.status(authCheck.status).json({
+      error_code: authCheck.error,
+      reason: authCheck.message,
+    });
+    return;
+  }
+
+  const response = await pluginManager.sendRequest(providerSlug, {
+    method: req.method,
+    path: endpoint,
+    headers: req.headers,
+    query: req.query,
+    body: req.body,
+    user,
+    pluginSlug: providerSlug,
+    fileId: getFileIdFromReq(req),
+  });
+
+  if (response.headers) {
+    Object.entries(response.headers).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+  }
+
+  res.status(response.status || 200);
+
+  if (typeof response.body === 'string') {
+    res.send(response.body);
+  } else {
+    res.json(response.body);
+  }
+}
+
+app.get('/bank-sync/:providerSlug/status', async (req, res) => {
+  try {
+    const { providerSlug } = req.params;
+
+    // Get the plugin
+    const plugin = pluginManager.getPlugin(providerSlug);
+    if (!plugin || !plugin.manifest?.bankSync?.enabled) {
+      return res.json({
+        status: 'ok',
+        data: {
+          configured: false,
+        },
+      });
+    }
+
+    // Check if the plugin defines a status endpoint
+    const statusEndpoint = plugin.manifest.bankSync.endpoints?.status;
+    if (!statusEndpoint) {
+      // Plugin exists but doesn't have a status endpoint - consider it configured
+      return res.json({
+        status: 'ok',
+        data: {
+          configured: true,
+        },
+      });
+    }
+
+    return forwardToBankSyncPluginEndpoint(
+      req,
+      res,
+      providerSlug,
+      statusEndpoint,
+    );
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: getErrorMessage(error),
+    });
+  }
+});
+
+app.post('/bank-sync/:providerSlug/status', async (req, res) => {
+  try {
+    const { providerSlug } = req.params;
+    const statusEndpoint = getBankSyncPluginEndpoint(
+      res,
+      providerSlug,
+      'status',
+    );
+    if (!statusEndpoint) {
+      return;
+    }
+
+    return forwardToBankSyncPluginEndpoint(
+      req,
+      res,
+      providerSlug,
+      statusEndpoint,
+    );
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'INTERNAL_ERROR',
+      reason: getErrorMessage(error),
+    });
+  }
+});
+
+app.post('/bank-sync/:providerSlug/secret', async (req, res) => {
+  if (!(await requirePluginAuth(req, res, 'admin'))) return;
+
+  try {
+    const { providerSlug } = req.params;
+    const plugin = pluginManager.getPlugin(providerSlug);
+    if (!plugin || !plugin.manifest?.bankSync?.enabled) {
+      res.status(404).json({
+        error_code: 'PLUGIN_NOT_FOUND',
+        reason: `Bank sync plugin '${providerSlug}' not found`,
+      });
+      return;
+    }
+
+    const { key, value } = req.body ?? {};
+    const fileId = getFileIdFromReq(req);
+    if (!key || typeof key !== 'string') {
+      res.status(400).json({
+        error_code: 'INVALID_SECRET_KEY',
+        reason: 'Secret key is required',
+      });
+      return;
+    }
+    if (!fileId || typeof fileId !== 'string') {
+      res.status(400).json({
+        error_code: 'MISSING_FILE_ID',
+        reason: 'fileId is required',
+      });
+      return;
+    }
+    if (value !== null && typeof value !== 'string') {
+      res.status(400).json({
+        error_code: 'INVALID_SECRET_VALUE',
+        reason: 'Secret value must be a string or null',
+      });
+      return;
+    }
+
+    secretsService.set(`${providerSlug}_${key}`, value, fileId);
+
+    res.json({
+      status: 'ok',
+      data: {},
+    });
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'INTERNAL_ERROR',
+      reason: getErrorMessage(error),
+    });
+  }
+});
+
+// Add endpoint to get accounts from a specific bank sync plugin
+app.post('/bank-sync/:providerSlug/accounts', async (req, res) => {
+  try {
+    const { providerSlug } = req.params;
+
+    const accountsEndpoint = getBankSyncPluginEndpoint(
+      res,
+      providerSlug,
+      'accounts',
+    );
+    if (!accountsEndpoint) {
+      return;
+    }
+
+    return forwardToBankSyncPluginEndpoint(
+      req,
+      res,
+      providerSlug,
+      accountsEndpoint,
+    );
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'INTERNAL_ERROR',
+      reason: getErrorMessage(error),
+    });
+  }
+});
+
+// Add endpoint to get transactions from a specific bank sync plugin
+app.post('/bank-sync/:providerSlug/transactions', async (req, res) => {
+  try {
+    const { providerSlug } = req.params;
+
+    const transactionsEndpoint = getBankSyncPluginEndpoint(
+      res,
+      providerSlug,
+      'transactions',
+    );
+    if (!transactionsEndpoint) {
+      return;
+    }
+
+    return forwardToBankSyncPluginEndpoint(
+      req,
+      res,
+      providerSlug,
+      transactionsEndpoint,
+    );
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'INTERNAL_ERROR',
+      reason: getErrorMessage(error),
+    });
+  }
+});
+
+app.all(/^\/bank-sync\/([^/]+)\/(.+)$/, async (req, res) => {
+  try {
+    const params = req.params as Record<string, string>;
+    const providerSlug = params[0];
+    const route = params[1];
+    const routePath = `/${route || ''}`;
+
+    return forwardToBankSyncPluginEndpoint(req, res, providerSlug, routePath);
+  } catch (error) {
+    res.status(500).json({
+      error_code: 'INTERNAL_ERROR',
+      reason: getErrorMessage(error),
+    });
+  }
+});
+
+// Add plugin middleware to handle all plugin routes
 app.use(createPluginMiddleware(pluginManager));
 
+// Error handling middleware (must be last)
 app.use(errorMiddleware);

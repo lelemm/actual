@@ -53,6 +53,17 @@ type PluginSource = {
   zipPath?: string | null;
 };
 
+type BankSyncPluginInfo = {
+  slug: string;
+  name: string;
+  displayName: string;
+  description?: string;
+  version: string;
+  endpoints: NonNullable<RuntimeManifest['bankSync']>['endpoints'];
+  requiresAuth: boolean;
+  setup: NonNullable<NonNullable<RuntimeManifest['bankSync']>['setup']>;
+};
+
 const debug = createDebug('actual:plugins');
 const require = createRequire(import.meta.url);
 const pluginRunnerPath = require.resolve('#plugin-runner');
@@ -332,6 +343,32 @@ function createPluginManager(pluginsDir: string) {
   async function reloadPluginsNow(): Promise<void> {
     await shutdownNow();
     await loadPluginsNow();
+  }
+
+  /**
+   * Get all bank sync plugins
+   * Returns plugins that have bankSync configuration enabled
+   */
+  getBankSyncPlugins(): BankSyncPluginInfo[] {
+    const bankSyncPlugins: BankSyncPluginInfo[] = [];
+
+    for (const [slug, plugin] of this.onlinePlugins) {
+      if (plugin.manifest?.bankSync?.enabled) {
+        bankSyncPlugins.push({
+          slug,
+          name: plugin.manifest.name,
+          displayName: plugin.manifest.bankSync.displayName,
+          description:
+            plugin.manifest.bankSync.description || plugin.manifest.description,
+          version: plugin.manifest.version,
+          endpoints: plugin.manifest.bankSync.endpoints,
+          requiresAuth: plugin.manifest.bankSync.requiresAuth ?? true,
+          setup: plugin.manifest.bankSync.setup ?? { type: 'json' },
+        });
+      }
+    }
+
+    return bankSyncPlugins;
   }
 
   /**
