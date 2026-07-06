@@ -58,32 +58,13 @@ export type BankSyncProviderLinkRenderer = (
   props: BankSyncProviderLinkRenderProps,
 ) => ReactElement;
 
-export type HostContext = {
-  registerBankSyncProviderSetup: (
-    providerSlug: string,
-    renderSetup: (
-      props: BankSyncProviderSetupRenderProps,
-      container: HTMLDivElement,
-    ) => void | (() => void),
-    modalProps?: BasicModalProps,
-  ) => () => void;
-  registerBankSyncProviderLink: (
-    providerSlug: string,
-    renderLink: (
-      props: BankSyncProviderLinkRenderProps,
-      container: HTMLDivElement,
-    ) => void | (() => void),
-    modalProps?: BasicModalProps,
-  ) => () => void;
-  i18nInstance: i18n;
-};
-
 export type PluginContext = Pick<HostContext, 'i18nInstance'> & {
   registerBankSyncProviderSetup: (
     providerSlug: string,
     renderSetup: BankSyncProviderSetupRenderer,
     modalProps?: BasicModalProps,
   ) => () => void;
+
   registerBankSyncProviderLink: (
     providerSlug: string,
     renderLink: BankSyncProviderLinkRenderer,
@@ -107,4 +88,26 @@ export type ActualPlugin = {
 export type ActualPluginInitialized = Omit<ActualPlugin, 'activate'> & {
   initialized: true;
   activate: (context: HostContext) => void;
+};
+
+export type HostContext = {
+  registerBankSyncProviderSetup: (
+    providerSlug: string,
+    renderSetup: (
+      props: BankSyncProviderSetupRenderProps,
+      container: HTMLDivElement,
+    ) => void | (() => void),
+    modalProps?: BasicModalProps,
+  ) => () => void;
+
+  registerBankSyncProviderLink: (
+    providerSlug: string,
+    renderLink: (
+      props: BankSyncProviderLinkRenderProps,
+      container: HTMLDivElement,
+    ) => void | (() => void),
+    modalProps?: BasicModalProps,
+  ) => () => void;
+
+  i18nInstance: i18n;
 };

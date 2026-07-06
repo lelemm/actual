@@ -1,46 +1,97 @@
 {
   "name": "@actual-app/plugins-core",
-  "version": "0.0.0-stub",
-  "description": "Temporary plugin core stubs for Actual Budget",
-  "type": "module",
+  "version": "0.1.0",
+  "description": "Core plugin system for Actual Budget",
   "exports": {
+    "./BasicModalComponents": {
+      "types": "./src/BasicModalComponents.tsx",
+      "development": "./src/BasicModalComponents.tsx",
+      "import": "./build/BasicModalComponents.js",
+      "require": "./build/BasicModalComponents.cjs"
+    },
     "./middleware": {
       "types": "./src/middleware.ts",
       "development": "./src/middleware.ts",
-      "import": "./src/middleware.ts"
+      "import": "./build/middleware.js",
+      "require": "./build/middleware.cjs"
     },
     "./types/actualPlugin": {
       "types": "./src/types/actualPlugin.ts",
       "development": "./src/types/actualPlugin.ts",
-      "import": "./src/types/actualPlugin.ts"
+      "import": "./build/types/actualPlugin.js",
+      "require": "./build/types/actualPlugin.cjs"
     },
     "./types/actualPluginEntry": {
       "types": "./src/types/actualPluginEntry.ts",
-      "development": "./src/types/actualPluginEntry.ts",
-      "import": "./src/types/actualPluginEntry.ts"
+      "development": "./src/types/actualPluginEntry.ts"
     },
     "./types/actualPluginManifest": {
       "types": "./src/types/actualPluginManifest.ts",
       "development": "./src/types/actualPluginManifest.ts",
-      "import": "./src/types/actualPluginManifest.ts"
+      "import": "./build/types/actualPluginManifest.js",
+      "require": "./build/types/actualPluginManifest.cjs"
     },
     "./types/modalProps": {
       "types": "./src/types/modalProps.ts",
-      "development": "./src/types/modalProps.ts",
-      "import": "./src/types/modalProps.ts"
+      "development": "./src/types/modalProps.ts"
     },
     "./types/plugin-files": {
       "types": "./src/types/plugin-files.ts",
-      "development": "./src/types/plugin-files.ts",
-      "import": "./src/types/plugin-files.ts"
-    }
+      "development": "./src/types/plugin-files.ts"
+    },
+    "./src/*": "./src/*"
   },
   "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@actual-app/components": "workspace:*",
+    "@types/node": "^22.19.21",
     "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
     "i18next": "^26.3.1",
-    "typescript": "^6.0.3"
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-i18next": "^17.0.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^4.1.8"
+  },
+  "peerDependencies": {
+    "@emotion/css": "^11.13.5",
+    "i18next": "^26.3.1",
+    "react": ">=19.2",
+    "react-aria-components": "^1.7.1",
+    "react-dom": ">=19.2",
+    "react-i18next": "^17.0.8",
+    "usehooks-ts": "^3.1.1"
+  },
+  "peerDependenciesMeta": {
+    "@emotion/css": {
+      "optional": true
+    },
+    "i18next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-aria-components": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "react-i18next": {
+      "optional": true
+    },
+    "usehooks-ts": {
+      "optional": true
+    }
   }
 }
