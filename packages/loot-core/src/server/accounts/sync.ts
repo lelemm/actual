@@ -393,6 +393,47 @@ async function downloadEnableBankingTransactions(
   };
 }
 
+async function downloadPluginTransactions(
+  providerSlug: string,
+  acctId: AccountEntity['id'],
+  bankId: string,
+  since: string,
+  fileId: string,
+) {
+  const userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) return;
+
+  logger.log(`Pulling transactions from plugin ${providerSlug}`);
+
+  const res = await post(
+    `${getServer().BASE_SERVER}/plugins-api/bank-sync/${providerSlug}/transactions`,
+    {
+      accountId: acctId,
+      requisitionId: bankId,
+      bankId,
+      startDate: since,
+    },
+    {
+      'X-ACTUAL-TOKEN': userToken,
+      'x-actual-file-id': fileId,
+    },
+    60000,
+  );
+
+  if (res.error_code) {
+    throw BankSyncError(res.error_type, res.error_code, res.reason);
+  } else if ('error' in res) {
+    throw BankSyncError('UNKNOWN_ERROR', res.error, res.error);
+  }
+
+  const singleRes = res as BankSyncResponse;
+  return {
+    transactions: singleRes.transactions.all,
+    accountBalance: singleRes.balances,
+    startingBalance: singleRes.startingBalance,
+  };
+}
+
 async function resolvePayee(trans, payeeName, payeesToCreate) {
   if (trans.payee == null && payeeName) {
     // First check our registry of new payees (to avoid a db access)
@@ -1090,14 +1131,6 @@ async function processBankSyncDownload(
         return total - amountToInteger(trans.transactionAmount.amount);
       }, currentBalance);
       balanceToUse = previousBalance;
-    } else if (acctRow.account_sync_source === 'akahu') {
-      const currentBalance = download.startingBalance;
-      const previousBalance = transactions.reduce(
-        (total, trans) =>
-          total - amountToInteger(trans.transactionAmount.amount),
-        currentBalance,
-      );
-      balanceToUse = Math.round(previousBalance);
     }
 
     const oldestTransaction = transactions[transactions.length - 1];
@@ -1204,6 +1237,14 @@ export async function syncAccount(
     );
   } else if (acctRow.account_sync_source === 'enableBanking') {
     download = await downloadEnableBankingTransactions(acctId, syncStartDate);
+  } else if (acctRow.account_sync_source) {
+    download = await downloadPluginTransactions(
+      acctRow.account_sync_source,
+      acctId,
+      bankId,
+      syncStartDate,
+      fileId,
+    );
   } else {
     throw new Error(
       `Unrecognized bank-sync provider: ${acctRow.account_sync_source}`,

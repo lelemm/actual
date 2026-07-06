@@ -111,7 +111,8 @@ export function BuiltInProviders({
         <View
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 320px))',
+            justifyContent: 'start',
             gap: 12,
           }}
         >
@@ -125,6 +126,7 @@ export function BuiltInProviders({
                 padding: 16,
                 backgroundColor: theme.tableBackground,
                 gap: 16,
+                minHeight: 150,
               }}
             >
               <View

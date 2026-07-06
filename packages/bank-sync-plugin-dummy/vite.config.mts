@@ -18,7 +18,7 @@ export default defineConfig({
     outDir: 'dist/plugin/frontend',
     emptyOutDir: false,
     lib: {
-      entry: path.resolve(__dirname, 'frontend/src/index.ts'),
+      entry: path.resolve(__dirname, 'frontend/src/index.tsx'),
       name: manifest.name,
       fileName: format => `${manifest.name}.${format}.js`,
       formats: ['es'],
@@ -31,7 +31,7 @@ export default defineConfig({
       manifest: true,
       dts: false,
       exposes: {
-        '.': './frontend/src/index.ts',
+        '.': './frontend/src/index.tsx',
       },
       shared: {
         react: {

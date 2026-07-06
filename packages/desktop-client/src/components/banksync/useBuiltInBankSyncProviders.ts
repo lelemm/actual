@@ -51,6 +51,18 @@ type PluggyAiAccount = {
   };
 };
 
+type AkahuAccount = {
+  _id: string;
+  name: string;
+  connection: {
+    _id: string;
+    name: string;
+  };
+  balance: {
+    current: number;
+  };
+};
+
 export type BuiltInBankSyncProviderState = {
   id: BankSyncProviders;
   displayName: string;
@@ -95,7 +107,7 @@ async function ensureSuccessResponse(
   response: SecretSetResponse,
   fallbackMessage: string,
 ) {
-  if (response?.error_code) {
+  if (response.error_code) {
     throw new Error(response.reason || response.error_code);
   }
 
@@ -370,7 +382,6 @@ export function useBuiltInBankSyncProviders({
       );
       setIsAkahuSetupComplete(false);
     } catch (error) {
-      console.log(error);
       notifyResetFailure('Akahu', error);
     }
   }, [notifyResetFailure]);
@@ -561,36 +572,23 @@ export function useBuiltInBankSyncProviders({
         throw new Error(results.reason || results.error);
       }
 
-      const newAccounts = [];
-
-      type NormalizedAccount = {
-        account_id: string;
-        name: string;
-        institution: string;
-        orgDomain: string;
-        orgId: string;
-        balance: number;
-      };
-
-      for (const oldAccount of results.accounts ?? []) {
-        const newAccount: NormalizedAccount = {
+      const externalAccounts = ((results.accounts ?? []) as AkahuAccount[]).map(
+        oldAccount => ({
           account_id: oldAccount._id,
           name: oldAccount.name,
           institution: oldAccount.connection.name,
           orgDomain: oldAccount.connection.name,
           orgId: oldAccount.connection._id,
           balance: oldAccount.balance.current,
-        };
-
-        newAccounts.push(newAccount);
-      }
+        }),
+      );
 
       dispatch(
         pushModal({
           modal: {
             name: 'select-linked-accounts',
             options: {
-              externalAccounts: newAccounts,
+              externalAccounts,
               syncSource: 'akahu',
               upgradingAccountId,
             },
@@ -609,16 +607,16 @@ export function useBuiltInBankSyncProviders({
         }),
       );
       onAkahuInit();
+    } finally {
+      setLoadingAkahuAccounts(false);
     }
-
-    setLoadingAkahuAccounts(false);
   }, [
     dispatch,
     isAkahuSetupComplete,
     loadingAkahuAccounts,
     onAkahuInit,
-    upgradingAccountId,
     t,
+    upgradingAccountId,
   ]);
 
   const configuredProviders = {
@@ -736,15 +734,15 @@ export function useBuiltInBankSyncProviders({
     enableBankingEnabled,
     akahuEnabled,
     isEnableBankingLoading,
-    loadingSimpleFinAccounts,
     loadingAkahuAccounts,
+    loadingSimpleFinAccounts,
+    onAkahuInit,
+    onAkahuReset,
     onConnectAkahu,
     onConnectEnableBanking,
     onConnectGoCardless,
     onConnectPluggyAi,
     onConnectSimpleFin,
-    onAkahuInit,
-    onAkahuReset,
     onEnableBankingInit,
     onEnableBankingReset,
     onGoCardlessInit,

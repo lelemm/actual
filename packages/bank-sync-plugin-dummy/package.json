@@ -5,6 +5,9 @@
   "description": "Dummy bank sync plugin for validating the plugin MVP stack",
   "license": "MIT",
   "type": "module",
+  "imports": {
+    "#manifest": "./src/manifest.ts"
+  },
   "scripts": {
     "build": "yarn clean && yarn build:compile && yarn build:manifest && yarn build:bundle && yarn build:frontend && yarn package:zip",
     "build:bundle": "node scripts/build-bundle.cjs",
@@ -23,8 +26,10 @@
     "@vitejs/plugin-react": "^6.0.2",
     "esbuild": "^0.28.1",
     "fflate": "^0.8.3",
+    "i18next": "^26.3.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-i18next": "^17.0.8",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   }

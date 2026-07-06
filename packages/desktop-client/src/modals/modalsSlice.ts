@@ -19,6 +19,7 @@ import type {
 } from '@actual-app/core/types/models';
 import type { CleanupTemplate } from '@actual-app/core/types/models/cleanup-templates';
 import type { Template } from '@actual-app/core/types/models/templates';
+import type { BasicModalProps } from '@actual-app/plugins-core/types/modalProps';
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
@@ -175,6 +176,14 @@ export type Modal =
         >;
         onClose?: (() => void) | undefined;
         onSuccess: (data: GoCardlessToken) => Promise<void>;
+      };
+    }
+  | {
+      name: 'bank-sync-init';
+      options: {
+        providerSlug: string;
+        providerDisplayName: string;
+        onSuccess: (credentials: Record<string, string>) => void;
       };
     }
   | {
@@ -674,6 +683,13 @@ export type Modal =
       name: 'select-new-plugin';
       options: {
         onSave: () => void | Promise<void>;
+      };
+    }
+  | {
+      name: 'plugin-modal';
+      options: {
+        parameter: (container: HTMLDivElement) => void | (() => void);
+        modalProps?: BasicModalProps;
       };
     };
 
