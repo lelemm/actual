@@ -36,6 +36,8 @@ packages/desktop-electron/dist
 packages/desktop-electron/loot-core
 packages/desktop-client/service-worker
 packages/plugins-service/dist
+packages/bank-sync-plugin-pluggy.ai/dist
+packages/bank-sync-plugin-pluggy.ai/frontend-build
 packages/component-library/dist
 packages/loot-core/lib-dist
 **/.tsbuildinfo

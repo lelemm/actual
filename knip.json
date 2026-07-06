@@ -30,6 +30,9 @@
         "syncserver/index.ts"
       ]
     },
+    "packages/bank-sync-plugin-pluggy.ai": {
+      "entry": ["frontend/src/index.tsx", "src/index.ts", "src/manifest.ts"]
+    },
     "packages/ci-actions": {
       "entry": ["bin/*.ts"],
       "ignoreBinaries": ["bin/tsx"],

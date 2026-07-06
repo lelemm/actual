@@ -1,0 +1,12 @@
+node_modules/
+dist/
+frontend-build/
+*.log
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+
+# Generated build artifacts
+manifest.json
+*.zip
