@@ -1,31 +1,23 @@
-// This is still a partial manifest shape: this PR only defines the fields
-// needed to validate sync-server plugin loading. These types stay local until
-// the shared plugin contract package is introduced later in the stack.
+import type {
+  PluginManifest,
+  PluginRoute,
+} from '@actual-app/plugins-core-sync-server/types';
+
+// Manifest validation stays in sync-server, while the manifest contract types
+// come from the shared sync-server plugin package.
 
 type JsonRecord = Record<string, unknown>;
-type ManifestBase = {
-  name: string;
-  version: string;
-  description?: string;
-};
-export type PluginRouteManifest = {
-  path: string;
-  methods: string[];
-  auth?: 'anonymous' | 'authenticated' | 'admin';
-  description?: string;
-};
-type SyncServerManifestConfig = {
-  entry: string;
-  routes?: PluginRouteManifest[];
-};
-export type Manifest = ManifestBase & {
+type SyncServerManifestConfig = NonNullable<PluginManifest['syncserver']>;
+export type PluginRouteManifest = PluginRoute;
+export type Manifest = PluginManifest & {
   type: 'syncserver';
+  frontend?: never;
   syncserver: SyncServerManifestConfig;
 };
 export type SyncServerManifest = Manifest;
 export type RuntimeManifest = Manifest & {
   entry?: string;
-  routes?: PluginRouteManifest[];
+  routes?: SyncServerManifestConfig['routes'];
 };
 
 function isRecord(value: unknown): value is JsonRecord {

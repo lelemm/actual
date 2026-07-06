@@ -11,4 +11,5 @@ esbuild.buildSync({
   format: 'esm',
   platform: 'node',
   target: 'node22',
+  conditions: ['development'],
 });

@@ -16,6 +16,7 @@
     "package:zip": "node scripts/build-zip.cjs"
   },
   "devDependencies": {
+    "@actual-app/plugins-core-sync-server": "workspace:*",
     "esbuild": "^0.28.1",
     "fflate": "^0.8.3",
     "typescript": "^6.0.3"

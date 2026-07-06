@@ -1,29 +1,22 @@
-// This is just a shell plugin to test the sync-server. It has no behavior yet.
-export const plugin = {
-  routes: [
-    {
-      method: 'GET',
-      path: '/status',
-      handler: statusHandler,
-    },
-    {
-      method: 'POST',
-      path: '/status',
-      handler: statusHandler,
-    },
-  ],
-};
+import {
+  defineSyncServerPlugin,
+  json,
+  route,
+} from '@actual-app/plugins-core-sync-server/plugin';
 
 function statusHandler() {
-  return {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: {
-      status: 'ok',
-      data: {
-        configured: true,
-        provider: 'dummy-bank-sync',
-      },
+  return json({
+    status: 'ok',
+    data: {
+      configured: true,
+      provider: 'dummy-bank-sync',
     },
-  };
+  });
 }
+
+export const plugin = defineSyncServerPlugin({
+  routes: [
+    route('GET', '/status', statusHandler),
+    route('POST', '/status', statusHandler),
+  ],
+});
