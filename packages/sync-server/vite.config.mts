@@ -45,6 +45,14 @@ export default defineConfig({
           __dirname,
           'src/scripts/reset-password.js',
         ),
+        'scripts/enable-plugins': path.resolve(
+          __dirname,
+          'src/scripts/enable-plugins.ts',
+        ),
+        'scripts/disable-plugins': path.resolve(
+          __dirname,
+          'src/scripts/disable-plugins.ts',
+        ),
         'scripts/disable-openid': path.resolve(
           __dirname,
           'src/scripts/disable-openid.js',

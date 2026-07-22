@@ -20,6 +20,7 @@
   "imports": {
     "#db": "./src/db.js",
     "#account-db": "./src/account-db.js",
+    "#server-prefs": "./src/plugins/server-prefs.ts",
     "#load-config": "./src/load-config.js",
     "#migrations": "./src/migrations.ts",
     "#accounts/*": "./src/accounts/*.js",
@@ -48,6 +49,7 @@
     "imports": {
       "#db": "./build/src/db.js",
       "#account-db": "./build/src/account-db.js",
+      "#server-prefs": "./build/src/plugins/server-prefs.js",
       "#load-config": "./build/src/load-config.js",
       "#migrations": "./build/src/migrations.js",
       "#accounts/*": "./build/src/accounts/*.js",
@@ -84,6 +86,8 @@
     "db:test-migrate": "yarn build && cross-env NODE_ENV=test node build/scripts/run-migrations.js up",
     "db:test-downgrade": "yarn build && cross-env NODE_ENV=test node build/scripts/run-migrations.js down",
     "reset-password": "yarn build && node build/scripts/reset-password.js",
+    "enable-plugins": "yarn build && node build/scripts/enable-plugins.js",
+    "disable-plugins": "yarn build && node build/scripts/disable-plugins.js",
     "disable-openid": "yarn build && node build/scripts/disable-openid.js",
     "health-check": "yarn build && node build/scripts/health-check.js"
   },
