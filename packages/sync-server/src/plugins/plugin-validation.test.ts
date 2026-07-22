@@ -5,15 +5,19 @@ import { resolvePluginPath, sanitizePluginSlug } from './plugin-paths.js';
 
 describe('plugin manifest validation', () => {
   describe('validateManifest', () => {
-    it('accepts the partial manifest fields needed for plugin loading', () => {
+    it('accepts a sync-server manifest with runtime entry metadata', () => {
       const manifest = validateManifest({
         name: 'test-plugin',
         version: '1.0.0',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       });
 
       expect(manifest.name).toBe('test-plugin');
       expect(manifest.type).toBe('syncserver');
+      expect(manifest).toMatchObject({
+        syncserver: { entry: 'syncserver/index.js' },
+      });
     });
 
     it('rejects invalid manifest identity fields', () => {
@@ -39,7 +43,7 @@ describe('plugin manifest validation', () => {
           version: '1.0.0',
           type: false,
         }),
-      ).toThrow(/type must be a string/);
+      ).toThrow(/type must be 'syncserver'/);
     });
   });
 });

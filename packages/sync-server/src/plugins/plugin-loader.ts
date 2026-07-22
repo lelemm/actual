@@ -7,7 +7,7 @@ import type { Unzipped } from 'fflate';
 
 import { getErrorMessage } from './plugin-errors.js';
 import { validateManifest } from './plugin-manifest.js';
-import type { Manifest } from './plugin-manifest.js';
+import type { Manifest, SyncServerManifest } from './plugin-manifest.js';
 import { assertSafeZipEntries, resolvePluginPath } from './plugin-paths.js';
 
 export type PluginSourceCandidate = {
@@ -143,6 +143,21 @@ export function readPluginManifest(
   }
 
   return validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')));
+}
+
+export function resolveSyncServerEntry(
+  pluginSlug: string,
+  pluginPath: string,
+  manifest: SyncServerManifest,
+): string {
+  const entryPath = resolvePluginPath(pluginPath, manifest.syncserver.entry);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error(
+      `Plugin ${pluginSlug} entry point does not exist: ${entryPath}`,
+    );
+  }
+
+  return entryPath;
 }
 
 function toPluginSourceCandidate(

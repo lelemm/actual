@@ -29,7 +29,13 @@ function writePlugin(pluginPath: string, name = 'test-plugin'): void {
     name,
     version: '1.0.0',
     type: 'syncserver',
+    syncserver: { entry: 'syncserver/index.js' },
   });
+  fs.mkdirSync(path.join(pluginPath, 'syncserver'), { recursive: true });
+  fs.writeFileSync(
+    path.join(pluginPath, 'syncserver', 'index.js'),
+    'export const plugin = { routes: [] };',
+  );
 }
 
 function makeZip(entries: Record<string, string>): string {
@@ -120,6 +126,7 @@ describe('plugin loader', () => {
           name: 'from-zip',
           version: '1.0.0',
           type: 'syncserver',
+          syncserver: { entry: 'syncserver/index.js' },
         }),
       }),
     );
@@ -166,6 +173,7 @@ describe('plugin loader', () => {
         name: 'safe-zip',
         version: '1.0.0',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
     tempDirs.push(path.dirname(zipPath));
@@ -198,6 +206,7 @@ describe('plugin loader', () => {
         name: 'safe-zip',
         version: '1.0.0',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
     tempDirs.push(path.dirname(zipPath));
@@ -218,6 +227,7 @@ describe('plugin loader', () => {
           name: 'manifest-slug',
           version: '1.0.0',
           type: 'syncserver',
+          syncserver: { entry: 'syncserver/index.js' },
         }),
       }),
     );
@@ -391,7 +401,7 @@ describe('PluginManager plugin loading', () => {
     return pluginManager;
   }
 
-  it('loads plugin manifests without running plugin code', async () => {
+  it('loads sync-server plugin manifests without running plugin code', async () => {
     writePlugin(path.join(pluginsDir, 'test-plugin'));
 
     const pluginManager = makePluginManager();
@@ -434,12 +444,14 @@ describe('PluginManager plugin loading', () => {
       name: 'duplicate-plugin',
       version: '1.0.0',
       type: 'syncserver',
+      syncserver: { entry: 'syncserver/index.js' },
     });
     writePlugin(path.join(pluginsDir, 'second'), 'duplicate-plugin');
     writeJson(path.join(pluginsDir, 'second', 'manifest.json'), {
       name: 'duplicate-plugin',
       version: '2.0.0',
       type: 'syncserver',
+      syncserver: { entry: 'syncserver/index.js' },
     });
 
     const pluginManager = makePluginManager();
@@ -457,6 +469,7 @@ describe('PluginManager plugin loading', () => {
         name: 'unsafe-version',
         version: '../evil',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
 
@@ -474,6 +487,7 @@ describe('PluginManager plugin loading', () => {
         name: 'build-metadata-version',
         version: '1.0.0+build.5',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
 
@@ -498,6 +512,7 @@ describe('PluginManager plugin loading', () => {
         name: 'already-installed',
         version: '1.0.0',
         type: 'syncserver',
+        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
     const zipPath = path.join(pluginsDir, 'already-installed-1.0.0.zip');
@@ -547,7 +562,9 @@ describe('PluginManager plugin loading', () => {
           name,
           version: '1.0.0',
           type: 'syncserver',
+          syncserver: { entry: 'syncserver/index.js' },
         }),
+        'syncserver/index.js': 'export const plugin = { routes: [] };',
       });
     }
 
