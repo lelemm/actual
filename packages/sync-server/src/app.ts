@@ -20,6 +20,7 @@ import * as secretApp from './app-secrets';
 import * as simpleFinApp from './app-simplefin/app-simplefin';
 import * as syncApp from './app-sync';
 import { config } from './load-config';
+import * as pluginsApp from './plugins/app-plugins';
 import { bootstrapPlugins, shutdownPlugins } from './plugins/plugins-bootstrap';
 
 const shutdownTimeoutMs = 10_000;
@@ -75,6 +76,7 @@ if (config.get('corsProxy.enabled')) {
 
 app.use('/admin', adminApp.handlers);
 app.use('/openid', openidApp.handlers);
+app.use('/plugins-api', pluginsApp.handlers);
 
 app.get('/mode', (req, res) => {
   res.send(config.get('mode'));
