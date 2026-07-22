@@ -8,6 +8,13 @@ import path from 'path';
 
 import createDebug from 'debug';
 
+import {
+  assertDevPluginRegistrationAllowed,
+  buildDevPluginUrl,
+  normalizeDevPluginLocator,
+  normalizeDevPluginPath,
+} from './dev-plugin-locator.js';
+import type { DevPluginLocatorInput } from './dev-plugin-locator.js';
 import { getErrorMessage } from './plugin-errors.js';
 import {
   bindPluginProcessEvents,
@@ -37,7 +44,7 @@ import {
   validateManifest,
 } from './plugin-manifest.js';
 import type { Manifest, RuntimeManifest } from './plugin-manifest.js';
-import { sanitizePluginSlug } from './plugin-paths.js';
+import { isPluginPathInsideDir, sanitizePluginSlug } from './plugin-paths.js';
 
 type PluginSource = {
   slug: string;
@@ -249,6 +256,75 @@ function createPluginManager(pluginsDir: string) {
     }
   }
 
+  async function registerDevPlugin(
+    devPluginLocator: DevPluginLocatorInput,
+  ): Promise<Manifest> {
+    return enqueue(() => registerDevPluginNow(devPluginLocator));
+  }
+
+  async function registerDevPluginNow(
+    devPluginLocator: DevPluginLocatorInput,
+  ): Promise<Manifest> {
+    assertDevPluginRegistrationAllowed();
+    const manifestLocator = normalizeDevPluginLocator(devPluginLocator);
+    const manifestUrlForFetch = buildDevPluginUrl(manifestLocator);
+    const manifestResponse = await fetch(manifestUrlForFetch);
+    if (!manifestResponse.ok) {
+      throw new Error(
+        `Failed to fetch dev plugin manifest: ${manifestUrlForFetch}`,
+      );
+    }
+
+    const manifest = validateManifest(await manifestResponse.json());
+
+    if (!isSyncServerPlugin(manifest)) {
+      return manifest;
+    }
+
+    const pluginSlug = sanitizePluginSlug(manifest.name);
+    const devPath = path.join(os.tmpdir(), 'actual-dev-plugins', pluginSlug);
+    if (
+      !isPluginPathInsideDir(devPath, 'syncserver', manifest.syncserver.entry)
+    ) {
+      throw new Error(
+        `Plugin ${manifest.name} sync-server files must live under syncserver/`,
+      );
+    }
+    fs.rmSync(devPath, { recursive: true, force: true });
+    fs.mkdirSync(path.join(devPath, 'syncserver'), { recursive: true });
+    fs.writeFileSync(
+      path.join(devPath, 'manifest.json'),
+      JSON.stringify(manifest, null, 2),
+    );
+
+    const parsedEntryUrl = new URL(
+      manifest.syncserver.entry,
+      manifestUrlForFetch,
+    );
+    const entryLocator = {
+      ...manifestLocator,
+      path: normalizeDevPluginPath(parsedEntryUrl.pathname),
+    };
+    const entryUrlForFetch = buildDevPluginUrl(entryLocator);
+    const entryResponse = await fetch(entryUrlForFetch);
+    if (!entryResponse.ok) {
+      throw new Error(`Failed to fetch dev plugin entry: ${entryUrlForFetch}`);
+    }
+
+    const devEntryPath = path.join(devPath, manifest.syncserver.entry);
+    fs.mkdirSync(path.dirname(devEntryPath), { recursive: true });
+    fs.writeFileSync(devEntryPath, await entryResponse.text(), 'utf8');
+
+    if (onlinePlugins.has(pluginSlug)) {
+      const plugin = onlinePlugins.get(pluginSlug);
+      plugin?.process.kill();
+      onlinePlugins.delete(pluginSlug);
+    }
+
+    await loadPluginNow(pluginSlug, devPath);
+    return manifest;
+  }
+
   async function reloadPlugins(): Promise<void> {
     return enqueue(() => reloadPluginsNow());
   }
@@ -422,6 +498,7 @@ function createPluginManager(pluginsDir: string) {
     getOnlinePlugins,
     getInstalledPluginManifests,
     installPluginZip,
+    registerDevPlugin,
     reloadPlugins,
     debugPluginMetadata,
     shutdown,

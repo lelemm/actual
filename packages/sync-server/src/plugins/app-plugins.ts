@@ -78,6 +78,37 @@ app.post(
   },
 );
 
+app.post('/dev/register', async (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    res.status(404).json({
+      status: 'error',
+      reason: 'not-found',
+    });
+    return;
+  }
+
+  if (!(await requirePluginAuth(req, res, 'admin'))) return;
+
+  try {
+    const devPlugin =
+      req.body.devPlugin ??
+      (req.body.port
+        ? {
+            port: req.body.port,
+            path: req.body.path,
+          }
+        : undefined);
+
+    const manifest = await pluginManager.registerDevPlugin(devPlugin);
+    res.json({
+      status: 'ok',
+      data: { manifest },
+    });
+  } catch (error) {
+    sendPluginError(res, error);
+  }
+});
+
 app.use(createPluginMiddleware(pluginManager));
 
 app.use(errorMiddleware);

@@ -1,5 +1,6 @@
 import path from 'path';
 
+import { normalizeDevPluginLocator } from './dev-plugin-locator.js';
 import { validateManifest } from './plugin-manifest.js';
 import { resolvePluginPath, sanitizePluginSlug } from './plugin-paths.js';
 
@@ -74,6 +75,51 @@ describe('plugin paths', () => {
       expect(() => resolvePluginPath(pluginPath, '../outside.js')).toThrow(
         /inside the plugin directory/,
       );
+    });
+  });
+});
+
+describe('dev plugin locator', () => {
+  describe('normalizeDevPluginLocator', () => {
+    it('normalizes supported local dev plugin locator forms', () => {
+      expect(normalizeDevPluginLocator(3000)).toEqual({
+        port: '3000',
+        path: '/manifest.json',
+      });
+      expect(
+        normalizeDevPluginLocator({
+          port: '3001',
+          path: '/plugins/demo/manifest.json',
+        }),
+      ).toEqual({
+        port: '3001',
+        path: '/plugins/demo/manifest.json',
+      });
+    });
+
+    it('rejects invalid ports and paths that leave the origin', () => {
+      expect(() => normalizeDevPluginLocator(0)).toThrow(/valid TCP port/);
+      expect(() =>
+        normalizeDevPluginLocator({ port: 3000, path: '/../secret' }),
+      ).toThrow(/stay inside the origin/);
+      expect(() =>
+        normalizeDevPluginLocator({
+          port: 3000,
+          path: '/plugins/%2e%2e/secret',
+        }),
+      ).toThrow(/stay inside the origin/);
+      expect(() =>
+        normalizeDevPluginLocator({
+          port: 3000,
+          path: '/plugins/%252e%252e/secret',
+        }),
+      ).toThrow(/stay inside the origin/);
+      expect(() =>
+        normalizeDevPluginLocator({
+          port: 3000,
+          path: '/plugins/%5c..%5csecret',
+        }),
+      ).toThrow(/stay inside the origin/);
     });
   });
 });

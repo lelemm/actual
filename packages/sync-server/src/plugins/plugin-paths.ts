@@ -34,6 +34,17 @@ export function resolvePluginPath(
   return resolvedEntryPath;
 }
 
+// Ensures runtime entrypoints stay in their declared capability dirs.
+export function isPluginPathInsideDir(
+  pluginPath: string,
+  relativeDir: string,
+  relativeEntry: string,
+): boolean {
+  const resolvedDir = resolvePluginPath(pluginPath, relativeDir);
+  const resolvedEntry = resolvePluginPath(pluginPath, relativeEntry);
+  return isPathInside(resolvedDir, resolvedEntry);
+}
+
 // Rejects zip-slip payloads before extracting uploaded plugin archives.
 export function assertSafeZipEntries(entryNames: Iterable<string>): void {
   for (const rawEntryName of entryNames) {
