@@ -175,6 +175,7 @@ describe('plugin loader', () => {
         type: 'syncserver',
         syncserver: { entry: 'syncserver/index.js' },
       }),
+      'syncserver/index.js': 'export const plugin = { routes: [] };',
     });
     tempDirs.push(path.dirname(zipPath));
 
@@ -206,7 +207,6 @@ describe('plugin loader', () => {
         name: 'safe-zip',
         version: '1.0.0',
         type: 'syncserver',
-        syncserver: { entry: 'syncserver/index.js' },
       }),
     });
     tempDirs.push(path.dirname(zipPath));
@@ -401,7 +401,7 @@ describe('PluginManager plugin loading', () => {
     return pluginManager;
   }
 
-  it('loads sync-server plugin manifests without running plugin code', async () => {
+  it('loads sync-server plugins after their runner signals ready', async () => {
     writePlugin(path.join(pluginsDir, 'test-plugin'));
 
     const pluginManager = makePluginManager();
@@ -413,6 +413,8 @@ describe('PluginManager plugin loading', () => {
         source: 'sync-server',
       }),
     ]);
+    expect(pluginManager.isPluginOnline('test-plugin')).toBe(true);
+    await pluginManager.shutdown();
   });
 
   it('cleans old zip extractions when plugins are loaded repeatedly', async () => {
@@ -461,6 +463,7 @@ describe('PluginManager plugin loading', () => {
     expect(pluginManager.getInstalledPluginManifests()[0].version).toBe(
       '1.0.0',
     );
+    await pluginManager.shutdown();
   });
 
   it('rejects uploaded plugin versions with path separators', async () => {
@@ -471,6 +474,7 @@ describe('PluginManager plugin loading', () => {
         type: 'syncserver',
         syncserver: { entry: 'syncserver/index.js' },
       }),
+      'syncserver/index.js': 'export const plugin = { routes: [] };',
     });
 
     const pluginManager = makePluginManager();
@@ -489,6 +493,7 @@ describe('PluginManager plugin loading', () => {
         type: 'syncserver',
         syncserver: { entry: 'syncserver/index.js' },
       }),
+      'syncserver/index.js': 'export const plugin = { routes: [] };',
     });
 
     const pluginManager = makePluginManager();
@@ -534,7 +539,9 @@ describe('PluginManager plugin loading', () => {
           name: 'same-slug',
           version: '1.0.0',
           type: 'syncserver',
+          syncserver: { entry: 'syncserver/index.js' },
         }),
+        'syncserver/index.js': 'export const plugin = { routes: [] };',
       }),
     );
 
@@ -545,7 +552,9 @@ describe('PluginManager plugin loading', () => {
             name: 'same-slug',
             version: '2.0.0',
             type: 'syncserver',
+            syncserver: { entry: 'syncserver/index.js' },
           }),
+          'syncserver/index.js': 'export const plugin = { routes: [] };',
         }),
       ),
     ).rejects.toThrow(/same-slug is already installed/);
@@ -589,6 +598,7 @@ describe('PluginManager plugin loading', () => {
     expect(fs.existsSync(path.join(pluginsDir, 'same-upload-1.0.0.zip'))).toBe(
       true,
     );
+    await pluginManager.shutdown();
   });
 
   it('keeps loaded plugins available while installing a new plugin', async () => {

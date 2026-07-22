@@ -40,6 +40,7 @@
     "#app-simplefin/*": "./src/app-simplefin/*.js",
     "#app-sync/services/*": "./src/app-sync/services/*.js",
     "#app-sync/*": "./src/app-sync/*.js",
+    "#plugin-runner": "./src/plugins/plugin-runner.ts",
     "#scripts/*": "./src/scripts/*.js",
     "#services/*": "./src/services/*.js",
     "#util/title": "./src/util/title/index.js",
@@ -69,6 +70,7 @@
       "#app-simplefin/*": "./build/src/app-simplefin/*.js",
       "#app-sync/services/*": "./build/src/app-sync/services/*.js",
       "#app-sync/*": "./build/src/app-sync/*.js",
+      "#plugin-runner": "./build/src/plugins/plugin-runner.js",
       "#scripts/*": "./build/src/scripts/*.js",
       "#services/*": "./build/src/services/*.js",
       "#util/title": "./build/src/util/title/index.js",
@@ -110,6 +112,7 @@
     "jws": "^4.0.1",
     "migrate": "^2.1.0",
     "openid-client": "^5.7.1",
+    "path-to-regexp": "^8.4.2",
     "pluggy-sdk": "^0.89.0",
     "uuid": "^14.0.1",
     "winston": "^3.19.0"

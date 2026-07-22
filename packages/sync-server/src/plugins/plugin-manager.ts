@@ -1,4 +1,7 @@
+import { fork } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import fs from 'fs';
+import { createRequire } from 'module';
 import { randomUUID } from 'node:crypto';
 import os from 'os';
 import path from 'path';
@@ -7,15 +10,33 @@ import createDebug from 'debug';
 
 import { getErrorMessage } from './plugin-errors.js';
 import {
+  bindPluginProcessEvents,
+  handlePluginMessage,
+  sendPluginRequest,
+  stopPluginProcess,
+  waitForPluginReady,
+} from './plugin-ipc.js';
+import type {
+  JsonRecord,
+  OnlinePlugin,
+  PendingRequest,
+  PluginResponse,
+} from './plugin-ipc.js';
+import {
   cleanupExtractedPlugin,
   extractZipPlugin as extractZipPluginArchive,
   findInstallablePlugins,
   getPluginSlugFromManifest,
   readPluginManifest,
+  resolveSyncServerEntry,
 } from './plugin-loader.js';
 import type { PluginSourceCandidate } from './plugin-loader.js';
-import { validateManifest } from './plugin-manifest.js';
-import type { Manifest } from './plugin-manifest.js';
+import {
+  isSyncServerPlugin,
+  toRuntimeManifest,
+  validateManifest,
+} from './plugin-manifest.js';
+import type { Manifest, RuntimeManifest } from './plugin-manifest.js';
 import { sanitizePluginSlug } from './plugin-paths.js';
 
 type PluginSource = {
@@ -26,10 +47,13 @@ type PluginSource = {
 };
 
 const debug = createDebug('actual:plugins');
+const require = createRequire(import.meta.url);
+const pluginRunnerPath = require.resolve('#plugin-runner');
 
 export type PluginManager = ReturnType<typeof createPluginManager>;
 
 function createPluginManager(pluginsDir: string) {
+  const onlinePlugins = new Map<string, OnlinePlugin>();
   const extractedPlugins = new Map<string, string>();
   const pluginSources = new Map<string, PluginSource>();
   let operationQueue: Promise<unknown> = Promise.resolve();
@@ -112,7 +136,67 @@ function createPluginManager(pluginsDir: string) {
     zipPath: string | null | undefined = null,
   ): Promise<void> {
     const manifest = readPluginManifest(pluginSlug, pluginPath);
+
+    if (isSyncServerPlugin(manifest)) {
+      const runtimeManifest = toRuntimeManifest(manifest);
+      const entryPath = resolveSyncServerEntry(
+        pluginSlug,
+        pluginPath,
+        manifest,
+      );
+      const childProcess = startPluginRunner(pluginPath, entryPath);
+
+      rememberPluginSource(pluginSlug, manifest, pluginPath, zipPath);
+      trackOnlinePlugin(pluginSlug, manifest, runtimeManifest, childProcess);
+      bindPluginProcessEvents(pluginSlug, childProcess, onlinePlugins);
+
+      await waitForPluginReady(pluginSlug, childProcess, onlinePlugins);
+      return;
+    }
+
     rememberPluginSource(pluginSlug, manifest, pluginPath, zipPath);
+  }
+
+  /**
+   * Handle messages from plugin processes.
+   */
+  function handlePluginProcessMessage(
+    pluginSlug: string,
+    message: unknown,
+  ): void {
+    handlePluginMessage(pluginSlug, message, onlinePlugins);
+  }
+
+  /**
+   * Forward one HTTP-shaped request to a ready plugin process.
+   */
+  async function sendRequest(
+    pluginSlug: string,
+    requestData: JsonRecord,
+  ): Promise<PluginResponse> {
+    return sendPluginRequest(pluginSlug, requestData, onlinePlugins);
+  }
+
+  /**
+   * Check whether a plugin runner has loaded and signaled readiness.
+   */
+  function isPluginOnline(pluginSlug: string): boolean {
+    const plugin = onlinePlugins.get(pluginSlug);
+    return Boolean(plugin?.ready);
+  }
+
+  /**
+   * Get runtime information for a loaded sync-server plugin.
+   */
+  function getPlugin(pluginSlug: string): OnlinePlugin | undefined {
+    return onlinePlugins.get(pluginSlug);
+  }
+
+  /**
+   * Get all loaded sync-server plugin slugs.
+   */
+  function getOnlinePlugins(): string[] {
+    return Array.from(onlinePlugins.keys());
   }
 
   function getInstalledPluginManifests(): Array<Manifest & { source: string }> {
@@ -175,17 +259,47 @@ function createPluginManager(pluginsDir: string) {
   }
 
   /**
-   * Debug loaded plugin metadata when DEBUG=actual:plugins is set.
+   * Debug plugin routes and their authentication requirements.
+   * Only outputs when DEBUG=actual:plugins is set.
    */
   function debugPluginMetadata(pluginSlug: string): void {
-    const source = pluginSources.get(pluginSlug);
-    if (!source) {
+    const plugin = onlinePlugins.get(pluginSlug);
+    if (!plugin || !plugin.manifest) {
       return;
     }
 
+    const manifest = plugin.manifest;
+
     debug(`Plugin: ${pluginSlug}`);
-    debug(`  Version: ${source.manifest.version}`);
-    debug(`  Description: ${source.manifest.description || 'N/A'}`);
+    debug(`  Version: ${manifest.version}`);
+    debug(`  Description: ${manifest.description || 'N/A'}`);
+    debug(`  Entry: ${manifest.entry}`);
+
+    if (manifest.routes && manifest.routes.length > 0) {
+      debug(`  Routes (${manifest.routes.length}):`);
+
+      for (const route of manifest.routes) {
+        const methods = route.methods.join(', ');
+        const auth = route.auth || 'authenticated'; // Default to authenticated
+        const authLabel =
+          auth === 'anonymous'
+            ? 'anonymous'
+            : auth === 'admin'
+              ? 'admin'
+              : 'authenticated';
+
+        debug(
+          `    ${authLabel} | ${methods.padEnd(15)} | /plugins-api/${pluginSlug}${route.path}`,
+        );
+
+        if (route.description) {
+          debug(`      - ${route.description}`);
+        }
+      }
+    } else {
+      debug(`  Routes: none defined`);
+    }
+
     debug(''); // Empty line for readability
   }
 
@@ -197,6 +311,10 @@ function createPluginManager(pluginsDir: string) {
   }
 
   async function shutdownNow(): Promise<void> {
+    await Promise.all(
+      Array.from(onlinePlugins.values(), plugin => stopPluginProcess(plugin)),
+    );
+    onlinePlugins.clear();
     pluginSources.clear();
 
     for (const [pluginSlug, extractPath] of extractedPlugins) {
@@ -266,11 +384,42 @@ function createPluginManager(pluginsDir: string) {
     return result;
   }
 
+  function startPluginRunner(
+    pluginPath: string,
+    entryPath: string,
+  ): ChildProcess {
+    return fork(pluginRunnerPath, [entryPath], {
+      cwd: pluginPath,
+      silent: false,
+    });
+  }
+
+  function trackOnlinePlugin(
+    pluginSlug: string,
+    manifest: Manifest,
+    runtimeManifest: RuntimeManifest,
+    childProcess: ChildProcess,
+  ): void {
+    onlinePlugins.set(pluginSlug, {
+      slug: pluginSlug,
+      manifest: runtimeManifest,
+      originalManifest: manifest,
+      process: childProcess,
+      ready: false,
+      pendingRequests: new Map<string, PendingRequest>(),
+    });
+  }
+
   return {
     extractZipPlugin,
     getPluginSlugFromManifest: getPluginSlugFromPluginManifest,
     loadPlugins,
     loadPlugin,
+    handlePluginMessage: handlePluginProcessMessage,
+    sendRequest,
+    isPluginOnline,
+    getPlugin,
+    getOnlinePlugins,
     getInstalledPluginManifests,
     installPluginZip,
     reloadPlugins,
