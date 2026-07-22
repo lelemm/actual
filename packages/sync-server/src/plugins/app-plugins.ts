@@ -60,6 +60,24 @@ app.get('/list', async (req, res) => {
   }
 });
 
+app.post(
+  '/install',
+  express.raw({ type: 'application/zip', limit: '100mb' }),
+  async (req, res) => {
+    if (!(await requirePluginAuth(req, res, 'admin'))) return;
+
+    try {
+      const manifest = await pluginManager.installPluginZip(req.body);
+      res.json({
+        status: 'ok',
+        data: { manifest },
+      });
+    } catch (error) {
+      sendPluginError(res, error);
+    }
+  },
+);
+
 app.use(createPluginMiddleware(pluginManager));
 
 app.use(errorMiddleware);
