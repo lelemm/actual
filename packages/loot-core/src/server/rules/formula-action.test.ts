@@ -484,7 +484,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /[aeuio]/g, "a")',
+      '=REGEXREPLACE(notes, "/[aeuio]/g", "a")',
       transaction,
     );
 
@@ -495,7 +495,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /[aeuio]/, "")',
+      '=REGEXREPLACE(notes, "/[aeuio]/", "")',
       transaction,
     );
 
@@ -506,7 +506,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /sarah/gi, "Jantje")',
+      '=REGEXREPLACE(notes, "/sarah/gi", "Jantje")',
       transaction,
     );
 
@@ -517,7 +517,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /^.+ (.+)$/, "$1")',
+      '=REGEXREPLACE(notes, "/^.+ (.+)$/", "$1")',
       transaction,
     );
 
@@ -528,7 +528,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /Klaas/, "Jantje")',
+      '=REGEXREPLACE(notes, "/Klaas/", "Jantje")',
       transaction,
     );
 
@@ -539,7 +539,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition', amount: 1000 };
     const result = action.executeFormulaSync(
-      '=CONCATENATE(REGEXREPLACE(notes, / Condition/, ""), amount / 100)',
+      '=CONCATENATE(REGEXREPLACE(notes, "/ Condition/", ""), amount / 100)',
       transaction,
     );
 
@@ -550,7 +550,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'He said "hi"' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /"/g, "@")',
+      '=REGEXREPLACE(notes, "/\\"/g", "@")',
       transaction,
     );
 
@@ -561,7 +561,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'a]b]c' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /[\\]]/g, "X")',
+      '=REGEXREPLACE(notes, "/[\\]]/g", "X")',
       transaction,
     );
 
@@ -572,7 +572,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'Sarah Condition' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, / Condition/)',
+      '=REGEXREPLACE(notes, "/ Condition/")',
       transaction,
     );
 
@@ -583,7 +583,7 @@ describe('Formula-based rule actions', () => {
     const action = new Action('set', 'notes', null, {});
     const transaction = { notes: 'a\nb' };
     const result = action.executeFormulaSync(
-      '=REGEXREPLACE(notes, /a.b/s, "X")',
+      '=REGEXREPLACE(notes, "/a.b/s", "X")',
       transaction,
     );
 
@@ -592,7 +592,7 @@ describe('Formula-based rule actions', () => {
 
   it('should let IFERROR catch invalid REGEXREPLACE patterns', () => {
     const action = new Action('set', 'notes', null, {
-      formula: '=IFERROR(REGEXREPLACE(notes, /(/, "x"), "fallback")',
+      formula: '=IFERROR(REGEXREPLACE(notes, "/(/", "x"), "fallback")',
     });
 
     const transaction = { notes: 'original' };

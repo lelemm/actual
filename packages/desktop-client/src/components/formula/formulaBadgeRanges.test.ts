@@ -55,6 +55,24 @@ describe('getFormulaBadgeRanges', () => {
     ]);
   });
 
+  it('badges only the REGEXREPLACE pattern as a regex', () => {
+    const formula =
+      '=REGEXREPLACE(CONCATENATE(notes, "/not/a/regex"), "/me/g", "")';
+
+    expect(
+      getFormulaBadgeRanges({
+        formula,
+        mode: 'transaction',
+      }).filter(range => range.variant === 'regex'),
+    ).toEqual([
+      {
+        ...rangeFor(formula, '"/me/g"'),
+        label: '/me/g',
+        variant: 'regex',
+      },
+    ]);
+  });
+
   it('handles repeated transaction named expressions with distinct ranges', () => {
     const formula = '=IF(account_name=payee_name, account_name, payee_name)';
     const firstAccountName = rangeFor(formula, 'account_name');

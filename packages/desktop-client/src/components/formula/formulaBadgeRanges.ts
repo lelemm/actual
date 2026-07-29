@@ -9,6 +9,7 @@ type FormulaMode = 'transaction' | 'query';
 export type FormulaBadgeVariant =
   | 'named-expression'
   | 'query-name'
+  | 'regex'
   | 'budget-dimension'
   | 'budget-category-list'
   | 'budget-timeframe';
@@ -104,6 +105,7 @@ const queryNameFunctions = new Set([
 ]);
 
 const budgetDimensions = new Set<string>(budgetQueryDimensions);
+const regexLiteral = /^\/.*\/[a-z]*$/;
 
 function isBudgetTimeframe(value: string) {
   const yearMonth = value.match(/^(\d{4})-(\d{1,2})$/);
@@ -384,6 +386,25 @@ function getStringContextBadgeRangesFromAst({
     const procedureName = node.procedureName;
     const args = Array.isArray(node.args) ? (node.args as FormulaAst[]) : [];
     if (typeof procedureName !== 'string') {
+      return;
+    }
+
+    if (procedureName === 'REGEXREPLACE') {
+      const patternArg = args[1];
+      if (
+        patternArg?.type === 'STRING' &&
+        typeof patternArg.value === 'string' &&
+        regexLiteral.test(patternArg.value)
+      ) {
+        const range = stringNodeRanges.get(patternArg);
+        if (range) {
+          badgeRanges.push({
+            ...range,
+            label: patternArg.value,
+            variant: 'regex',
+          });
+        }
+      }
       return;
     }
 

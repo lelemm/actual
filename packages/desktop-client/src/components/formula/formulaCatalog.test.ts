@@ -93,6 +93,14 @@ describe('formulaCatalog', () => {
     );
   });
 
+  it('inserts REGEXREPLACE with editable values', () => {
+    expect(
+      getFunctionCompletions('transaction').find(
+        completion => completion.label === 'REGEXREPLACE',
+      )?.apply,
+    ).toBe('REGEXREPLACE("replace_me", "/me/g")');
+  });
+
   it('defines budget query dimensions and sorts their sections after function groups', () => {
     expect(budgetQueryDimensions).toEqual([
       'budgeted',

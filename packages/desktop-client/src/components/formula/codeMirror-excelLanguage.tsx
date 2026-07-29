@@ -6,7 +6,6 @@ import { SpaceBetween } from '@actual-app/components/space-between';
 import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
-import { readRegexLiteral } from '@actual-app/core/shared/formulas/customFunctions';
 import {
   autocompletion,
   insertCompletionText,
@@ -19,7 +18,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import type { StreamParser } from '@codemirror/language';
-import { RangeSetBuilder } from '@codemirror/state';
+import { EditorState, Prec, RangeSetBuilder } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import {
   Decoration,
@@ -171,6 +170,233 @@ export function formatMonthYear(month: string, format: MonthYearFormat) {
 function applyStyle(element: HTMLElement, style: Record<string, string>) {
   Object.assign(element.style, style);
 }
+
+class RegexWidget extends WidgetType {
+  readonly pattern: string;
+  readonly flags: string;
+
+  constructor(
+    value: string,
+    readonly range: { from: number; to: number },
+    readonly isEditable: boolean,
+    readonly onBadgeClick?: (details: FormulaBadgeClick) => void,
+  ) {
+    super();
+    const match = /^\/(.*)\/([a-z]*)$/.exec(value);
+    this.pattern = match?.[1].replaceAll('\\"', '"') ?? '';
+    this.flags = match?.[2] ?? '';
+  }
+
+  eq(other: RegexWidget) {
+    return (
+      other.pattern === this.pattern &&
+      other.flags === this.flags &&
+      other.range.from === this.range.from &&
+      other.range.to === this.range.to &&
+      other.isEditable === this.isEditable &&
+      other.onBadgeClick === this.onBadgeClick
+    );
+  }
+
+  updateDOM(element: HTMLElement) {
+    this.syncDOM(element);
+    return true;
+  }
+
+  toDOM(view: EditorView) {
+    const element = document.createElement('span');
+    const patternInput = document.createElement('input');
+    const flagsButton = document.createElement('button');
+
+    element.className = 'cm-regex-widget';
+    patternInput.dataset.regexPattern = '';
+    patternInput.setAttribute('aria-label', t('Regular expression pattern'));
+    patternInput.type = 'text';
+    patternInput.autocomplete = 'off';
+    patternInput.spellcheck = false;
+    flagsButton.dataset.regexFlags = '';
+    flagsButton.type = 'button';
+    flagsButton.setAttribute('aria-haspopup', 'menu');
+    flagsButton.setAttribute('aria-label', t('Regular expression flags'));
+
+    for (const control of [patternInput, flagsButton]) {
+      applyStyle(control, {
+        minWidth: 'calc(1ch + 10px)',
+        padding: '0',
+        border: '0',
+        background: 'transparent',
+        color: theme.pageText,
+        font: 'inherit',
+        textAlign: 'center',
+      });
+    }
+    patternInput.style.outline = 'none';
+    flagsButton.style.padding = '0 3px';
+
+    applyStyle(element, {
+      display: 'inline-flex',
+      alignItems: 'baseline',
+      marginRight: '6px',
+      color: theme.formInputBorderSelected,
+    });
+    element.append('/', patternInput, '/', flagsButton);
+    this.syncDOM(element);
+
+    const updateFormula = () => {
+      if (!view.state.facet(EditorView.editable)) {
+        return;
+      }
+
+      const from = Number(element.dataset.from);
+      const to = Number(element.dataset.to);
+      view.dispatch({
+        changes: {
+          from,
+          to,
+          insert: `"/${patternInput.value.replaceAll('"', '\\"')}/${flagsButton.dataset.regexFlags}"`,
+        },
+      });
+    };
+
+    patternInput.addEventListener('input', updateFormula);
+    patternInput.addEventListener('keydown', event => {
+      if (
+        event.shiftKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        patternInput.selectionStart !== patternInput.selectionEnd ||
+        patternInput.selectionStart === null
+      ) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' && patternInput.selectionStart === 0) {
+        view.dispatch({
+          selection: { anchor: Number(element.dataset.from) },
+          scrollIntoView: true,
+        });
+        view.focus();
+        event.preventDefault();
+      } else if (
+        event.key === 'ArrowRight' &&
+        patternInput.selectionStart === patternInput.value.length
+      ) {
+        flagsButton.focus();
+        event.preventDefault();
+      }
+    });
+    flagsButton.addEventListener('keydown', event => {
+      if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        patternInput.focus();
+        patternInput.setSelectionRange(
+          patternInput.value.length,
+          patternInput.value.length,
+        );
+        event.preventDefault();
+      } else if (event.key === 'ArrowRight') {
+        view.dispatch({
+          selection: { anchor: Number(element.dataset.to) },
+          scrollIntoView: true,
+        });
+        view.focus();
+        event.preventDefault();
+      }
+    });
+    flagsButton.addEventListener('mousedown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    flagsButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!view.state.facet(EditorView.editable) || !this.onBadgeClick) {
+        return;
+      }
+
+      const from = Number(element.dataset.from);
+      const to = Number(element.dataset.to);
+      this.onBadgeClick({
+        view,
+        anchorRect: flagsButton.getBoundingClientRect(),
+        from,
+        to,
+        label: view.state.sliceDoc(from + 1, to - 1),
+        variant: 'regex',
+      });
+    });
+    return element;
+  }
+
+  private syncDOM(element: HTMLElement) {
+    const patternInput = element.querySelector<HTMLInputElement>(
+      '[data-regex-pattern]',
+    );
+    const flagsButton =
+      element.querySelector<HTMLButtonElement>('[data-regex-flags]');
+    if (!patternInput || !flagsButton) {
+      return;
+    }
+
+    element.dataset.from = String(this.range.from);
+    element.dataset.to = String(this.range.to);
+    if (patternInput.value !== this.pattern) {
+      patternInput.value = this.pattern;
+    }
+    patternInput.readOnly = !this.isEditable;
+    patternInput.style.width = `calc(${this.pattern.length}ch + 10px)`;
+    flagsButton.dataset.regexFlags = this.flags;
+    flagsButton.textContent = this.flags;
+    flagsButton.disabled = !this.isEditable;
+    flagsButton.style.cursor = this.isEditable ? 'pointer' : 'default';
+    flagsButton.style.width = `calc(${this.flags.length}ch + 10px)`;
+  }
+}
+
+const regexWidgetArrowNavigation = EditorView.domEventHandlers({
+  keydown(event, view) {
+    if (
+      event.shiftKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') ||
+      !view.state.facet(EditorView.editable) ||
+      !view.state.selection.main.empty
+    ) {
+      return false;
+    }
+
+    const position = view.state.selection.main.head;
+    const widget = Array.from(
+      view.dom.querySelectorAll<HTMLElement>('.cm-regex-widget'),
+    ).find(element => {
+      return event.key === 'ArrowRight'
+        ? Number(element.dataset.from) === position
+        : Number(element.dataset.to) === position;
+    });
+    const control = widget?.querySelector<HTMLElement>(
+      event.key === 'ArrowRight'
+        ? '[data-regex-pattern]'
+        : '[data-regex-flags]',
+    );
+    if (!control) {
+      return false;
+    }
+
+    control.focus();
+    if (control instanceof HTMLInputElement) {
+      const inputPosition =
+        event.key === 'ArrowRight' ? 0 : control.value.length;
+      control.setSelectionRange(inputPosition, inputPosition);
+    }
+    return true;
+  },
+});
 
 class FormulaBadgeWidget extends WidgetType {
   constructor(
@@ -334,17 +560,26 @@ function formulaBadgeExtension(
       )
       .sort((a, b) => a.from - b.from || a.to - b.to)
       .forEach(({ from, to, label, variant, categories }) => {
+        const range = { from, to };
         builder.add(
           from,
           to,
           Decoration.replace({
-            widget: new FormulaBadgeWidget(
-              label,
-              variant,
-              { from, to },
-              onBadgeClick,
-              categories,
-            ),
+            widget:
+              variant === 'regex'
+                ? new RegexWidget(
+                    label,
+                    range,
+                    view.state.facet(EditorView.editable),
+                    onBadgeClick,
+                  )
+                : new FormulaBadgeWidget(
+                    label,
+                    variant,
+                    range,
+                    onBadgeClick,
+                    categories,
+                  ),
             inclusive: false,
           }),
         );
@@ -531,13 +766,42 @@ function getActiveFunctionArgumentContext(text: string) {
     : null;
 }
 
+const restoreEmptyRegexWidget = EditorState.transactionFilter.of(
+  transaction => {
+    if (!transaction.docChanged || !transaction.newSelection.main.empty) {
+      return transaction;
+    }
+
+    const position = transaction.newSelection.main.head;
+    if (
+      position === 0 ||
+      position === transaction.newDoc.length ||
+      transaction.newDoc.sliceString(position - 1, position + 1) !== '""'
+    ) {
+      return transaction;
+    }
+
+    const context = getActiveFunctionArgumentContext(
+      transaction.newDoc.sliceString(0, position - 1),
+    );
+    if (context?.name !== 'REGEXREPLACE' || context.argumentIndex !== 1) {
+      return transaction;
+    }
+
+    return [
+      transaction,
+      {
+        changes: { from: position, insert: '//g' },
+        sequential: true,
+      },
+    ];
+  },
+);
+
 // Excel formula syntax parser for CodeMirror
-const excelFormulaParser: StreamParser<{
-  inString: boolean;
-  afterValue: boolean;
-}> = {
+const excelFormulaParser: StreamParser<{ inString: boolean }> = {
   startState() {
-    return { inString: false, afterValue: false };
+    return { inString: false };
   },
 
   token(stream, state) {
@@ -549,7 +813,6 @@ const excelFormulaParser: StreamParser<{
       } else {
         stream.skipToEnd();
       }
-      state.afterValue = true;
       return 'string';
     }
 
@@ -558,32 +821,19 @@ const excelFormulaParser: StreamParser<{
       return 'string';
     }
 
-    // Handle regex literals
-    if (!state.afterValue && stream.peek() === '/') {
-      const end = readRegexLiteral(stream.string, stream.pos);
-      if (end !== -1) {
-        stream.pos = end;
-        state.afterValue = true;
-        return 'regexp';
-      }
-    }
-
     // Handle numbers
     if (stream.match(/^-?\d+(\.\d+)?/)) {
-      state.afterValue = true;
       return 'number';
     }
 
     // Handle operators
     if (stream.match(/^[+\-*/=<>(),:]/)) {
-      state.afterValue = stream.current() === ')';
       return 'operator';
     }
 
     // Handle function names (uppercase letters followed by parenthesis)
     if (stream.match(/^[A-Z_][A-Z0-9_]*/)) {
       const word = stream.current();
-      state.afterValue = true;
       // Check if it's a function (next non-whitespace is '(')
       const pos = stream.pos;
       stream.eatSpace();
@@ -600,7 +850,6 @@ const excelFormulaParser: StreamParser<{
 
     // Handle variable names (lowercase or mixed case)
     if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
-      state.afterValue = true;
       return 'variableName.special';
     }
 
@@ -612,8 +861,6 @@ const excelFormulaParser: StreamParser<{
     stream.next();
     return null;
   },
-
-  tokenTable: { regexp: tags.regexp },
 };
 
 // Autocomplete extension
@@ -1160,7 +1407,6 @@ export const excelFormulaHighlighting = syntaxHighlighting(
     { tag: tags.function(tags.variableName), color: '#795E26' }, // Generic functions in brown/gold
     // Other syntax elements
     { tag: tags.string, color: '#A31515' }, // Strings in red
-    { tag: tags.regexp, color: '#811F3F' }, // Regex literals in dark red
     { tag: tags.number, color: '#098658' }, // Numbers in green
     { tag: tags.operator, color: '#000000' }, // Operators in black
     { tag: tags.variableName, color: '#001080' }, // Variables in dark blue
@@ -1183,7 +1429,6 @@ export const excelFormulaDarkHighlighting = syntaxHighlighting(
     { tag: tags.function(tags.variableName), color: '#DCDCAA' }, // Generic functions in light yellow
     // Other syntax elements
     { tag: tags.string, color: '#CE9178' }, // Strings in orange
-    { tag: tags.regexp, color: '#D16969' }, // Regex literals in muted red
     { tag: tags.number, color: '#B5CEA8' }, // Numbers in light green
     { tag: tags.operator, color: '#D4D4D4' }, // Operators in light gray
     { tag: tags.variableName, color: '#9CDCFE' }, // Variables in light blue
@@ -1202,6 +1447,8 @@ export function excelFormulaExtension(
 ): Extension[] {
   return [
     excelFormulaLanguage,
+    restoreEmptyRegexWidget,
+    Prec.highest(regexWidgetArrowNavigation),
     excelFormulaAutocomplete(mode, queries, variables, categoryBadges),
     excelFormulaHover(mode),
     formulaBadgeExtension(

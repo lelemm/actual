@@ -1212,7 +1212,10 @@ export function getFunctionCompletions(mode: FormulaMode): Completion[] {
         '',
         func.parameters.map(p => `- ${p.name}: ${p.description}`).join('\n'),
       ].join('\n'),
-      apply: `${name}()`,
+      apply:
+        name === 'REGEXREPLACE'
+          ? 'REGEXREPLACE("replace_me", "/me/g")'
+          : `${name}()`,
       boost: 10,
     }),
   );

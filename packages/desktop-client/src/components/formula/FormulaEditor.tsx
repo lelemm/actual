@@ -56,6 +56,46 @@ type CategoryPickerState = BadgePickerState & {
   selectedCategoryIds: string[];
 };
 
+type RegexPickerState = BadgePickerState & {
+  pattern: string;
+  selectedFlags: string[];
+};
+
+const regexFlagOptions = [
+  {
+    flag: 'd',
+    description: <Trans>Return match indices.</Trans>,
+  },
+  {
+    flag: 'g',
+    description: <Trans>Find all matches.</Trans>,
+  },
+  {
+    flag: 'i',
+    description: <Trans>Ignore letter case.</Trans>,
+  },
+  {
+    flag: 'm',
+    description: <Trans>Match the start and end of each line.</Trans>,
+  },
+  {
+    flag: 's',
+    description: <Trans>Allow dots to match newlines.</Trans>,
+  },
+  {
+    flag: 'u',
+    description: <Trans>Treat the pattern as Unicode.</Trans>,
+  },
+  {
+    flag: 'v',
+    description: <Trans>Enable Unicode sets.</Trans>,
+  },
+  {
+    flag: 'y',
+    description: <Trans>Match from the current position.</Trans>,
+  },
+] as const;
+
 function getCurrentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -81,6 +121,7 @@ export function FormulaEditor({
     useState<TimeframePickerState | null>(null);
   const [categoryPicker, setCategoryPicker] =
     useState<CategoryPickerState | null>(null);
+  const [regexPicker, setRegexPicker] = useState<RegexPickerState | null>(null);
   const suppressBadgePickerUntilRef = useRef(0);
   const badgePickerPopoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -99,6 +140,7 @@ export function FormulaEditor({
     setDimensionPicker(null);
     setTimeframePicker(null);
     setCategoryPicker(null);
+    setRegexPicker(null);
   }, []);
 
   const openBadgePicker = useCallback(
@@ -119,6 +161,18 @@ export function FormulaEditor({
 
       if (details.variant === 'query-name') {
         setQueryPicker(picker);
+        return;
+      }
+
+      if (details.variant === 'regex') {
+        const match = /^\/(.*)\/([a-z]*)$/.exec(details.label);
+        if (match) {
+          setRegexPicker({
+            ...picker,
+            pattern: match[1],
+            selectedFlags: [...match[2]],
+          });
+        }
         return;
       }
 
@@ -207,12 +261,40 @@ export function FormulaEditor({
     );
   }, [categoryPicker, replaceBadgeValue]);
 
+  const toggleRegexFlag = useCallback((flag: string) => {
+    setRegexPicker(currentPicker => {
+      if (!currentPicker) {
+        return currentPicker;
+      }
+
+      const isSelected = currentPicker.selectedFlags.includes(flag);
+      return {
+        ...currentPicker,
+        selectedFlags: isSelected
+          ? currentPicker.selectedFlags.filter(value => value !== flag)
+          : [...currentPicker.selectedFlags, flag],
+      };
+    });
+  }, []);
+
+  const applyRegexPickerValue = useCallback(() => {
+    if (!regexPicker) {
+      return;
+    }
+
+    replaceBadgeValue(
+      regexPicker,
+      `/${regexPicker.pattern}/${regexPicker.selectedFlags.join('')}`,
+    );
+  }, [regexPicker, replaceBadgeValue]);
+
   useEffect(() => {
     if (
       !queryPicker &&
       !dimensionPicker &&
       !timeframePicker &&
-      !categoryPicker
+      !categoryPicker &&
+      !regexPicker
     ) {
       return;
     }
@@ -228,6 +310,8 @@ export function FormulaEditor({
 
       if (categoryPicker) {
         applyCategoryPickerValue();
+      } else if (regexPicker) {
+        applyRegexPickerValue();
       } else {
         closeBadgePickers();
       }
@@ -237,10 +321,12 @@ export function FormulaEditor({
     return () => document.removeEventListener('mousedown', onMouseDown, true);
   }, [
     applyCategoryPickerValue,
+    applyRegexPickerValue,
     categoryPicker,
     closeBadgePickers,
     dimensionPicker,
     queryPicker,
+    regexPicker,
     timeframePicker,
   ]);
 
@@ -249,7 +335,8 @@ export function FormulaEditor({
       !queryPicker &&
       !dimensionPicker &&
       !timeframePicker &&
-      !categoryPicker
+      !categoryPicker &&
+      !regexPicker
     ) {
       return;
     }
@@ -262,7 +349,8 @@ export function FormulaEditor({
           queryPicker ??
           dimensionPicker ??
           timeframePicker ??
-          categoryPicker
+          categoryPicker ??
+          regexPicker
         )?.view.focus();
       }
     };
@@ -274,6 +362,7 @@ export function FormulaEditor({
     categoryPicker,
     dimensionPicker,
     queryPicker,
+    regexPicker,
     timeframePicker,
   ]);
 
@@ -381,6 +470,34 @@ export function FormulaEditor({
           ))}
         </BadgeMenuPopover>
       )}
+      {regexPicker && (
+        <BadgeMenuPopover
+          anchorRect={regexPicker.anchorRect}
+          minWidth={320}
+          popoverRef={badgePickerPopoverRef}
+          scrollable={false}
+        >
+          <div style={{ maxHeight: 220, overflowY: 'auto', padding: 4 }}>
+            {regexFlagOptions.map(({ flag, description }) => (
+              <BadgeMenuButton
+                key={flag}
+                selected={regexPicker.selectedFlags.includes(flag)}
+                onClick={() => toggleRegexFlag(flag)}
+              >
+                <strong style={{ display: 'inline-block', width: '1.5em' }}>
+                  {flag}
+                </strong>
+                {' – '}
+                {description}
+              </BadgeMenuButton>
+            ))}
+          </div>
+          <BadgePickerActions
+            onCancel={closeBadgePickers}
+            onApply={applyRegexPickerValue}
+          />
+        </BadgeMenuPopover>
+      )}
       {categoryPicker && categoryBadges && (
         <BadgeMenuPopover
           anchorRect={categoryPicker.anchorRect}
@@ -407,34 +524,10 @@ export function FormulaEditor({
               </BadgeMenuButton>
             ))}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              gap: 6,
-              justifyContent: 'flex-end',
-              padding: '6px 4px 2px',
-              margin: '4px 4px 0',
-            }}
-          >
-            <button
-              type="button"
-              onClick={closeBadgePickers}
-              style={pickerActionButtonStyle}
-            >
-              <Trans>Cancel</Trans>
-            </button>
-            <button
-              type="button"
-              onClick={applyCategoryPickerValue}
-              style={{
-                ...pickerActionButtonStyle,
-                background: theme.buttonPrimaryBackground,
-                color: theme.buttonPrimaryText,
-              }}
-            >
-              <Trans>Apply</Trans>
-            </button>
-          </div>
+          <BadgePickerActions
+            onCancel={closeBadgePickers}
+            onApply={applyCategoryPickerValue}
+          />
         </BadgeMenuPopover>
       )}
       {timeframePicker && (
@@ -478,6 +571,41 @@ const pickerActionButtonStyle = {
   fontSize: 12,
   cursor: 'pointer',
 };
+
+function BadgePickerActions({
+  onCancel,
+  onApply,
+}: {
+  onCancel: () => void;
+  onApply: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 6,
+        justifyContent: 'flex-end',
+        padding: '6px 4px 2px',
+        margin: '4px 4px 0',
+      }}
+    >
+      <button type="button" onClick={onCancel} style={pickerActionButtonStyle}>
+        <Trans>Cancel</Trans>
+      </button>
+      <button
+        type="button"
+        onClick={onApply}
+        style={{
+          ...pickerActionButtonStyle,
+          background: theme.buttonPrimaryBackground,
+          color: theme.buttonPrimaryText,
+        }}
+      >
+        <Trans>Apply</Trans>
+      </button>
+    </div>
+  );
+}
 
 function BadgeMenuPopover({
   anchorRect,
@@ -529,6 +657,7 @@ function BadgeMenuButton({
   return (
     <button
       type="button"
+      aria-pressed={selected}
       onClick={onClick}
       style={{
         display: 'block',
