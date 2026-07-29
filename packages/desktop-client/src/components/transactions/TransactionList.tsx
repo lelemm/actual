@@ -41,6 +41,7 @@ import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
+import { shouldApplyRuleChange } from './table/utils';
 import { TransactionTable } from './TransactionsTable';
 import type { TransactionTableProps } from './TransactionsTable';
 // When data changes, there are two ways to update the UI:
@@ -265,6 +266,7 @@ type TransactionListProps = Pick<
   | 'showAccount'
   | 'showBalances'
   | 'showCleared'
+  | 'showGroup'
   | 'showReconciled'
   | 'showSelection'
   | 'sortField'
@@ -300,6 +302,7 @@ export function TransactionList({
   showBalances,
   showReconciled,
   showCleared,
+  showGroup,
   showAccount,
   isAdding,
   isNew,
@@ -541,10 +544,7 @@ export function TransactionList({
       if (diff) {
         Object.keys(diff).forEach(field => {
           if (
-            newTransaction[field] == null ||
-            newTransaction[field] === '' ||
-            newTransaction[field] === 0 ||
-            newTransaction[field] === false
+            shouldApplyRuleChange(field, newTransaction[field], diff[field])
           ) {
             newTransaction[field] = diff[field];
           }
@@ -743,6 +743,7 @@ export function TransactionList({
         showCleared={showCleared}
         showAccount={showAccount}
         showCategory
+        showGroup={showGroup}
         currentAccountId={account && account.id}
         currentCategoryId={category && category.id}
         isAdding={isAdding}

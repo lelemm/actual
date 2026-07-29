@@ -106,7 +106,8 @@ function categoryRangeToIds(categories: SimpleRangeValue): string[] {
         !(value instanceof CellError) &&
         (typeof value === 'string' || typeof value === 'number'),
     )
-    .map(value => String(value).trim())
+    .flatMap(value => String(value).split(','))
+    .map(value => value.trim())
     .filter(value => value.length > 0);
 }
 
@@ -205,7 +206,7 @@ export function convertRegexLiterals(formula: string): string {
   let result = '';
   let prev = '';
 
-  for (let i = 0; i < formula.length; ) {
+  for (let i = 0; i < formula.length;) {
     const char = formula[i];
 
     if (char === '"') {
