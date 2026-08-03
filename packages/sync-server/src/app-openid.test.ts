@@ -40,4 +40,40 @@ describe('/config', () => {
       reason: 'already-bootstraped',
     });
   });
+
+  it('does not expose the client secret', async () => {
+    const { owner: previousOwner } = getAccountDb().first(
+      'SELECT owner FROM users WHERE id = ?',
+      ['genericAdmin'],
+    );
+    getAccountDb().mutate('UPDATE users SET owner = 0 WHERE owner = 1');
+
+    try {
+      await bootstrapPassword('review-password');
+      insertOpenIdAuth({
+        client_id: 'client-id',
+        client_secret: 'client-secret',
+        issuer: 'https://issuer.example.com',
+        server_hostname: 'https://actual.example.com',
+      });
+
+      const res = await request(app)
+        .post('/config')
+        .send({ password: 'review-password' });
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.status).toEqual('ok');
+      expect(res.body.data.openId).toEqual({
+        client_id: 'client-id',
+        issuer: 'https://issuer.example.com',
+        server_hostname: 'https://actual.example.com',
+      });
+      expect(res.body.data.openId).not.toHaveProperty('client_secret');
+    } finally {
+      getAccountDb().mutate('UPDATE users SET owner = ? WHERE id = ?', [
+        previousOwner,
+        'genericAdmin',
+      ]);
+    }
+  });
 });

@@ -88,6 +88,7 @@ app.post('/config', openIdConfigRateLimiter, async (req, res) => {
 
   try {
     const openIdConfig = JSON.parse(auth.extra_data);
+    delete openIdConfig.client_secret;
     res.send({ status: 'ok', data: { openId: openIdConfig } });
   } catch {
     res

@@ -17,7 +17,14 @@ import { TOKEN_EXPIRATION_NEVER } from '#util/validate-user';
 import { checkPassword } from './password';
 
 export type ConfigParameter = {
-  issuer?: string;
+  issuer?:
+    | string
+    | {
+        name: string;
+        authorization_endpoint: string;
+        token_endpoint: string;
+        userinfo_endpoint: string;
+      };
   discoveryURL?: string;
   client_id?: string;
   client_secret?: string;
@@ -36,6 +43,25 @@ export async function bootstrapOpenId(configParameter: ConfigParameter) {
   }
   if (!('server_hostname' in configParameter)) {
     return { error: 'missing-server-hostname' };
+  }
+
+  if (!configParameter.client_secret) {
+    const existingConfig = getAccountDb().first(
+      'SELECT extra_data FROM auth WHERE method = ?',
+      ['openid'],
+    );
+    if (existingConfig) {
+      try {
+        configParameter.client_secret = JSON.parse(
+          existingConfig['extra_data'],
+        ).client_secret;
+      } catch {
+        return { error: 'configuration-error' };
+      }
+    }
+  }
+  if (!configParameter.client_secret) {
+    return { error: 'missing-client-secret' };
   }
 
   custom.setHttpOptionsDefaults({
@@ -214,6 +240,14 @@ export async function loginWithOpenIdFinalize(body) {
   }
 
   const { code_verifier, return_url } = pendingRequest;
+
+  const { changes: deletedRequests } = accountDb.mutate(
+    'DELETE FROM pending_openid_requests WHERE state = ?',
+    [body.state],
+  );
+  if (deletedRequests === 0) {
+    return { error: 'invalid-or-expired-state' };
+  }
 
   try {
     let tokenSet = null;
