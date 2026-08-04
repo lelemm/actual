@@ -9,7 +9,8 @@ import { SecretName, secretsService } from '#services/secrets-service';
 
 const debug = createDebug('actual:enable-banking:service');
 
-const BASE_URL = 'https://api.enablebanking.com';
+const BASE_URL =
+  process.env.ENABLEBANKING_API_URL ?? 'https://api.enablebanking.com';
 
 // --- Type definitions ---
 

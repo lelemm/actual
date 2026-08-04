@@ -82,7 +82,7 @@ app.post(
     }
 
     try {
-      const akahu = new AkahuClient({ appToken });
+      const akahu = createAkahuClient(appToken);
       const accounts = await akahu.accounts.list(userToken);
 
       res.send({
@@ -133,7 +133,7 @@ app.post(
     }
 
     try {
-      const akahu = new AkahuClient({ appToken });
+      const akahu = createAkahuClient(appToken);
 
       const account = await getRefreshedAccount(akahu, userToken, accountId);
       if (!account) {
@@ -404,4 +404,26 @@ function shouldRefreshAccount(refreshedAt?: string) {
     Number.isFinite(refreshedAtTime) &&
     Date.now() - refreshedAtTime > AKAHU_TRANSACTION_REFRESH_INTERVAL_MS
   );
+}
+
+function createAkahuClient(appToken: string) {
+  const configuredUrl = process.env.AKAHU_API_URL;
+  if (!configuredUrl) {
+    return new AkahuClient({ appToken });
+  }
+
+  const url = new URL(configuredUrl);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`Unsupported Akahu API protocol: ${url.protocol}`);
+  }
+  if (url.pathname.replace(/^\/+|\/+$/g, '') !== 'v1') {
+    throw new Error(`Unsupported Akahu API version: ${url.pathname}`);
+  }
+  return new AkahuClient({
+    appToken,
+    protocol: url.protocol === 'http:' ? 'http' : 'https',
+    host: url.hostname,
+    port: url.port ? Number(url.port) : undefined,
+    apiVersion: 'v1',
+  });
 }

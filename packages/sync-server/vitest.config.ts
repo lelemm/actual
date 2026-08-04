@@ -1,6 +1,11 @@
 export default {
   test: {
-    exclude: ['**/node_modules/**', '**/dist/**', '**/build/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/contract/**',
+    ],
     globalSetup: ['./vitest.globalSetup.js'],
     globals: true,
     coverage: {

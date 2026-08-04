@@ -30,7 +30,9 @@
     "migrations/**/*",
     "types/**/*",
     "app.ts",
-    "bin/**/*"
+    "bin/**/*",
+    "contract/**/*",
+    "vitest.contract.config.ts"
   ],
   "exclude": ["node_modules", "build", "coverage"]
 }

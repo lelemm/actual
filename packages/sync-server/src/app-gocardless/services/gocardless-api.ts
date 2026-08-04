@@ -13,8 +13,12 @@ import type {
   GetTransactionsResponse,
 } from '#app-gocardless/gocardless.types';
 
-const BASE_URL = 'https://bankaccountdata.gocardless.com/api/v2';
-const ALLOWED_ORIGIN = new URL(BASE_URL).origin;
+const BASE_URL =
+  process.env.GOCARDLESS_API_URL ??
+  'https://bankaccountdata.gocardless.com/api/v2';
+const BASE = new URL(BASE_URL);
+const ALLOWED_ORIGIN = BASE.origin;
+const ALLOWED_PATH = BASE.pathname.replace(/\/$/, '') + '/';
 
 export type TokenResponse = {
   access: string;
@@ -106,7 +110,10 @@ export class GoCardlessApi {
     }
 
     const url = new URL(`${BASE_URL}${endpoint}`);
-    if (url.origin !== ALLOWED_ORIGIN || !url.pathname.startsWith('/api/v2/')) {
+    if (
+      url.origin !== ALLOWED_ORIGIN ||
+      !url.pathname.startsWith(ALLOWED_PATH)
+    ) {
       throw new Error(`Invalid GoCardless API endpoint: ${endpoint}`);
     }
 

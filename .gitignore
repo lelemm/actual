@@ -80,6 +80,7 @@ bundle.mobile.js.map
 
 # build output
 package.tgz
+packages/sync-server/target/
 
 # Fly.io configuration
 fly.toml

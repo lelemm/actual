@@ -23,6 +23,9 @@ app.use(
 let allowlistedRepos = [];
 let lastAllowlistFetch = 0;
 const ALLOWLIST_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const ALLOWLIST_URL =
+  process.env.CORS_PROXY_ALLOWLIST_URL ??
+  'https://raw.githubusercontent.com/actualbudget/plugin-store/refs/heads/main/plugins.json';
 
 // Export cache clearing function for testing
 export const clearAllowlistCache = () => {
@@ -40,9 +43,7 @@ async function fetchAllowlist() {
   }
 
   try {
-    const response = await fetch(
-      'https://raw.githubusercontent.com/actualbudget/plugin-store/refs/heads/main/plugins.json',
-    );
+    const response = await fetch(ALLOWLIST_URL);
     if (!response.ok) {
       throw new Error(`Failed to fetch allowlist: ${response.status}`);
     }
@@ -66,9 +67,10 @@ function isUrlAllowed(targetUrl) {
   try {
     const url = new URL(targetUrl);
     const hostname = url.hostname;
+    const testAllowedOrigin = process.env.CORS_PROXY_TEST_ALLOWED_ORIGIN;
 
     // Block private/local IP addresses
-    if (isBlockedIp(hostname)) {
+    if (isBlockedIp(hostname) && url.origin !== testAllowedOrigin) {
       console.warn(`Blocked request to private/localhost IP: ${hostname}`);
       return false;
     }
