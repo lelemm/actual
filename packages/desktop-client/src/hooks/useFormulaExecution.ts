@@ -37,7 +37,13 @@ type QueryConfig = {
 
 type QueriesMap = Record<string, QueryConfig>;
 
-type FormulaCellValue = number | string | boolean | null;
+export type FormulaCellValue = number | string | boolean | null;
+
+export type FormulaSpreadsheetResult = {
+  values: FormulaCellValue[][];
+  errors: (string | null)[][];
+  serialized: string[][];
+};
 
 function createFormulaQueryContext(): Required<FormulaQueryContext> {
   return {
@@ -65,6 +71,67 @@ function isHyperFormulaError(
   );
 }
 
+function normalizeFormulaCells(cells: string[][]): string[][] {
+  const height = Math.max(cells.length, 1);
+  const width = Math.max(...cells.map(row => row.length), 1);
+
+  return Array.from({ length: height }, (_, rowIndex) =>
+    Array.from(
+      { length: width },
+      (_, colIndex) => cells[rowIndex]?.[colIndex] ?? '',
+    ),
+  );
+}
+
+function createHyperFormulaInstance({
+  formulaQueryContext,
+  locale,
+  namedExpressions,
+}: {
+  formulaQueryContext: FormulaQueryContext;
+  locale: unknown;
+  namedExpressions?: Record<string, number | string>;
+}) {
+  const hfInstance = HyperFormula.buildEmpty({
+    licenseKey: 'gpl-v3',
+    language: 'enUS',
+    localeLang: typeof locale === 'string' ? locale : 'en-US',
+    dateFormats: ['DD/MM/YYYY', 'YYYY-MM-DD', 'YYYY/MM/DD'],
+    context: {
+      formulaQuery: formulaQueryContext,
+    },
+  });
+
+  const sheetName = hfInstance.addSheet('Sheet1');
+  const sheetId = hfInstance.getSheetId(sheetName);
+
+  if (sheetId === undefined) {
+    hfInstance.destroy();
+    throw new Error('Failed to create sheet');
+  }
+
+  if (namedExpressions) {
+    for (const [name, value] of Object.entries(namedExpressions)) {
+      hfInstance.addNamedExpression(
+        name,
+        typeof value === 'number' ? value : String(value),
+      );
+    }
+  }
+
+  return { hfInstance, sheetId };
+}
+
+function getFormulaCellError(cellValue: unknown): string | null {
+  return isHyperFormulaError(cellValue)
+    ? `Formula error: ${cellValue.type}`
+    : null;
+}
+
+function getNamedExpressionValue(value: FormulaCellValue): number | string {
+  return typeof value === 'boolean' ? String(value) : (value ?? 0);
+}
+
 function evaluateFormulaWithContext({
   formula,
   formulaQueryContext,
@@ -81,31 +148,13 @@ function evaluateFormulaWithContext({
   let hfInstance: ReturnType<typeof HyperFormula.buildEmpty> | null = null;
 
   try {
-    hfInstance = HyperFormula.buildEmpty({
-      licenseKey: 'gpl-v3',
-      language: 'enUS',
-      localeLang: typeof locale === 'string' ? locale : 'en-US',
-      dateFormats: ['DD/MM/YYYY', 'YYYY-MM-DD', 'YYYY/MM/DD'],
-      context: {
-        formulaQuery: formulaQueryContext,
-      },
+    const instance = createHyperFormulaInstance({
+      formulaQueryContext,
+      locale,
+      namedExpressions,
     });
-
-    const sheetName = hfInstance.addSheet('Sheet1');
-    const sheetId = hfInstance.getSheetId(sheetName);
-
-    if (sheetId === undefined) {
-      throw new Error('Failed to create sheet');
-    }
-
-    if (namedExpressions) {
-      for (const [name, value] of Object.entries(namedExpressions)) {
-        hfInstance.addNamedExpression(
-          name,
-          typeof value === 'number' ? value : String(value),
-        );
-      }
-    }
+    hfInstance = instance.hfInstance;
+    const { sheetId } = instance;
 
     hfInstance.setCellContents({ sheet: sheetId, col: 0, row: 0 }, [[formula]]);
 
@@ -117,12 +166,210 @@ function evaluateFormulaWithContext({
 
     if (isHyperFormulaError(cellValue)) {
       if (throwOnCellError) {
-        throw new Error(`Formula error: ${cellValue.type}`);
+        throw new Error(getFormulaCellError(cellValue) ?? 'Formula error');
       }
       return null;
     }
 
     return cellValue as FormulaCellValue;
+  } finally {
+    hfInstance?.destroy();
+  }
+}
+
+function evaluateSpreadsheetWithContext({
+  cells,
+  formulaQueryContext,
+  locale,
+}: {
+  cells: string[][];
+  formulaQueryContext: FormulaQueryContext;
+  locale: unknown;
+}): FormulaSpreadsheetResult {
+  let hfInstance: ReturnType<typeof HyperFormula.buildEmpty> | null = null;
+
+  try {
+    const normalizedCells = normalizeFormulaCells(cells);
+    const instance = createHyperFormulaInstance({
+      formulaQueryContext,
+      locale,
+    });
+    hfInstance = instance.hfInstance;
+    const { sheetId } = instance;
+
+    hfInstance.setSheetContent(sheetId, normalizedCells);
+
+    const values = normalizedCells.map((row, rowIndex) =>
+      row.map((_, colIndex) => {
+        const cellValue = hfInstance!.getCellValue({
+          sheet: sheetId,
+          col: colIndex,
+          row: rowIndex,
+        });
+        return getFormulaCellError(cellValue)
+          ? null
+          : (cellValue as FormulaCellValue);
+      }),
+    );
+
+    const errors = normalizedCells.map((row, rowIndex) =>
+      row.map((_, colIndex) =>
+        getFormulaCellError(
+          hfInstance!.getCellValue({
+            sheet: sheetId,
+            col: colIndex,
+            row: rowIndex,
+          }),
+        ),
+      ),
+    );
+
+    const serialized = normalizeFormulaCells(
+      hfInstance
+        .getSheetSerialized(sheetId)
+        .map(row => row.map(cell => (cell == null ? '' : String(cell)))),
+    );
+
+    return { values, errors, serialized };
+  } finally {
+    hfInstance?.destroy();
+  }
+}
+
+async function executeFormula({
+  formula,
+  queries,
+  locale,
+  namedExpressions,
+}: {
+  formula: string;
+  queries: QueriesMap;
+  locale: unknown;
+  namedExpressions?: Record<string, number | string>;
+}): Promise<FormulaCellValue> {
+  const formulaQueryContext = createFormulaQueryContext();
+
+  evaluateFormulaWithContext({
+    formula,
+    formulaQueryContext,
+    locale,
+    namedExpressions,
+    throwOnCellError: false,
+  });
+
+  await prefetchFormulaQueries(formulaQueryContext, queries);
+
+  formulaQueryContext.budgetQueryRequests.clear();
+  evaluateFormulaWithContext({
+    formula,
+    formulaQueryContext,
+    locale,
+    namedExpressions,
+    throwOnCellError: false,
+  });
+
+  await prefetchBudgetQueries(formulaQueryContext);
+
+  return evaluateFormulaWithContext({
+    formula,
+    formulaQueryContext,
+    locale,
+    namedExpressions,
+  });
+}
+
+async function executeSpreadsheet({
+  cells,
+  queries,
+  locale,
+}: {
+  cells: string[][];
+  queries: QueriesMap;
+  locale: unknown;
+}): Promise<FormulaSpreadsheetResult> {
+  const formulaQueryContext = createFormulaQueryContext();
+
+  evaluateSpreadsheetWithContext({
+    cells,
+    formulaQueryContext,
+    locale,
+  });
+
+  await prefetchFormulaQueries(formulaQueryContext, queries);
+
+  formulaQueryContext.budgetQueryRequests.clear();
+  evaluateSpreadsheetWithContext({
+    cells,
+    formulaQueryContext,
+    locale,
+  });
+
+  await prefetchBudgetQueries(formulaQueryContext);
+
+  return evaluateSpreadsheetWithContext({
+    cells,
+    formulaQueryContext,
+    locale,
+  });
+}
+
+export function removeSpreadsheetRows(
+  cells: string[][],
+  rowIndex: number,
+): string[][] {
+  const normalizedCells = normalizeFormulaCells(cells);
+  if (normalizedCells.length <= 1) {
+    return normalizedCells;
+  }
+
+  let hfInstance: ReturnType<typeof HyperFormula.buildEmpty> | null = null;
+
+  try {
+    const instance = createHyperFormulaInstance({
+      formulaQueryContext: createFormulaQueryContext(),
+      locale: 'en-US',
+    });
+    hfInstance = instance.hfInstance;
+    const { sheetId } = instance;
+
+    hfInstance.setSheetContent(sheetId, normalizedCells);
+    hfInstance.removeRows(sheetId, [rowIndex, 1]);
+
+    return hfInstance
+      .getSheetSerialized(sheetId)
+      .map(row => row.map(cell => (cell == null ? '' : String(cell))));
+  } finally {
+    hfInstance?.destroy();
+  }
+}
+
+export function removeSpreadsheetColumns(
+  cells: string[][],
+  colIndex: number,
+): string[][] {
+  const normalizedCells = normalizeFormulaCells(cells);
+  if (normalizedCells[0].length <= 1) {
+    return normalizedCells;
+  }
+
+  let hfInstance: ReturnType<typeof HyperFormula.buildEmpty> | null = null;
+
+  try {
+    const instance = createHyperFormulaInstance({
+      formulaQueryContext: createFormulaQueryContext(),
+      locale: 'en-US',
+    });
+    hfInstance = instance.hfInstance;
+    const { sheetId } = instance;
+
+    hfInstance.setSheetContent(sheetId, normalizedCells);
+    hfInstance.removeColumns(sheetId, [colIndex, 1]);
+
+    return normalizeFormulaCells(
+      hfInstance
+        .getSheetSerialized(sheetId)
+        .map(row => row.map(cell => (cell == null ? '' : String(cell)))),
+    );
   } finally {
     hfInstance?.destroy();
   }
@@ -136,14 +383,14 @@ export function useFormulaExecution(
 ) {
   const locale = useLocale();
   const [language] = useGlobalPref('language');
-  const [result, setResult] = useState<number | string | null>(null);
+  const [result, setResult] = useState<FormulaCellValue>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function executeFormula() {
+    async function executeSingleFormula() {
       if (!formula || !formula.startsWith('=')) {
         setResult(null);
         setError('Formula must start with =');
@@ -169,39 +416,16 @@ export function useFormulaExecution(
           console.error('Error loading formula preferences:', err);
         }
 
-        const formulaQueryContext = createFormulaQueryContext();
-
-        evaluateFormulaWithContext({
+        const cellValue = await executeFormula({
           formula,
-          formulaQueryContext,
-          locale: formulaLocale,
-          namedExpressions,
-          throwOnCellError: false,
-        });
-
-        await prefetchFormulaQueries(formulaQueryContext, queries);
-
-        formulaQueryContext.budgetQueryRequests.clear();
-        evaluateFormulaWithContext({
-          formula,
-          formulaQueryContext,
-          locale: formulaLocale,
-          namedExpressions,
-          throwOnCellError: false,
-        });
-
-        await prefetchBudgetQueries(formulaQueryContext);
-
-        const cellValue = evaluateFormulaWithContext({
-          formula,
-          formulaQueryContext,
+          queries,
           locale: formulaLocale,
           namedExpressions,
         });
 
         if (cancelled) return;
 
-        setResult(cellValue as number | string);
+        setResult(cellValue);
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -215,7 +439,7 @@ export function useFormulaExecution(
       }
     }
 
-    void executeFormula();
+    void executeSingleFormula();
 
     return () => {
       cancelled = true;
@@ -223,6 +447,176 @@ export function useFormulaExecution(
   }, [formula, queriesVersion, locale, language, queries, namedExpressions]);
 
   return { result, isLoading, error };
+}
+
+export function useFormulaSpreadsheetExecution(
+  cells: string[][],
+  queries: QueriesMap,
+  queriesVersion?: number,
+  enabled = true,
+) {
+  const locale = useLocale();
+  const [language] = useGlobalPref('language');
+  const [result, setResult] = useState<FormulaSpreadsheetResult>({
+    values: normalizeFormulaCells(cells).map(row => row.map(() => null)),
+    errors: normalizeFormulaCells(cells).map(row => row.map(() => null)),
+    serialized: normalizeFormulaCells(cells),
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function executeFormulaSpreadsheet() {
+      if (!enabled) {
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const browserLocale =
+          typeof navigator === 'undefined' ? undefined : navigator.language;
+        const formulaLocale = language || browserLocale || locale || 'en-US';
+
+        try {
+          setCachedUserPreferences(
+            await send('formula-load-user-preferences', {
+              selectedLocale: language,
+              browserLocale,
+            }),
+          );
+        } catch (err) {
+          console.error('Error loading formula preferences:', err);
+        }
+
+        const spreadsheetResult = await executeSpreadsheet({
+          cells,
+          queries,
+          locale: formulaLocale,
+        });
+
+        if (cancelled) return;
+
+        setResult(spreadsheetResult);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Formula spreadsheet execution error:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void executeFormulaSpreadsheet();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cells, queriesVersion, locale, language, queries, enabled]);
+
+  return { result, isLoading, error };
+}
+
+export function useFormulaSpreadsheetStyleExecution({
+  values,
+  colorFormulas,
+  queries,
+  queriesVersion,
+  themeVariables,
+  enabled = true,
+}: {
+  values: FormulaCellValue[][];
+  colorFormulas: Record<string, string>;
+  queries: QueriesMap;
+  queriesVersion?: number;
+  themeVariables: Record<string, string>;
+  enabled?: boolean;
+}) {
+  const locale = useLocale();
+  const [language] = useGlobalPref('language');
+  const [colors, setColors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function executeStyleFormulas() {
+      if (!enabled || Object.keys(colorFormulas).length === 0) {
+        setColors({});
+        return;
+      }
+
+      const browserLocale =
+        typeof navigator === 'undefined' ? undefined : navigator.language;
+      const formulaLocale = language || browserLocale || locale || 'en-US';
+      const nextColors: Record<string, string> = {};
+
+      try {
+        setCachedUserPreferences(
+          await send('formula-load-user-preferences', {
+            selectedLocale: language,
+            browserLocale,
+          }),
+        );
+      } catch (err) {
+        console.error('Error loading formula preferences:', err);
+      }
+
+      for (const [key, formula] of Object.entries(colorFormulas)) {
+        if (!formula || !formula.startsWith('=')) {
+          continue;
+        }
+
+        const [rowText, colText] = key.split(':');
+        const row = Number(rowText);
+        const col = Number(colText);
+
+        try {
+          const color = await executeFormula({
+            formula,
+            queries,
+            locale: formulaLocale,
+            namedExpressions: {
+              RESULT: getNamedExpressionValue(values[row]?.[col] ?? null),
+              ...themeVariables,
+            },
+          });
+
+          if (color) {
+            nextColors[key] = String(color);
+          }
+        } catch {
+          // Invalid color formulas should not prevent spreadsheet rendering.
+        }
+      }
+
+      if (!cancelled) {
+        setColors(nextColors);
+      }
+    }
+
+    void executeStyleFormulas();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    colorFormulas,
+    language,
+    locale,
+    queries,
+    queriesVersion,
+    themeVariables,
+    values,
+    enabled,
+  ]);
+
+  return colors;
 }
 
 async function prefetchFormulaQueries(

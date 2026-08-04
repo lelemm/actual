@@ -23,7 +23,7 @@ const FONT_SIZE_SCALE_FACTOR = 1.6;
 const CONTAINER_MARGIN = 8;
 
 type FormulaResultProps = {
-  value: number | string | null;
+  value: number | string | boolean | null;
   animate?: boolean;
   loading?: boolean;
   error?: string | null;

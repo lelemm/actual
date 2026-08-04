@@ -214,6 +214,21 @@ export type FormulaWidget = AbstractWidget<
   {
     name?: string;
     formula?: string;
+    spreadsheetMode?: boolean;
+    spreadsheet?: {
+      cells: string[][];
+      columnWidths?: number[];
+      rowHeights?: number[];
+      cellColorFormulas?: Record<string, string>;
+      cellBackgroundColorFormulas?: Record<string, string>;
+      cellAlignments?: Record<string, 'left' | 'center' | 'right'>;
+      merges?: {
+        row: number;
+        col: number;
+        rowSpan: number;
+        colSpan: number;
+      }[];
+    };
     fontSize?: number;
     fontSizeMode?: 'dynamic' | 'static';
     staticFontSize?: number;

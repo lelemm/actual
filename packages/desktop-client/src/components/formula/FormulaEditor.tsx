@@ -16,6 +16,7 @@ type FormulaEditorProps = {
   onChange: (value: string) => void;
   mode: FormulaMode;
   height?: string;
+  minHeight?: string;
   disabled?: boolean;
   queries?: Record<string, unknown>;
   variables?: Record<string, number | string>;
@@ -28,6 +29,7 @@ export function FormulaEditor({
   onChange,
   mode,
   height = '100%',
+  minHeight,
   disabled = false,
   queries,
   variables,
@@ -50,6 +52,17 @@ export function FormulaEditor({
     () => [
       ...(singleLine
         ? [
+            EditorView.theme({
+              '&': {
+                height: '32px',
+              },
+              '.cm-scroller': {
+                scrollbarWidth: 'none',
+              },
+              '.cm-scroller::-webkit-scrollbar': {
+                display: 'none',
+              },
+            }),
             EditorState.transactionFilter.of(tr =>
               tr.newDoc.lines > 1
                 ? [
@@ -66,9 +79,8 @@ export function FormulaEditor({
                 : [tr],
             ),
           ]
-        : []),
+        : [EditorView.lineWrapping]),
       ...excelFormulaExtension(mode, queries, isDarkTheme, variables),
-      EditorView.lineWrapping,
       EditorView.editable.of(!disabled),
       // Must come late + highest precedence so Tab accepts completion when the popup is open
       autocompleteTabAcceptHighest,
@@ -83,7 +95,8 @@ export function FormulaEditor({
   return (
     <CodeMirror
       value={value}
-      height={height}
+      height={singleLine ? '32px' : height}
+      minHeight={minHeight}
       theme={codeMirrorTheme}
       extensions={extensions}
       onChange={onChange}

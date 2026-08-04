@@ -14,7 +14,11 @@ import { TestProviders } from '#mocks';
 
 import {
   buildFilteredTransactionsQuery,
+  removeSpreadsheetColumns,
+  removeSpreadsheetRows,
   useFormulaExecution,
+  useFormulaSpreadsheetExecution,
+  useFormulaSpreadsheetStyleExecution,
 } from './useFormulaExecution';
 
 vi.mock(
@@ -221,5 +225,83 @@ describe('formula query timeframes', () => {
       '2026-07-01',
       '2026-07-31',
     );
+  });
+
+  it('evaluates spreadsheet cells in a shared HyperFormula sheet', async () => {
+    const cells = [
+      ['1', '=SUM(A1, 2)'],
+      ['=SUM(A1:B1)', ''],
+    ];
+    const { result, unmount } = renderHook(
+      () => useFormulaSpreadsheetExecution(cells, {}, 0),
+      { wrapper: TestProviders },
+    );
+
+    await waitFor(() =>
+      expect(result.current.result.values).toEqual([
+        [1, 3],
+        [4, ''],
+      ]),
+    );
+    unmount();
+  });
+
+  it('prefetches report queries used across spreadsheet cells', async () => {
+    queryPayloads = [];
+    const cells = [
+      ['=QUERY("Income")'],
+      ['=QUERY("Expenses")'],
+      ['=SUM(A1:A2)'],
+    ];
+    const { result, unmount } = renderHook(
+      () => useFormulaSpreadsheetExecution(cells, formulaQueries, 0),
+      { wrapper: TestProviders },
+    );
+
+    await waitFor(() =>
+      expect(result.current.result.values).toEqual([[1], [2], [3]]),
+    );
+    unmount();
+  });
+
+  it('evaluates per-cell color formulas with RESULT', async () => {
+    const values = [[2]];
+    const colorFormulas = { '0:0': '=RESULT + 1' };
+    const { result, unmount } = renderHook(
+      () =>
+        useFormulaSpreadsheetStyleExecution({
+          values,
+          colorFormulas,
+          queries: {},
+          queriesVersion: 0,
+          themeVariables: {},
+        }),
+      { wrapper: TestProviders },
+    );
+
+    await waitFor(() => expect(result.current).toEqual({ '0:0': '3' }));
+    unmount();
+  });
+
+  it('rewrites formulas when deleting spreadsheet columns', () => {
+    expect(
+      removeSpreadsheetColumns([['1', '2', '3', '=SUM(A1:C1)']], 1),
+    ).toEqual([['1', '3', '=SUM(A1:B1)']]);
+  });
+
+  it('rewrites formulas when deleting spreadsheet rows', () => {
+    expect(
+      removeSpreadsheetRows(
+        [
+          ['1', '=SUM(A1:A3)'],
+          ['2', ''],
+          ['3', ''],
+        ],
+        1,
+      ),
+    ).toEqual([
+      ['1', '=SUM(A1:A2)'],
+      ['3', ''],
+    ]);
   });
 });
