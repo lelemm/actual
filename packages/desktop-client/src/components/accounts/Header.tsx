@@ -189,6 +189,8 @@ export function AccountHeader({
   const splitsExpanded = useSplitsExpanded();
   const syncServerStatus = useSyncServerStatus();
   const isUsingServer = syncServerStatus !== 'no-server';
+  const isSimpleFinWasm =
+    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const isServerOffline = syncServerStatus === 'offline';
   const [_, setExpandSplitsPref] = useLocalPref('expand-splits');
   const [showNetWorthChartPref, _setShowNetWorthChartPref] = useSyncedPref(
@@ -199,8 +201,15 @@ export function AccountHeader({
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const locale = useLocale();
 
-  let canSync = !!(account?.account_id && isUsingServer);
-  if (!account) {
+  let canSync = isSimpleFinWasm
+    ? !!(account?.account_id && account.account_sync_source === 'simpleFin')
+    : !!(account?.account_id && isUsingServer);
+  if (!account && isSimpleFinWasm) {
+    canSync = accounts.some(
+      account =>
+        !!account.account_id && account.account_sync_source === 'simpleFin',
+    );
+  } else if (!account) {
     // All accounts - check for any syncable account
     canSync = !!accounts.find(account => !!account.account_id) && isUsingServer;
   }

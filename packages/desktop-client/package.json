@@ -123,9 +123,11 @@
   "scripts": {
     "start": "cross-env PORT=3001 vite",
     "start:browser": "cross-env ./bin/watch-browser",
+    "start:wasm": "cross-env PORT=3001 REACT_APP_BANK_SYNC_RUNTIME=wasm vite --mode=wasm",
     "watch": "cross-env BROWSER=none yarn start",
     "build": "vite build",
     "build:browser": "vite build --mode=browser",
+    "build:wasm": "cross-env REACT_APP_BANK_SYNC_RUNTIME=wasm vite build --mode=wasm",
     "generate:i18n": "i18next",
     "test": "vitest --run",
     "validate:theme-catalog": "node --experimental-strip-types bin/validate-theme-catalog.mts",

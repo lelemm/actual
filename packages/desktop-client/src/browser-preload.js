@@ -24,6 +24,7 @@ const EMBEDDED_SERVER_URL =
   Platform.isAndroid && 'Capacitor' in window
     ? 'http://127.0.0.1:5006'
     : undefined;
+const SIMPLEFIN_WASM = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
 
 // The OIDC callback (/openid-cb) is reached via a full-page navigation back
 // from the OpenID provider. Routing it through the SharedWorker coordinator is
@@ -53,6 +54,7 @@ const worker = startBrowserBackend({
     publicUrl: import.meta.env.BASE_URL.slice(0, -1),
     hash: import.meta.env.REACT_APP_BACKEND_WORKER_HASH,
     embeddedServerUrl: EMBEDDED_SERVER_URL,
+    simpleFinWasm: SIMPLEFIN_WASM,
   },
   createSharedWorker: () =>
     new SharedBrowserServerWorker({ name: 'actual-backend' }),
@@ -60,6 +62,7 @@ const worker = startBrowserBackend({
     Platform.isPlaywright ||
     Platform.isIOS ||
     Platform.isAndroid ||
+    SIMPLEFIN_WASM ||
     isOpenIdCallback,
 });
 

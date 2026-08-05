@@ -10,6 +10,7 @@ export type StartBackendInit = {
   publicUrl?: string;
   hash?: string;
   embeddedServerUrl?: string;
+  simpleFinWasm?: boolean;
 };
 
 export type StartBackendOptions = {

@@ -10,6 +10,9 @@ export-2020-01-10.csv
 # MacOS
 .DS_Store
 
+# WASM
+build-bank-sync-wasm
+
 # Logs
 **/*.log
 
@@ -26,6 +29,7 @@ packages/crdt/dist
 packages/desktop-client/build-stats
 packages/desktop-client/dev-dist
 packages/desktop-client/public/kcab
+packages/desktop-client/generated/bank-sync-wasm
 packages/desktop-client/locale
 packages/desktop-client/playwright-report
 packages/desktop-client/test-results

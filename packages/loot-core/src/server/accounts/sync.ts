@@ -36,6 +36,10 @@ import type {
 } from '#types/models';
 
 import { getStartingBalancePayee } from './payees';
+import {
+  getSimpleFinTransactions,
+  isSimpleFinWasmEnabled,
+} from './simplefin-wasm';
 import { title } from './title';
 
 function BankSyncError(type: string, code: string, details?: object) {
@@ -190,27 +194,32 @@ async function downloadSimpleFinTransactions(
   acctId: AccountEntity['id'] | AccountEntity['id'][],
   since: string | string[],
 ) {
-  const userToken = await asyncStorage.getItem('user-token');
-  if (!userToken) return;
-
   const batchSync = Array.isArray(acctId);
 
   logger.log('Pulling transactions from SimpleFin');
 
   let res;
   try {
-    res = await post(
-      getServer().SIMPLEFIN_SERVER + '/transactions',
-      {
-        accountId: acctId,
-        startDate: since,
-      },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
-      // 5 minute timeout for batch sync, one minute for individual accounts
-      Array.isArray(acctId) ? 300000 : 60000,
-    );
+    const body = {
+      accountId: acctId,
+      startDate: since,
+    };
+    if (isSimpleFinWasmEnabled()) {
+      res = await getSimpleFinTransactions(body);
+    } else {
+      const userToken = await asyncStorage.getItem('user-token');
+      if (!userToken) return;
+
+      res = await post(
+        getServer().SIMPLEFIN_SERVER + '/transactions',
+        body,
+        {
+          'X-ACTUAL-TOKEN': userToken,
+        },
+        // 5 minute timeout for batch sync, one minute for individual accounts
+        Array.isArray(acctId) ? 300000 : 60000,
+      );
+    }
   } catch (error) {
     logger.error('Suspected timeout during bank sync:', error);
     throw BankSyncError('TIMED_OUT', 'TIMED_OUT');

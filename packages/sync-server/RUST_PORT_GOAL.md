@@ -30,11 +30,18 @@ The same Rust core must build as:
 
 - A standalone `actual-server` executable for normal hosting and Docker.
 - A child executable for Electron.
-- An Android native library loaded through a thin JNI lifecycle adapter.
+- An Android native library loaded through a thin Capacitor/JNI adapter.
 
-Only lifecycle and filesystem-path discovery may be platform-specific. HTTP
-routes, authentication, migrations, sync behavior, secrets, and bank-provider
-logic must remain shared.
+The standalone and Electron artifacts may wrap the core in HTTP. Capacitor may
+call the same Rust handlers directly instead of starting a localhost server.
+Only the transport adapter, lifecycle, secure-storage access, native networking,
+and filesystem-path discovery may be platform-specific. Sync behavior,
+secrets semantics, and bank-provider logic must remain shared.
+
+The direct-call approach was validated by the SimpleFIN WASM trial documented
+in [WASM_BANK_SYNC_TRIAL.md](./WASM_BANK_SYNC_TRIAL.md). It is a deployment
+option for the shared Rust core, not a separate Android implementation and not
+a reduction of the full server parity goal.
 
 Start with one Rust crate unless a demonstrated dependency cycle requires a
 split. During migration, Rust may live beside the TypeScript implementation in
@@ -191,13 +198,18 @@ Before deleting TypeScript, verify supported desktop/server targets and:
   application.
 - A complete bank transaction synchronization.
 
-The Android adapter should expose only lifecycle operations equivalent to:
+If Android runs the HTTP wrapper, its adapter should expose only lifecycle
+operations equivalent to:
 
 ```rust
 pub fn start(config: ServerConfig) -> Result<ServerHandle>;
 pub fn stop(handle: ServerHandle);
 pub fn status(handle: &ServerHandle) -> ServerStatus;
 ```
+
+If Android uses direct calls, expose only the bank-sync and secrets operations
+needed by loot-core through a thin Capacitor/JNI bridge. Those operations must
+delegate to the same Rust core used by the HTTP handlers.
 
 ## Cutover Criteria
 

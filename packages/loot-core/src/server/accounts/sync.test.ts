@@ -11,6 +11,7 @@ import * as monthUtils from '#shared/months';
 import type { SyncedPrefs } from '#types/prefs';
 
 import { app as accountsApp } from './app';
+import * as simpleFinWasm from './simplefin-wasm';
 import {
   addTransactions,
   reconcileTransactions,
@@ -23,8 +24,15 @@ vi.mock('#shared/months', async () => ({
   currentMonth: vi.fn(),
 }));
 
+vi.mock('./simplefin-wasm', async () => ({
+  ...(await vi.importActual('./simplefin-wasm')),
+  getSimpleFinTransactions: vi.fn(),
+  isSimpleFinWasmEnabled: vi.fn(() => false),
+}));
+
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.mocked(simpleFinWasm.isSimpleFinWasmEnabled).mockReturnValue(false);
   vi.mocked(monthUtils.currentDay).mockReturnValue('2017-10-15');
   vi.mocked(monthUtils.currentMonth).mockReturnValue('2017-10');
   await global.emptyDatabase()();
@@ -645,6 +653,42 @@ describe('SimpleFin batch sync', () => {
 
   afterEach(() => {
     delete handlers['/simplefin/transactions'];
+  });
+
+  test('downloads transactions through WASM without a user token', async () => {
+    const providerAccountId = 'sf-account-1';
+    vi.mocked(simpleFinWasm.isSimpleFinWasmEnabled).mockReturnValue(true);
+    vi.mocked(simpleFinWasm.getSimpleFinTransactions).mockResolvedValue({
+      [providerAccountId]: {
+        transactions: { all: [], booked: [], pending: [] },
+        balances: [],
+        startingBalance: 0,
+      },
+      errors: {},
+    });
+    vi.mocked(asyncStorage.getItem).mockResolvedValue(undefined);
+
+    const acctId = await db.insertAccount({
+      id: 'acct-1',
+      account_id: providerAccountId,
+      name: 'Account 1',
+      account_sync_source: 'simpleFin',
+    });
+    await db.insertPayee({
+      id: 'transfer-' + acctId,
+      name: '',
+      transfer_acct: acctId,
+    });
+
+    const result = await simpleFinBatchSync([
+      { id: acctId, account_id: providerAccountId },
+    ]);
+
+    expect(result[0].res.error_code).toBeUndefined();
+    expect(simpleFinWasm.getSimpleFinTransactions).toHaveBeenCalledWith({
+      accountId: [providerAccountId],
+      startDate: ['2017-07-18'],
+    });
   });
 
   test('does not emit transaction CRDT messages when provider category appears later', async () => {

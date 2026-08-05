@@ -40,7 +40,10 @@ export function MobileNavTabs() {
   const { isNarrowWidth } = useResponsive();
   const syncServerStatus = useSyncServerStatus();
   const isTestEnv = useIsTestEnv();
-  const isUsingServer = syncServerStatus !== 'no-server' || isTestEnv;
+  const isUsingServer =
+    syncServerStatus !== 'no-server' ||
+    isTestEnv ||
+    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const [navbarState, setNavbarState] = useState<'default' | 'open' | 'hidden'>(
     'default',
   );

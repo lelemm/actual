@@ -638,6 +638,15 @@ export function useSyncAccountsMutation() {
           .map(({ id }) => id);
       }
 
+      if (import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm') {
+        accountIdsToSync = accountIdsToSync.filter(id =>
+          accounts.some(
+            account =>
+              account.id === id && account.account_sync_source === 'simpleFin',
+          ),
+        );
+      }
+
       dispatch(setAccountsSyncing({ ids: accountIdsToSync }));
 
       const simpleFinAccounts = accounts.filter(

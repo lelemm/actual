@@ -84,15 +84,17 @@ self.addEventListener('message', async event => {
           { maxRetries: isDev ? 5 : 3 },
         );
 
-        backend.initApp(isDev, self, msg.embeddedServerUrl).catch(err => {
-          console.log(err);
-          appInitFailureInterval = postMessageWithRetry({
-            type: 'app-init-failure',
-            IDBFailure: err.message.includes('indexeddb-failure'),
-          });
+        backend
+          .initApp(isDev, self, msg.embeddedServerUrl, msg.simpleFinWasm)
+          .catch(err => {
+            console.log(err);
+            appInitFailureInterval = postMessageWithRetry({
+              type: 'app-init-failure',
+              IDBFailure: err.message.includes('indexeddb-failure'),
+            });
 
-          throw err;
-        });
+            throw err;
+          });
       }
     }
 
