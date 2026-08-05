@@ -8,3 +8,7 @@ pub fn up(connection: &Connection) -> rusqlite::Result<()> {
          );",
     )
 }
+
+pub fn down(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch("DROP TABLE secrets;")
+}

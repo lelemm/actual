@@ -19,8 +19,9 @@ use serde_json::{Value, json};
 use crate::{
     app::AppState,
     util::{
+        http::with_node_extra_ca,
         ssrf::is_blocked_ip,
-        validate_user::{SessionError, validate_session},
+        validate_user::{SessionError, client_ip, validate_session},
     },
 };
 
@@ -29,6 +30,8 @@ const ALLOWLIST_URL: &str =
 const ALLOWLIST_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
 const RATE_LIMIT: u64 = 25;
 const RATE_WINDOW: Duration = Duration::from_secs(60);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const MAX_REDIRECTS: usize = 20;
 
 #[derive(Clone)]
 pub struct CorsProxyState {
@@ -60,7 +63,7 @@ impl CorsProxyState {
                 last_fetch: None,
             })),
             rate_limits: Arc::new(Mutex::new(HashMap::new())),
-            http: reqwest::Client::builder()
+            http: direct_client_builder()
                 .redirect(reqwest::redirect::Policy::limited(20))
                 .build()
                 .map_err(|error| error.to_string())?,
@@ -150,7 +153,8 @@ async fn proxy(
     Query(query): Query<HashMap<String, String>>,
     body: Option<Json<Value>>,
 ) -> Response {
-    let attempt = match state.cors_proxy.begin(peer.ip()) {
+    let address = client_ip(peer, &headers, &state.config.trusted_proxies).unwrap_or(peer.ip());
+    let attempt = match state.cors_proxy.begin(address) {
         Ok(attempt) => attempt,
         Err(response) => return response,
     };
@@ -176,7 +180,7 @@ async fn proxy_inner(
         );
         return response;
     }
-    let Some(target) = query.get("url") else {
+    let Some(target) = query.get("url").filter(|target| !target.is_empty()) else {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": "Missing url parameter" })),
@@ -202,7 +206,8 @@ async fn proxy_inner(
         }
     };
     let allowlist = state.cors_proxy.fetch_allowlist().await;
-    if !is_url_allowed(&url, &allowlist) {
+    let is_development = state.config.environment == "development";
+    if !is_url_allowed(&url, &allowlist, is_development) {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({
@@ -236,12 +241,15 @@ async fn proxy_inner(
     let mut outgoing_headers = headers;
     if let Some(custom) = body.get("headers").and_then(Value::as_object) {
         for (name, value) in custom {
-            if let (Ok(name), Ok(value)) = (
-                HeaderName::try_from(name),
-                HeaderValue::try_from(javascript_string(value)),
-            ) {
-                outgoing_headers.insert(name, value);
-            }
+            let name = match HeaderName::try_from(name) {
+                Ok(name) => name,
+                Err(error) => return proxy_error(error.to_string()),
+            };
+            let value = match HeaderValue::try_from(javascript_string(value)) {
+                Ok(value) => value,
+                Err(error) => return proxy_error(error.to_string()),
+            };
+            outgoing_headers.insert(name, value);
         }
     }
     for name in [
@@ -260,35 +268,21 @@ async fn proxy_inner(
     if let Ok(host) = HeaderValue::try_from(host) {
         outgoing_headers.insert("host", host);
     }
-    if !state.config.github.token.is_empty() && is_github_download(&url) {
-        outgoing_headers.insert(
-            "authorization",
-            HeaderValue::try_from(format!("Bearer {}", state.config.github.token)).unwrap(),
-        );
-        outgoing_headers.insert(
-            "user-agent",
-            HeaderValue::from_static("Actual-Budget-Plugin-System"),
-        );
-    }
-    let upstream = match state
-        .cors_proxy
-        .http
-        .request(proxy_method, url.clone())
-        .headers(outgoing_headers)
-        .send()
-        .await
+    add_github_auth(&mut outgoing_headers, &state.config.github.token, &url);
+    let test_allowed_origin = is_development
+        .then(|| std::env::var("CORS_PROXY_TEST_ALLOWED_ORIGIN").ok())
+        .flatten();
+    let upstream = match send_upstream(
+        proxy_method,
+        url.clone(),
+        outgoing_headers,
+        test_allowed_origin.as_deref(),
+    )
+    .await
     {
         Ok(response) => response,
-        Err(error) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Error proxying request",
-                    "details": error.to_string()
-                })),
-            )
-                .into_response();
-        }
+        Err(UpstreamError::Blocked) => return url_not_allowed(),
+        Err(UpstreamError::Request(error)) => return proxy_error(error),
     };
     let status = upstream.status();
     let content_type = upstream
@@ -350,7 +344,135 @@ async fn proxy_inner(
     response
 }
 
-fn is_url_allowed(url: &Url, allowlist: &[String]) -> bool {
+#[derive(Debug)]
+enum UpstreamError {
+    Blocked,
+    Request(String),
+}
+
+async fn send_upstream(
+    method: Method,
+    mut url: Url,
+    mut headers: HeaderMap,
+    test_allowed_origin: Option<&str>,
+) -> Result<reqwest::Response, UpstreamError> {
+    for redirects in 0..=MAX_REDIRECTS {
+        set_host_header(&mut headers, &url);
+        let client = client_for_url(&url, test_allowed_origin).await?;
+        let response = client
+            .request(method.clone(), url.clone())
+            .headers(headers.clone())
+            .send()
+            .await
+            .map_err(|error| UpstreamError::Request(error.to_string()))?;
+        if !response.status().is_redirection() {
+            return Ok(response);
+        }
+        if redirects == MAX_REDIRECTS {
+            return Err(UpstreamError::Request("redirect limit exceeded".into()));
+        }
+        let location = response
+            .headers()
+            .get("location")
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| UpstreamError::Request("redirect missing location".into()))?;
+        let next = url
+            .join(location)
+            .map_err(|error| UpstreamError::Request(error.to_string()))?;
+        if url.origin() != next.origin() {
+            headers.remove("authorization");
+        }
+        url = next;
+    }
+    unreachable!("redirect loop returns at the configured limit")
+}
+
+async fn client_for_url(
+    url: &Url,
+    test_allowed_origin: Option<&str>,
+) -> Result<reqwest::Client, UpstreamError> {
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(UpstreamError::Blocked);
+    }
+    let hostname = url
+        .host_str()
+        .ok_or(UpstreamError::Blocked)?
+        .trim_start_matches('[')
+        .trim_end_matches(']');
+    let port = url.port_or_known_default().ok_or(UpstreamError::Blocked)?;
+    let addresses = if let Ok(address) = hostname.parse::<IpAddr>() {
+        vec![SocketAddr::new(address, port)]
+    } else {
+        tokio::net::lookup_host((hostname, port))
+            .await
+            .map_err(|error| UpstreamError::Request(error.to_string()))?
+            .collect::<Vec<_>>()
+    };
+    if addresses.is_empty() {
+        return Err(UpstreamError::Request(format!(
+            "Unable to resolve host: {hostname}"
+        )));
+    }
+    let is_test_origin = test_allowed_origin == Some(url.origin().ascii_serialization().as_str());
+    if !is_test_origin
+        && addresses
+            .iter()
+            .any(|address| is_blocked_ip(address.ip(), false))
+    {
+        return Err(UpstreamError::Blocked);
+    }
+    let mut builder = direct_client_builder().redirect(reqwest::redirect::Policy::none());
+    if hostname.parse::<IpAddr>().is_err() {
+        builder = builder.resolve_to_addrs(hostname, &addresses);
+    }
+    builder
+        .build()
+        .map_err(|error| UpstreamError::Request(error.to_string()))
+}
+
+fn direct_client_builder() -> reqwest::ClientBuilder {
+    with_node_extra_ca(reqwest::Client::builder())
+        .no_proxy()
+        .timeout(REQUEST_TIMEOUT)
+}
+
+fn set_host_header(headers: &mut HeaderMap, url: &Url) {
+    headers.remove("host");
+    let host = url.port().map_or_else(
+        || url.host_str().unwrap_or_default().to_owned(),
+        |port| format!("{}:{port}", url.host_str().unwrap_or_default()),
+    );
+    if let Ok(host) = HeaderValue::try_from(host) {
+        headers.insert("host", host);
+    }
+}
+
+fn url_not_allowed() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(json!({
+            "error": "URL not allowed",
+            "message": "Only allowlisted plugin repositories are allowed (localhost only in development)"
+        })),
+    )
+        .into_response()
+}
+
+fn proxy_error(details: String) -> Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({
+            "error": "Error proxying request",
+            "details": details
+        })),
+    )
+        .into_response()
+}
+
+fn is_url_allowed(url: &Url, allowlist: &[String], is_development: bool) -> bool {
     let Some(hostname) = url.host_str() else {
         return false;
     };
@@ -358,7 +480,8 @@ fn is_url_allowed(url: &Url, allowlist: &[String]) -> bool {
     if hostname
         .parse()
         .is_ok_and(|address| is_blocked_ip(address, false))
-        && test_allowed_origin.as_deref() != Some(url.origin().ascii_serialization().as_str())
+        && (!is_development
+            || test_allowed_origin.as_deref() != Some(url.origin().ascii_serialization().as_str()))
     {
         return false;
     }
@@ -399,8 +522,25 @@ fn is_github_download(url: &Url) -> bool {
     ) || (url.host_str() == Some("github.com") && url.path().contains("/releases/"))
 }
 
+fn add_github_auth(headers: &mut HeaderMap, token: &str, url: &Url) {
+    if !token.is_empty() && is_github_download(url) {
+        headers.insert(
+            "authorization",
+            HeaderValue::try_from(format!("Bearer {token}")).unwrap(),
+        );
+        headers.insert(
+            "user-agent",
+            HeaderValue::from_static("Actual-Budget-Plugin-System"),
+        );
+    }
+}
+
 fn add_rate_headers(response: &mut Response, attempt: &RateAttempt, retry_after: bool) {
-    let reset = attempt.reset_after.as_secs().max(1);
+    let reset = attempt
+        .reset_after
+        .as_secs()
+        .saturating_add(u64::from(attempt.reset_after.subsec_nanos() != 0))
+        .max(1);
     let headers = response.headers_mut();
     headers.insert("ratelimit-policy", HeaderValue::from_static("25;w=60"));
     headers.insert("ratelimit-limit", HeaderValue::from_static("25"));
@@ -471,7 +611,13 @@ fn javascript_string(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::{net::Ipv4Addr, sync::Arc};
+
+    use axum::{body::Body, extract::ConnectInfo, http::Request};
+    use tower::ServiceExt;
+
     use super::*;
+    use crate::test_support::TestApp;
 
     #[test]
     fn matches_repository_allowlist_variants_without_prefix_confusion() {
@@ -483,15 +629,165 @@ mod tests {
             "https://api.github.com/repos/user/repo1/releases",
             "https://raw.githubusercontent.com/user/repo1/main/file.txt",
         ] {
-            assert!(is_url_allowed(&Url::parse(allowed).unwrap(), &allowlist));
+            assert!(is_url_allowed(
+                &Url::parse(allowed).unwrap(),
+                &allowlist,
+                false
+            ));
         }
         assert!(!is_url_allowed(
             &Url::parse("https://api.github.com/repos/user/repo1-private/contents/.env").unwrap(),
-            &allowlist
+            &allowlist,
+            false
         ));
         assert!(is_url_allowed(
             &Url::parse("https://plugins.example/repo/file.json").unwrap(),
-            &["https://plugins.example/repo".into()]
+            &["https://plugins.example/repo".into()],
+            false
         ));
+        assert!(!is_url_allowed(
+            &Url::parse("http://127.0.0.1/repo/file.json").unwrap(),
+            &["http://127.0.0.1/repo".into()],
+            false
+        ));
+        assert!(!is_url_allowed(
+            &Url::parse("https://objects.githubusercontent.com/asset.zip").unwrap(),
+            &allowlist,
+            false
+        ));
+    }
+
+    #[test]
+    fn adds_github_auth_only_for_supported_github_downloads() {
+        let mut headers = HeaderMap::new();
+        add_github_auth(
+            &mut headers,
+            "github-token",
+            &Url::parse("https://api.github.com/repos/user/repo").unwrap(),
+        );
+        assert_eq!(headers.get("authorization").unwrap(), "Bearer github-token");
+        assert_eq!(
+            headers.get("user-agent").unwrap(),
+            "Actual-Budget-Plugin-System"
+        );
+
+        let mut headers = HeaderMap::new();
+        add_github_auth(
+            &mut headers,
+            "github-token",
+            &Url::parse("https://example.com/repo").unwrap(),
+        );
+        assert!(headers.get("authorization").is_none());
+    }
+
+    #[tokio::test]
+    async fn blocks_unsafe_schemes_userinfo_literals_and_dns_destinations() {
+        for target in [
+            "file:///etc/passwd",
+            "http://user@example.com/repo",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::ffff:127.0.0.1]/private",
+            "http://localhost/private",
+        ] {
+            assert!(matches!(
+                client_for_url(&Url::parse(target).unwrap(), None).await,
+                Err(UpstreamError::Blocked)
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn follows_a_safe_redirect_outside_the_initial_repository_path() {
+        let app = Router::new()
+            .route(
+                "/repo/release",
+                axum::routing::get(|| async {
+                    (StatusCode::FOUND, [("location", "/download/asset.zip")])
+                }),
+            )
+            .route(
+                "/download/asset.zip",
+                axum::routing::get(|| async { "release asset" }),
+            );
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let response = send_upstream(
+            Method::GET,
+            Url::parse(&format!("{origin}/repo/release")).unwrap(),
+            HeaderMap::new(),
+            Some(&origin),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.text().await.unwrap(), "release asset");
+        server.abort();
+    }
+
+    #[test]
+    fn rate_limit_is_atomic_and_resets_after_its_window() {
+        let state = Arc::new(CorsProxyState::new().unwrap());
+        let address = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 10));
+        let attempts = (0..26)
+            .map(|_| {
+                let state = Arc::clone(&state);
+                std::thread::spawn(move || state.begin(address).is_ok())
+            })
+            .map(|thread| thread.join().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(attempts.iter().filter(|allowed| **allowed).count(), 25);
+
+        state
+            .rate_limits
+            .lock()
+            .unwrap()
+            .get_mut(&address)
+            .unwrap()
+            .reset = Instant::now() - Duration::from_secs(1);
+        assert_eq!(state.begin(address).unwrap().remaining, 24);
+    }
+
+    #[test]
+    fn rate_limit_headers_round_reset_up_to_the_next_second() {
+        let mut response = StatusCode::OK.into_response();
+        add_rate_headers(
+            &mut response,
+            &RateAttempt {
+                remaining: 1,
+                reset_after: Duration::from_millis(1_001),
+            },
+            true,
+        );
+        assert_eq!(response.headers()["ratelimit-reset"], "2");
+        assert_eq!(response.headers()["retry-after"], "2");
+    }
+
+    #[tokio::test]
+    async fn app_mounts_the_proxy_only_when_enabled() {
+        async fn status(app: &TestApp) -> StatusCode {
+            let mut request = Request::builder()
+                .uri("/cors-proxy")
+                .body(Body::empty())
+                .unwrap();
+            request
+                .extensions_mut()
+                .insert(ConnectInfo(SocketAddr::from((Ipv4Addr::LOCALHOST, 12345))));
+            crate::app::router(app.state.clone())
+                .oneshot(request)
+                .await
+                .unwrap()
+                .status()
+        }
+
+        let disabled = TestApp::new();
+        assert_eq!(status(&disabled).await, StatusCode::NOT_FOUND);
+
+        let mut enabled = TestApp::new();
+        Arc::make_mut(&mut enabled.state.config).cors_proxy.enabled = true;
+        Arc::make_mut(&mut enabled.state.config).environment = "development".into();
+        assert_eq!(status(&enabled).await, StatusCode::BAD_REQUEST);
     }
 }

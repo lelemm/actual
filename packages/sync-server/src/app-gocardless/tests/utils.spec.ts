@@ -1,162 +1,57 @@
-import { mockTransactionAmount } from '#app-gocardless/services/tests/fixtures';
-import { sortByBookingDateOrValueDate } from '#app-gocardless/utils';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-describe('utils', () => {
-  describe('#sortByBookingDate', () => {
-    it('sorts transactions by bookingDate field from newest to oldest', () => {
-      const transactions = [
-        {
-          bookingDate: '2023-01-01',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-20',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-10',
-          transactionAmount: mockTransactionAmount,
-        },
-      ];
-      expect(sortByBookingDateOrValueDate(transactions)).toEqual([
-        {
-          bookingDate: '2023-01-20',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-10',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-01',
-          transactionAmount: mockTransactionAmount,
-        },
-      ]);
-    });
+import { escapeRegExp } from '#app-gocardless/banks/util/escape-regexp';
+import {
+  amountToInteger,
+  printIban,
+  sortByBookingDateOrValueDate,
+} from '#app-gocardless/utils';
 
-    it('should sort by valueDate if bookingDate is missing', () => {
-      const transactions = [
-        {
-          valueDate: '2023-01-01',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          valueDate: '2023-01-20',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          valueDate: '2023-01-10',
-          transactionAmount: mockTransactionAmount,
-        },
-      ];
-      expect(sortByBookingDateOrValueDate(transactions)).toEqual([
-        {
-          valueDate: '2023-01-20',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          valueDate: '2023-01-10',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          valueDate: '2023-01-01',
-          transactionAmount: mockTransactionAmount,
-        },
-      ]);
-    });
+const packageRoot = dirname(fileURLToPath(import.meta.url));
+const fixture = JSON.parse(
+  readFileSync(
+    join(
+      packageRoot,
+      '..',
+      '..',
+      '..',
+      'contract',
+      'fixtures',
+      'gocardless-utils-golden.json',
+    ),
+    'utf8',
+  ),
+);
 
-    it('should use bookingDate primarily even if bookingDateTime is on an other date', () => {
-      const transactions = [
-        {
-          bookingDate: '2023-01-01',
-          bookingDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-10',
-          bookingDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-01',
-          bookingDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-10',
-          bookingDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-      ];
-      expect(sortByBookingDateOrValueDate(transactions)).toEqual([
-        {
-          bookingDate: '2023-01-10',
-          bookingDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-10',
-          bookingDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-01',
-          bookingDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-01',
-          bookingDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-      ]);
+describe('GoCardless utility golden fixture', () => {
+  for (const { id, transactions, expectedIds } of fixture.sortCases) {
+    it(id, () => {
+      expect(
+        sortByBookingDateOrValueDate(transactions).map(transaction =>
+          String(Reflect.get(transaction, 'id')),
+        ),
+      ).toEqual(expectedIds);
     });
+  }
 
-    it('should sort on booking date if value date is widely off', () => {
-      const transactions = [
-        {
-          bookingDate: '2023-01-01',
-          valueDateTime: '2023-01-31T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-02',
-          valueDateTime: '2023-01-02T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-30',
-          valueDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-30',
-          valueDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-      ];
-      expect(sortByBookingDateOrValueDate(transactions)).toEqual([
-        {
-          bookingDate: '2023-01-30',
-          valueDateTime: '2023-01-01T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-30',
-          valueDateTime: '2023-01-01T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-02',
-          valueDateTime: '2023-01-02T12:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-        {
-          bookingDate: '2023-01-01',
-          valueDateTime: '2023-01-31T00:00:00Z',
-          transactionAmount: mockTransactionAmount,
-        },
-      ]);
+  for (const { id, account, expected } of fixture.ibanCases) {
+    it(id, () => {
+      expect(printIban(account)).toBe(expected);
     });
-  });
+  }
+
+  for (const { id, input, expected } of fixture.amountCases) {
+    it(id, () => {
+      const amount = amountToInteger(input);
+      expect(Object.is(amount, -0) ? 0 : amount).toBe(expected);
+    });
+  }
+
+  for (const { id, input, typescriptEscaped } of fixture.escapeCases) {
+    it(id, () => {
+      expect(escapeRegExp(input)).toBe(typescriptEscaped);
+    });
+  }
 });

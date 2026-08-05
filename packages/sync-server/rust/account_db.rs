@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, types::Value as SqlValue};
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     accounts::password::{hash_password, is_legacy_hash, is_valid_password, verify_password},
     db::Database,
+    load_config::TokenExpiration,
 };
 
 pub const TOKEN_EXPIRATION_NEVER: i64 = -1;
@@ -44,9 +45,9 @@ pub struct LoginMethod {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub token: String,
-    pub expires_at: i64,
+    pub expires_at: f64,
     pub user_id: String,
-    pub auth_method: String,
+    pub auth_method: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -94,7 +95,11 @@ pub fn get_active_login_method(database: &Database) -> Result<Option<String>, Ac
         .optional()?)
 }
 
-pub fn bootstrap(database: &Database, settings: &Value) -> Result<String, AccountError> {
+pub fn bootstrap(
+    database: &Database,
+    settings: &Value,
+    token_expiration: &TokenExpiration,
+) -> Result<String, AccountError> {
     let Some(settings) = settings.as_object() else {
         return Err(AccountError::Reason("invalid-login-settings"));
     };
@@ -133,12 +138,13 @@ pub fn bootstrap(database: &Database, settings: &Value) -> Result<String, Accoun
         )?;
         transaction.commit()?;
     }
-    login_with_password(database, Some(password))
+    login_with_password(database, Some(password), token_expiration)
 }
 
 pub fn login_with_password(
     database: &Database,
     password: Option<&str>,
+    token_expiration: &TokenExpiration,
 ) -> Result<String, AccountError> {
     if !is_valid_password(password) {
         return Err(AccountError::Reason("invalid-password"));
@@ -174,12 +180,29 @@ pub fn login_with_password(
         )
         .optional()?;
     let token = session.unwrap_or_else(|| Uuid::new_v4().to_string());
-    let user_id = connection
-        .query_row("SELECT id FROM users WHERE user_name = ?", [""], |row| {
-            row.get::<_, String>(0)
-        })
-        .optional()?
-        .ok_or(AccountError::Reason("user-not-found"))?;
+    let user_count =
+        connection.query_row("SELECT count(*) FROM users", [], |row| row.get::<_, i64>(0))?;
+    let user_id = if user_count == 0 {
+        let user_id = Uuid::new_v4().to_string();
+        connection.execute(
+            "INSERT INTO users (id, user_name, display_name, enabled, owner, role)
+             VALUES (?, '', '', 1, 1, 'ADMIN')",
+            [&user_id],
+        )?;
+        user_id
+    } else {
+        connection
+            .query_row("SELECT id FROM users WHERE user_name = ?", [""], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()?
+            .ok_or(AccountError::Reason("user-not-found"))?
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let expiration = password_expiration_value(now, token_expiration);
 
     if connection.query_row(
         "SELECT count(*) FROM sessions WHERE token = ?",
@@ -190,24 +213,36 @@ pub fn login_with_password(
         connection.execute(
             "INSERT INTO sessions (token, expires_at, user_id, auth_method)
              VALUES (?, ?, ?, ?)",
-            params![token, TOKEN_EXPIRATION_NEVER, user_id, "password"],
+            params![token, expiration, user_id, "password"],
         )?;
     } else {
         connection.execute(
             "UPDATE sessions SET user_id = ?, expires_at = ? WHERE token = ?",
-            params![user_id, TOKEN_EXPIRATION_NEVER, token],
+            params![user_id, expiration, token],
         )?;
     }
-    let clear_threshold = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
-        - 3600;
+    let clear_threshold = now - 3600;
     connection.execute(
         "DELETE FROM sessions WHERE expires_at <> -1 and expires_at < ?",
         [clear_threshold],
     )?;
     Ok(token)
+}
+
+pub(crate) fn expiration_value(now: i64, seconds: f64) -> SqlValue {
+    let expiration = now as f64 + seconds;
+    if expiration.fract() == 0.0 && expiration >= i64::MIN as f64 && expiration < i64::MAX as f64 {
+        SqlValue::Integer(expiration as i64)
+    } else {
+        SqlValue::Real(expiration)
+    }
+}
+
+fn password_expiration_value(now: i64, token_expiration: &TokenExpiration) -> SqlValue {
+    match token_expiration {
+        TokenExpiration::Seconds(minutes) => expiration_value(now, minutes * 60.0),
+        TokenExpiration::Named(_) => SqlValue::Integer(TOKEN_EXPIRATION_NEVER),
+    }
 }
 
 pub fn get_session(database: &Database, token: &str) -> Result<Option<Session>, AccountError> {
@@ -292,4 +327,23 @@ pub fn change_password(database: &Database, password: Option<&str>) -> Result<()
         [hash],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expiration_values_preserve_sqlite_integer_and_real_storage() {
+        assert_eq!(expiration_value(100, 60.0), SqlValue::Integer(160));
+        assert_eq!(expiration_value(100, 0.5), SqlValue::Real(100.5));
+        assert_eq!(
+            password_expiration_value(100, &TokenExpiration::Seconds(0.5)),
+            SqlValue::Integer(130)
+        );
+        assert_eq!(
+            password_expiration_value(100, &TokenExpiration::Named("never".into())),
+            SqlValue::Integer(TOKEN_EXPIRATION_NEVER)
+        );
+    }
 }

@@ -2,13 +2,16 @@ use std::time::Duration;
 
 use axum::{
     Json, Router,
-    extract::State,
-    response::{IntoResponse, Response},
+    body::{Body, to_bytes},
+    extract::{Request, State},
+    http::{HeaderValue, StatusCode},
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Response},
     routing::post,
 };
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeZone, Utc};
 use chrono_tz::Pacific::Auckland;
-use reqwest::{Method, Url};
+use reqwest::{Method, Url, header};
 use serde_json::{Map, Value, json};
 
 use crate::{app::AppState, services::secrets_service, util::middlewares::ValidatedSession};
@@ -28,11 +31,74 @@ impl From<String> for TransactionError {
     }
 }
 
-pub fn router() -> Router<AppState> {
+pub fn router(body_limit_mb: u64) -> Router<AppState> {
+    let body_limit = body_limit_mb
+        .saturating_mul(1024 * 1024)
+        .min(usize::MAX as u64) as usize;
     Router::new()
         .route("/status", post(status))
         .route("/accounts", post(accounts))
         .route("/transactions", post(transactions))
+        .layer(middleware::from_fn(move |request, next| {
+            validate_json_body(request, next, body_limit)
+        }))
+        .layer(middleware::map_response(express_json_content_type))
+}
+
+async fn validate_json_body(mut request: Request, next: Next, body_limit: usize) -> Response {
+    let is_json = request
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+    if !is_json {
+        request.headers_mut().remove(header::CONTENT_TYPE);
+        return next.run(request).await;
+    }
+    let (parts, body) = request.into_parts();
+    let bytes = match to_bytes(body, body_limit).await {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                Html("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Payload Too Large</pre>\n</body>\n</html>\n"),
+            )
+                .into_response();
+        }
+    };
+    let bytes = if bytes.is_empty() {
+        bytes::Bytes::from_static(b"{}")
+    } else {
+        match serde_json::from_slice::<Value>(&bytes) {
+            Ok(Value::Object(_) | Value::Array(_)) => bytes,
+            _ => return express_bad_request(),
+        }
+    };
+    next.run(Request::from_parts(parts, Body::from(bytes)))
+        .await
+}
+
+fn express_bad_request() -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Html("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Bad Request</pre>\n</body>\n</html>\n"),
+    )
+        .into_response()
+}
+
+async fn express_json_content_type(mut response: Response) -> Response {
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .is_some_and(|value| value.as_bytes().starts_with(b"application/json"))
+    {
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        );
+    }
+    response
 }
 
 async fn status(State(state): State<AppState>, ValidatedSession(_): ValidatedSession) -> Response {
@@ -81,8 +147,9 @@ async fn accounts(
 async fn transactions(
     State(state): State<AppState>,
     ValidatedSession(_): ValidatedSession,
-    Json(body): Json<Value>,
+    body: Option<Json<Value>>,
 ) -> Response {
+    let body = body.map(|body| body.0).unwrap_or(Value::Null);
     let account_id = body.get("accountId").and_then(Value::as_str);
     let start_date = body.get("startDate").and_then(Value::as_str);
     let (Some(account_id), Some(start_date)) = (account_id, start_date) else {
@@ -294,22 +361,40 @@ async fn api_call(
         .map_err(|error| error.to_string())?;
     if !query.is_empty() {
         url.query_pairs_mut().extend_pairs(query.iter().copied());
+        let axios_query = url.query().unwrap_or_default().replace("%3A", ":");
+        url.set_query(Some(&axios_query));
     }
     let is_post = method == Method::POST;
     let mut request = state
         .http
         .request(method, url)
+        .header(header::ACCEPT, "application/json, text/plain, */*")
+        .header(header::ACCEPT_ENCODING, "gzip, compress, deflate, br")
         .header("X-Akahu-Sdk", "akahu-sdk-js/2.5.1")
         .header("X-Akahu-Id", app_token)
         .header("User-Agent", "akahu-sdk-js/2.5.1")
         .header("Authorization", format!("Bearer {user_token}"));
     if is_post {
-        request = request.header("Idempotency-Key", uuid::Uuid::new_v4().to_string());
+        request = request
+            .header("Idempotency-Key", uuid::Uuid::new_v4().to_string())
+            .header(header::CONTENT_LENGTH, "0");
     }
-    let response = request.send().await.map_err(|error| error.to_string())?;
+    let response = request.send().await.map_err(|error| {
+        let details = format!("{error:?}").to_lowercase();
+        if details.contains("incompletemessage") || details.contains("connection reset") {
+            "socket hang up".into()
+        } else {
+            error.to_string()
+        }
+    })?;
     let status = response.status();
     let body = response.text().await.map_err(|error| error.to_string())?;
-    let body = serde_json::from_str::<Value>(&body).map_err(|error| error.to_string())?;
+    let body = serde_json::from_str::<Value>(&body).map_err(|_| {
+        status
+            .canonical_reason()
+            .unwrap_or("Akahu API request failed")
+            .to_owned()
+    })?;
     if !status.is_success() || body.get("success").and_then(Value::as_bool) != Some(true) {
         return Err(body
             .get("message")
@@ -422,7 +507,7 @@ fn parse_javascript_date(value: &str) -> Result<DateTime<Utc>, String> {
                 DateTime::from_naive_utc_and_offset(date.and_hms_opt(0, 0, 0).unwrap(), Utc)
             })
         })
-        .map_err(|error| error.to_string())
+        .map_err(|_| "Invalid time value".to_owned())
 }
 
 fn first_day_next_local_month() -> Result<DateTime<Utc>, String> {
@@ -510,5 +595,21 @@ mod tests {
         );
         assert_eq!(js_cents(&json!(-1.005)), -100);
         assert!(!should_refresh_account(None));
+    }
+
+    #[tokio::test]
+    async fn json_validation_enforces_the_configured_limit_before_buffering() {
+        let app = crate::test_support::TestApp::new();
+        let response = app
+            .send(
+                router(0),
+                Method::POST,
+                "/status",
+                None,
+                None,
+                Some(json!({})),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::PAYLOAD_TOO_LARGE);
     }
 }

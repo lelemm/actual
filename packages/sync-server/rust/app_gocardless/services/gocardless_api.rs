@@ -44,16 +44,52 @@ impl GoCardlessApi {
         secret_id: Option<String>,
         secret_key: Option<String>,
     ) -> Self {
+        Self::with_base_url(
+            http,
+            secret_id,
+            secret_key,
+            Url::parse(&std::env::var("GOCARDLESS_API_URL").unwrap_or_else(|_| BASE_URL.into()))
+                .expect("valid GoCardless base URL"),
+        )
+    }
+
+    fn with_base_url(
+        http: reqwest::Client,
+        secret_id: Option<String>,
+        secret_key: Option<String>,
+        base_url: Url,
+    ) -> Self {
         Self {
             http,
-            base_url: Url::parse(
-                &std::env::var("GOCARDLESS_API_URL").unwrap_or_else(|_| BASE_URL.into()),
-            )
-            .expect("valid GoCardless base URL"),
+            base_url,
             secret_id,
             secret_key,
             token: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn for_test(http: reqwest::Client, base_url: Url) -> Self {
+        Self::with_base_url(
+            http,
+            Some("secret-id".into()),
+            Some("secret-key".into()),
+            base_url,
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn for_test_credentials(
+        &self,
+        secret_id: Option<String>,
+        secret_key: Option<String>,
+    ) -> Self {
+        Self::with_base_url(
+            self.http.clone(),
+            secret_id,
+            secret_key,
+            self.base_url.clone(),
+        )
     }
 
     pub fn secret_id(&self) -> Option<&str> {
@@ -94,8 +130,7 @@ impl GoCardlessApi {
         if let Some(token) = &self.token {
             request = request.bearer_auth(token);
         }
-        if let Some(mut body) = body {
-            body.retain(|_, value| !value.is_null());
+        if let Some(body) = body {
             request = request.json(&body);
         }
         let response = request.send().await.map_err(|error| GoCardlessApiError {
@@ -140,15 +175,11 @@ impl GoCardlessApi {
     }
 
     pub async fn generate_token(&mut self) -> Result<TokenResponse, GoCardlessApiError> {
+        let mut body = Map::new();
+        insert_option(&mut body, "secret_id", self.secret_id.clone());
+        insert_option(&mut body, "secret_key", self.secret_key.clone());
         let value = self
-            .request(
-                "/token/new/",
-                Method::POST,
-                Some(object([
-                    ("secret_id", option(self.secret_id.clone())),
-                    ("secret_key", option(self.secret_key.clone())),
-                ])),
-            )
+            .request("/token/new/", Method::POST, Some(body))
             .await?;
         let response = serde_json::from_value::<TokenResponse>(value).map_err(json_error)?;
         self.token = Some(response.access.clone());
@@ -188,16 +219,16 @@ impl GoCardlessApi {
     pub async fn create_agreement(
         &self,
         institution_id: &str,
-        max_historical_days: u64,
-        access_valid_for_days: u64,
+        max_historical_days: Value,
+        access_valid_for_days: Value,
     ) -> Result<Value, GoCardlessApiError> {
         self.request(
             "/agreements/enduser/",
             Method::POST,
             Some(object([
                 ("institution_id", json!(institution_id)),
-                ("max_historical_days", json!(max_historical_days)),
-                ("access_valid_for_days", json!(access_valid_for_days)),
+                ("max_historical_days", max_historical_days),
+                ("access_valid_for_days", access_valid_for_days),
                 (
                     "access_scope",
                     json!(["balances", "details", "transactions"]),
@@ -219,29 +250,26 @@ impl GoCardlessApi {
         redirect_immediate: bool,
         account_selection: bool,
     ) -> Result<Value, GoCardlessApiError> {
-        self.request(
-            "/requisitions/",
-            Method::POST,
-            Some(object([
-                ("redirect", json!(redirect_url)),
-                ("institution_id", json!(institution_id)),
-                ("agreement", json!(agreement)),
-                ("user_language", json!(user_language)),
-                ("reference", option(reference)),
-                ("ssn", option(ssn)),
-                ("redirect_immediate", json!(redirect_immediate)),
-                ("account_selection", json!(account_selection)),
-            ])),
-        )
-        .await
+        let mut body = object([
+            ("redirect", json!(redirect_url)),
+            ("institution_id", json!(institution_id)),
+            ("agreement", json!(agreement)),
+            ("user_language", json!(user_language)),
+            ("redirect_immediate", json!(redirect_immediate)),
+            ("account_selection", json!(account_selection)),
+        ]);
+        insert_option(&mut body, "reference", reference);
+        insert_option(&mut body, "ssn", ssn);
+        self.request("/requisitions/", Method::POST, Some(body))
+            .await
     }
 
     pub async fn init_session(
         &self,
         redirect_url: &str,
         institution_id: &str,
-        max_historical_days: u64,
-        access_valid_for_days: u64,
+        max_historical_days: Value,
+        access_valid_for_days: Value,
         reference_id: Option<&str>,
         account_selection: bool,
     ) -> Result<Value, GoCardlessApiError> {
@@ -299,7 +327,9 @@ impl GoCardlessApi {
         let mut url = self
             .endpoint(&format!("/accounts/{id}/transactions/"))
             .map_err(api_url_error)?;
-        {
+        let date_from = date_from.filter(|date| !date.is_empty());
+        let date_to = date_to.filter(|date| !date.is_empty());
+        if date_from.is_some() || date_to.is_some() {
             let mut query = url.query_pairs_mut();
             if let Some(date_from) = date_from {
                 query.append_pair("date_from", date_from);
@@ -320,8 +350,10 @@ fn object<const N: usize>(values: [(&str, Value); N]) -> Map<String, Value> {
         .collect()
 }
 
-fn option<T: Serialize>(value: Option<T>) -> Value {
-    value.map_or(Value::Null, |value| json!(value))
+fn insert_option<T: Serialize>(body: &mut Map<String, Value>, key: &str, value: Option<T>) {
+    if let Some(value) = value {
+        body.insert(key.to_owned(), json!(value));
+    }
 }
 
 fn json_error(error: serde_json::Error) -> GoCardlessApiError {

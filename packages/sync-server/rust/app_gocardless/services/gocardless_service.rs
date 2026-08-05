@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde_json::Value;
-use tokio::sync::Mutex;
+use serde_json::{Value, json};
+use tokio::{sync::Mutex, task::JoinHandle};
 use uuid::Uuid;
 
 use crate::{
@@ -17,15 +17,17 @@ use crate::{
 use super::gocardless_api::GoCardlessApi;
 
 #[derive(Clone, Default)]
-pub struct GoCardlessService(Arc<Mutex<Option<CachedClient>>>);
-
-struct CachedClient {
-    secret_id: Option<String>,
-    secret_key: Option<String>,
-    api: GoCardlessApi,
-}
+pub struct GoCardlessService(Arc<Mutex<HashMap<(Option<String>, Option<String>), GoCardlessApi>>>);
 
 impl GoCardlessService {
+    #[cfg(test)]
+    pub(super) fn for_test(api: GoCardlessApi) -> Self {
+        Self(Arc::new(Mutex::new(HashMap::from([(
+            (Some("secret-id".into()), Some("secret-key".into())),
+            api,
+        )]))))
+    }
+
     pub fn is_configured(&self, state: &AppState) -> bool {
         credentials(state).is_some_and(|(id, key)| {
             id.is_some_and(|id| !id.is_empty()) && key.is_some_and(|key| !key.is_empty())
@@ -42,6 +44,130 @@ impl GoCardlessService {
             .get_institutions(country)
             .await
             .map_err(Into::into)
+    }
+
+    pub async fn get_institution(
+        &self,
+        state: &AppState,
+        institution_id: &str,
+    ) -> Result<Value, GoCardlessError> {
+        self.client(state)
+            .await?
+            .get_institution_by_id(institution_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_requisition(
+        &self,
+        state: &AppState,
+        requisition_id: &str,
+    ) -> Result<Value, GoCardlessError> {
+        self.client(state)
+            .await?
+            .get_requisition(requisition_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_detailed_account(
+        &self,
+        state: &AppState,
+        account_id: &str,
+    ) -> Result<Value, GoCardlessError> {
+        let api = self.client(state).await?;
+        let (details, metadata) = tokio::try_join!(
+            api.get_account_details(account_id),
+            api.get_account_metadata(account_id)
+        )
+        .map_err(GoCardlessError::from)?;
+        let mut account = details
+            .get("account")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(metadata) = metadata.as_object() {
+            for (key, value) in metadata.iter().filter(|(_, value)| truthy(value)) {
+                account.insert(key.clone(), value.clone());
+            }
+        }
+        Ok(Value::Object(account))
+    }
+
+    pub async fn get_account_metadata(
+        &self,
+        state: &AppState,
+        account_id: &str,
+    ) -> Result<Value, GoCardlessError> {
+        self.client(state)
+            .await?
+            .get_account_metadata(account_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_balances(
+        &self,
+        state: &AppState,
+        account_id: &str,
+    ) -> Result<Value, GoCardlessError> {
+        self.client(state)
+            .await?
+            .get_account_balances(account_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_account_transactions(
+        &self,
+        state: &AppState,
+        institution_id: &str,
+        account_id: &str,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<Value, GoCardlessError> {
+        let response = self
+            .client(state)
+            .await?
+            .get_account_transactions(account_id, start_date, end_date)
+            .await
+            .map_err(GoCardlessError::from)?;
+        let mut response = response;
+        response["transactions"]["booked"] = Value::Array(normalized_transactions(
+            &response,
+            "booked",
+            institution_id,
+            true,
+        ));
+        response["transactions"]["pending"] = Value::Array(normalized_transactions(
+            &response,
+            "pending",
+            institution_id,
+            false,
+        ));
+        Ok(response)
+    }
+
+    pub fn extend_accounts_about_institutions(
+        accounts: &[Value],
+        institutions: &[Value],
+    ) -> Vec<Value> {
+        accounts
+            .iter()
+            .map(|account| {
+                let mut account = account.as_object().cloned().unwrap_or_default();
+                let institution_id = account.get("institution_id").and_then(Value::as_str);
+                let institution = institutions
+                    .iter()
+                    .find(|institution| {
+                        institution.get("id").and_then(Value::as_str) == institution_id
+                    })
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                account.insert("institution".into(), institution);
+                Value::Object(account)
+            })
+            .collect()
     }
 
     pub async fn create_requisition(
@@ -62,15 +188,15 @@ impl GoCardlessService {
         let separate_history = has_feature(features, "separate_continuous_history_consent");
         let access_days = institution
             .get("max_access_valid_for_days")
-            .and_then(number)
-            .unwrap_or(90);
+            .map(js_number)
+            .unwrap_or_else(|| json!(90));
         let history_days = if separate_history {
-            90
+            json!(90)
         } else {
             institution
                 .get("transaction_total_days")
-                .and_then(number)
-                .unwrap_or(90)
+                .map(js_number)
+                .unwrap_or_else(|| json!(90))
         };
         let redirect_url = format!("{host}/gocardless/link");
         let reference = Uuid::new_v4().to_string();
@@ -90,8 +216,8 @@ impl GoCardlessService {
                 .init_session(
                     &redirect_url,
                     institution_id,
-                    89,
-                    90,
+                    json!(89),
+                    json!(90),
                     Some(&reference),
                     account_selection,
                 )
@@ -137,25 +263,14 @@ impl GoCardlessService {
         requisition_id: &str,
     ) -> Result<(Value, Vec<Value>), GoCardlessError> {
         let api = self.client(state).await?;
-        let requisition = api
-            .get_requisition(requisition_id)
-            .await
-            .map_err(GoCardlessError::from)?;
-        if requisition.get("status").and_then(Value::as_str) != Some("LN") {
-            return Err(GoCardlessError {
-                kind: GoCardlessErrorKind::RequisitionNotLinked,
-                message: "Requisition not linked yet",
-                details: serde_json::json!({
-                    "requisitionStatus": requisition.get("status").cloned()
-                }),
-            });
-        }
+        let requisition = self.get_linked_requisition(&api, requisition_id).await?;
         let account_ids = requisition
             .get("accounts")
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
         let mut accounts = Vec::with_capacity(account_ids.len());
+        let mut institution_ids: Vec<String> = Vec::new();
         for account_id in account_ids.iter().filter_map(Value::as_str) {
             let (details, metadata) = tokio::try_join!(
                 api.get_account_details(account_id),
@@ -177,13 +292,41 @@ impl GoCardlessService {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            let institution = api
-                .get_institution_by_id(&institution_id)
-                .await
-                .map_err(GoCardlessError::from)?;
-            account.insert("institution".into(), institution);
-            accounts.push(bank_factory::normalize_account(&institution_id, &account));
+            if !institution_ids.contains(&institution_id) {
+                institution_ids.push(institution_id.clone());
+            }
+            accounts.push((account, institution_id));
         }
+        let mut institutions = Vec::with_capacity(institution_ids.len());
+        let institution_requests = institution_ids
+            .iter()
+            .map(|institution_id| {
+                let api = api.clone();
+                let institution_id = institution_id.clone();
+                tokio::spawn(async move {
+                    api.get_institution_by_id(&institution_id)
+                        .await
+                        .map_err(GoCardlessError::from)
+                })
+            })
+            .collect::<Vec<_>>();
+        for request in institution_requests {
+            institutions.push(service_task(request).await?);
+        }
+        let accounts = accounts
+            .into_iter()
+            .map(|(mut account, institution_id)| {
+                let institution = institutions
+                    .iter()
+                    .find(|institution| {
+                        institution.get("id").and_then(Value::as_str) == Some(&institution_id)
+                    })
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                account.insert("institution".into(), institution);
+                bank_factory::normalize_account(&institution_id, &account)
+            })
+            .collect();
         Ok((requisition, accounts))
     }
 
@@ -196,7 +339,87 @@ impl GoCardlessService {
         end_date: Option<&str>,
         include_balance: bool,
     ) -> Result<Value, GoCardlessError> {
-        let api = self.client(state).await?;
+        if include_balance {
+            let api = self.client(state).await?;
+            let requisition = self.get_linked_requisition(&api, requisition_id).await?;
+            ensure_account_linked(&requisition, account_id, requisition_id)?;
+            let institution_id = requisition
+                .get("institution_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            let transaction_request = {
+                let service = self.clone();
+                let state = state.clone();
+                let requisition_id = requisition_id.to_owned();
+                let account_id = account_id.to_owned();
+                let start_date = start_date.map(str::to_owned);
+                let end_date = end_date.map(str::to_owned);
+                tokio::spawn(async move {
+                    service
+                        .get_normalized_transactions(
+                            &state,
+                            &requisition_id,
+                            &account_id,
+                            start_date.as_deref(),
+                            end_date.as_deref(),
+                        )
+                        .await
+                })
+            };
+            let balance_request = {
+                let api = api.clone();
+                let account_id = account_id.to_owned();
+                tokio::spawn(async move {
+                    api.get_account_balances(&account_id)
+                        .await
+                        .map_err(GoCardlessError::from)
+                })
+            };
+            let ((_, transactions), balances) = tokio::try_join!(
+                service_task(transaction_request),
+                service_task(balance_request)
+            )?;
+            let balances = balances
+                .get("balances")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let starting_balance = bank_factory::calculate_starting_balance(
+                &institution_id,
+                transactions["booked"]
+                    .as_array()
+                    .expect("array created in get_normalized_transactions"),
+                &balances,
+            );
+            Ok(serde_json::json!({
+                "balances": balances,
+                "institutionId": institution_id,
+                "startingBalance": starting_balance,
+                "transactions": transactions
+            }))
+        } else {
+            let (institution_id, transactions) = self
+                .get_normalized_transactions(
+                    state,
+                    requisition_id,
+                    account_id,
+                    start_date,
+                    end_date,
+                )
+                .await?;
+            Ok(serde_json::json!({
+                "institutionId": institution_id,
+                "transactions": transactions
+            }))
+        }
+    }
+
+    async fn get_linked_requisition(
+        &self,
+        api: &GoCardlessApi,
+        requisition_id: &str,
+    ) -> Result<Value, GoCardlessError> {
         let requisition = api
             .get_requisition(requisition_id)
             .await
@@ -210,47 +433,33 @@ impl GoCardlessService {
                 }),
             });
         }
-        let account_is_linked = requisition
-            .get("accounts")
-            .and_then(Value::as_array)
-            .is_some_and(|accounts| {
-                accounts
-                    .iter()
-                    .any(|account| account.as_str() == Some(account_id))
-            });
-        if !account_is_linked {
-            return Err(GoCardlessError {
-                kind: GoCardlessErrorKind::AccountNotLinked,
-                message: "Provided account id is not linked to given requisition",
-                details: serde_json::json!({
-                    "accountId": account_id,
-                    "requisitionId": requisition_id
-                }),
-            });
-        }
+        Ok(requisition)
+    }
+
+    async fn get_normalized_transactions(
+        &self,
+        state: &AppState,
+        requisition_id: &str,
+        account_id: &str,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<(String, Value), GoCardlessError> {
+        let api = self.client(state).await?;
+        let requisition = self.get_linked_requisition(&api, requisition_id).await?;
+        ensure_account_linked(&requisition, account_id, requisition_id)?;
         let institution_id = requisition
             .get("institution_id")
             .and_then(Value::as_str)
-            .unwrap_or_default();
-        let (transactions, balances) = if include_balance {
-            let (transactions, balances) = tokio::try_join!(
-                api.get_account_transactions(account_id, start_date, end_date),
-                api.get_account_balances(account_id)
-            )
+            .unwrap_or_default()
+            .to_owned();
+        let transactions = api
+            .get_account_transactions(account_id, start_date, end_date)
+            .await
             .map_err(GoCardlessError::from)?;
-            (transactions, Some(balances))
-        } else {
-            (
-                api.get_account_transactions(account_id, start_date, end_date)
-                    .await
-                    .map_err(GoCardlessError::from)?,
-                None,
-            )
-        };
-        let mut booked = normalized_transactions(&transactions, "booked", institution_id, true);
-        let mut pending = normalized_transactions(&transactions, "pending", institution_id, false);
-        bank_factory::sort_transactions(institution_id, &mut booked);
-        bank_factory::sort_transactions(institution_id, &mut pending);
+        let mut booked = normalized_transactions(&transactions, "booked", &institution_id, true);
+        let mut pending = normalized_transactions(&transactions, "pending", &institution_id, false);
+        bank_factory::sort_transactions(&institution_id, &mut booked);
+        bank_factory::sort_transactions(&institution_id, &mut pending);
         let mut all = booked
             .iter()
             .cloned()
@@ -263,66 +472,52 @@ impl GoCardlessService {
                 transaction
             }))
             .collect::<Vec<_>>();
-        bank_factory::sort_transactions(institution_id, &mut all);
-        let transactions = serde_json::json!({
-            "booked": booked,
-            "pending": pending,
-            "all": all
-        });
-        if let Some(balances) = balances {
-            let balances = balances
-                .get("balances")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            let starting_balance = bank_factory::calculate_starting_balance(
-                institution_id,
-                transactions["booked"]
-                    .as_array()
-                    .expect("array created above"),
-                &balances,
-            );
-            Ok(serde_json::json!({
-                "balances": balances,
-                "institutionId": institution_id,
-                "startingBalance": starting_balance,
-                "transactions": transactions
-            }))
-        } else {
-            Ok(serde_json::json!({
-                "institutionId": institution_id,
-                "transactions": transactions
-            }))
-        }
+        bank_factory::sort_transactions(&institution_id, &mut all);
+        Ok((
+            institution_id,
+            serde_json::json!({
+                "booked": booked,
+                "pending": pending,
+                "all": all
+            }),
+        ))
     }
 
     async fn client(&self, state: &AppState) -> Result<GoCardlessApi, GoCardlessError> {
-        let (secret_id, secret_key) = credentials(state).ok_or(GoCardlessError {
+        let credentials = credentials(state).ok_or(GoCardlessError {
             kind: GoCardlessErrorKind::Generic,
             message: "GoCardless returned error",
             details: Value::Null,
         })?;
-        let mut cached = self.0.lock().await;
-        if cached
-            .as_ref()
-            .is_none_or(|cached| cached.secret_id != secret_id || cached.secret_key != secret_key)
-        {
-            *cached = Some(CachedClient {
-                api: GoCardlessApi::new(state.http.clone(), secret_id.clone(), secret_key.clone()),
-                secret_id,
-                secret_key,
-            });
+        let mut clients = self.0.lock().await;
+        #[cfg(test)]
+        let test_template = clients.values().next().cloned();
+        let api = clients.entry(credentials.clone()).or_insert_with(|| {
+            #[cfg(test)]
+            if let Some(template) = test_template {
+                return template.for_test_credentials(credentials.0.clone(), credentials.1.clone());
+            }
+            GoCardlessApi::new(
+                state.http.clone(),
+                credentials.0.clone(),
+                credentials.1.clone(),
+            )
+        });
+        if api.token().is_none_or(is_expired_jwt) {
+            api.generate_token().await.map_err(GoCardlessError::from)?;
         }
-        let cached = cached.as_mut().expect("client initialized above");
-        if cached.api.token().is_none_or(is_expired_jwt) {
-            cached
-                .api
-                .generate_token()
-                .await
-                .map_err(GoCardlessError::from)?;
-        }
-        Ok(cached.api.clone())
+        Ok(api.clone())
     }
+}
+
+async fn service_task<T>(
+    task: JoinHandle<Result<T, GoCardlessError>>,
+) -> Result<T, GoCardlessError> {
+    task.await.map_err(|error| GoCardlessError {
+        kind: GoCardlessErrorKind::Generic,
+        message: "GoCardless returned error",
+        details: Value::String(error.to_string()),
+    })?
 }
 
 fn truthy(value: &Value) -> bool {
@@ -353,10 +548,89 @@ fn normalized_transactions(
         .collect()
 }
 
-fn number(value: &Value) -> Option<u64> {
-    value
-        .as_u64()
-        .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+fn ensure_account_linked(
+    requisition: &Value,
+    account_id: &str,
+    requisition_id: &str,
+) -> Result<(), GoCardlessError> {
+    if requisition
+        .get("accounts")
+        .and_then(Value::as_array)
+        .is_some_and(|accounts| {
+            accounts
+                .iter()
+                .any(|account| account.as_str() == Some(account_id))
+        })
+    {
+        return Ok(());
+    }
+    Err(GoCardlessError {
+        kind: GoCardlessErrorKind::AccountNotLinked,
+        message: "Provided account id is not linked to given requisition",
+        details: serde_json::json!({
+            "accountId": account_id,
+            "requisitionId": requisition_id
+        }),
+    })
+}
+
+fn js_number(value: &Value) -> Value {
+    let parsed = match value {
+        Value::Null => Some(0.0),
+        Value::Bool(value) => Some(if *value { 1.0 } else { 0.0 }),
+        Value::Number(value) => value.as_f64(),
+        Value::String(value) => {
+            let value = value.trim();
+            if value.is_empty() {
+                Some(0.0)
+            } else if let Some((digits, radix)) = [
+                ("0x", 16),
+                ("0X", 16),
+                ("0o", 8),
+                ("0O", 8),
+                ("0b", 2),
+                ("0B", 2),
+            ]
+            .into_iter()
+            .find_map(|(prefix, radix)| value.strip_prefix(prefix).map(|digits| (digits, radix)))
+            {
+                if digits.is_empty() {
+                    None
+                } else {
+                    num_bigint::BigUint::parse_bytes(digits.as_bytes(), radix)
+                        .and_then(|number| number.to_str_radix(10).parse::<f64>().ok())
+                }
+            } else {
+                value.parse::<f64>().ok()
+            }
+        }
+        Value::Array(values) => return js_number(&Value::String(js_array_string(values))),
+        _ => None,
+    };
+    parsed
+        .filter(|value| value.is_finite())
+        .map_or(Value::Null, |value| {
+            if value.fract() == 0.0 && value.abs() <= 9_007_199_254_740_991.0 {
+                json!(value as i64)
+            } else {
+                serde_json::Number::from_f64(value).map_or(Value::Null, Value::Number)
+            }
+        })
+}
+
+fn js_array_string(values: &[Value]) -> String {
+    values
+        .iter()
+        .map(|value| match value {
+            Value::Null => String::new(),
+            Value::Bool(value) => value.to_string(),
+            Value::Number(value) => value.to_string(),
+            Value::String(value) => value.clone(),
+            Value::Array(values) => js_array_string(values),
+            Value::Object(_) => "[object Object]".to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn has_feature(features: Option<&Vec<Value>>, expected: &str) -> bool {
@@ -412,5 +686,28 @@ mod tests {
             URL_SAFE_NO_PAD.encode(br#"{"exp":4102444800}"#)
         );
         assert!(!is_expired_jwt(&future));
+    }
+
+    #[test]
+    fn coerces_agreement_limits_like_javascript_number() {
+        for (input, expected) in [
+            (json!("  "), json!(0)),
+            (json!("1.5"), json!(1.5)),
+            (json!("1e2"), json!(100)),
+            (json!("0x10"), json!(16)),
+            (json!("0x24ded6a2c8489d3"), json!(166_049_801_551_776_220.0)),
+            (
+                json!("0x10000000000000000"),
+                json!(18_446_744_073_709_552_000.0),
+            ),
+            (json!(""), json!(0)),
+            (json!([]), json!(0)),
+            (json!(["90"]), json!(90)),
+            (json!([null]), json!(0)),
+        ] {
+            assert_eq!(js_number(&input), expected);
+        }
+        assert_eq!(js_number(&json!("not-a-number")), Value::Null);
+        assert_eq!(js_number(&json!(["1", "2"])), Value::Null);
     }
 }

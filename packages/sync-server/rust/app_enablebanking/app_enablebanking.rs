@@ -8,7 +8,8 @@ use std::{
 use axum::{
     Json, Router,
     extract::{ConnectInfo, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue, header},
+    middleware,
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
@@ -19,7 +20,7 @@ use tokio::sync::oneshot;
 use crate::{
     app::AppState,
     services::secrets_service,
-    util::{middlewares::ValidatedSession, ssrf::is_blocked_ip},
+    util::{middlewares::ValidatedSession, ssrf::is_blocked_ip, validate_user::client_ip},
 };
 
 use super::{
@@ -33,13 +34,89 @@ use super::{
 
 const APPLICATION_ID: &str = "enablebanking_applicationId";
 const SECRET_KEY: &str = "enablebanking_secretKey";
-const POLL_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+#[cfg(test)]
+const POLL_TIMEOUT: Duration = Duration::from_millis(500);
+#[cfg(not(test))]
+fn poll_timeout() -> Duration {
+    let configured = std::env::var("ENABLEBANKING_POLL_TIMEOUT_MS").ok();
+    parse_poll_timeout(configured.as_deref())
+}
+#[cfg(test)]
+fn poll_timeout() -> Duration {
+    POLL_TIMEOUT
+}
+
+fn parse_poll_timeout(configured: Option<&str>) -> Duration {
+    let Some(configured) = configured else {
+        return DEFAULT_POLL_TIMEOUT;
+    };
+    let configured = configured.trim_matches(is_ecmascript_whitespace);
+    let milliseconds = if configured.is_empty() {
+        Some(0.0)
+    } else if let Some(value) = configured.strip_prefix("0x") {
+        u64::from_str_radix(value, 16)
+            .ok()
+            .map(|value| value as f64)
+    } else if let Some(value) = configured.strip_prefix("0X") {
+        u64::from_str_radix(value, 16)
+            .ok()
+            .map(|value| value as f64)
+    } else if let Some(value) = configured.strip_prefix("0o") {
+        u64::from_str_radix(value, 8).ok().map(|value| value as f64)
+    } else if let Some(value) = configured.strip_prefix("0O") {
+        u64::from_str_radix(value, 8).ok().map(|value| value as f64)
+    } else if let Some(value) = configured.strip_prefix("0b") {
+        u64::from_str_radix(value, 2).ok().map(|value| value as f64)
+    } else if let Some(value) = configured.strip_prefix("0B") {
+        u64::from_str_radix(value, 2).ok().map(|value| value as f64)
+    } else {
+        configured.parse::<f64>().ok()
+    };
+    milliseconds
+        .filter(|value| {
+            value.is_finite() && *value >= 0.0 && value.fract() == 0.0 && *value <= MAX_SAFE_INTEGER
+        })
+        .map_or(DEFAULT_POLL_TIMEOUT, |value| {
+            Duration::from_millis(value as u64)
+        })
+}
+
+fn is_ecmascript_whitespace(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0009}' | '\u{000B}' | '\u{000C}' | '\u{0020}' | '\u{00A0}' | '\u{1680}' | '\u{2000}'
+            ..='\u{200A}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202F}'
+                | '\u{205F}'
+                | '\u{3000}'
+                | '\u{FEFF}'
+                | '\n'
+                | '\r'
+    )
+}
 const COMPLETED_AUTH_TTL: Duration = Duration::from_secs(30);
 
 type PendingSender = oneshot::Sender<Result<Value, String>>;
 
+struct PendingPollGuard {
+    state: EnableBankingState,
+    auth_state: String,
+    waiter_id: u64,
+}
+
+impl Drop for PendingPollGuard {
+    fn drop(&mut self) {
+        self.state.cleanup_pending(&self.auth_state, self.waiter_id);
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct EnableBankingState {
+    handoff: Arc<Mutex<()>>,
     pending: Arc<Mutex<HashMap<String, (u64, PendingSender)>>>,
     completed: Arc<Mutex<HashMap<String, Value>>>,
     next_waiter_id: Arc<Mutex<u64>>,
@@ -47,6 +124,10 @@ pub struct EnableBankingState {
 
 impl EnableBankingState {
     fn complete(&self, auth_state: &str, result: Value, error: Option<String>) {
+        let _handoff = self
+            .handoff
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         self.completed
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
@@ -79,6 +160,33 @@ impl EnableBankingState {
         *next
     }
 
+    fn register(
+        &self,
+        auth_state: &str,
+        waiter_id: u64,
+        sender: PendingSender,
+    ) -> (Option<Value>, Option<PendingSender>) {
+        let _handoff = self
+            .handoff
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let completed = self
+            .completed
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .remove(auth_state);
+        let existing = if completed.is_none() {
+            self.pending
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner())
+                .insert(auth_state.into(), (waiter_id, sender))
+                .map(|(_, sender)| sender)
+        } else {
+            None
+        };
+        (completed, existing)
+    }
+
     fn cleanup_pending(&self, auth_state: &str, waiter_id: u64) {
         let mut pending = self
             .pending
@@ -103,6 +211,21 @@ pub fn router() -> Router<AppState> {
         .route("/complete-auth", post(complete_auth))
         .route("/poll-auth", post(poll_auth))
         .route("/transactions", post(transactions))
+        .layer(middleware::map_response(express_json_content_type))
+}
+
+async fn express_json_content_type(mut response: Response) -> Response {
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .is_some_and(|value| value.as_bytes().starts_with(b"application/json"))
+    {
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        );
+    }
+    response
 }
 
 async fn auth_callback(
@@ -127,7 +250,8 @@ async fn auth_callback(
     };
     match create_session(&state, code).await {
         Ok(session) => {
-            match build_session_result(&state, &session, &psu_headers(peer, &headers)).await {
+            match build_session_result(&state, &session, &psu_headers(&state, peer, &headers)).await
+            {
                 Ok(result) => {
                     state.enablebanking.complete(auth_state, result, None);
                     Html(
@@ -284,7 +408,9 @@ async fn complete_auth(
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty());
     let result = match create_session(&state, code).await {
-        Ok(session) => build_session_result(&state, &session, &psu_headers(peer, &headers)).await,
+        Ok(session) => {
+            build_session_result(&state, &session, &psu_headers(&state, peer, &headers)).await
+        }
         Err(error) => Err(error),
     };
     match result {
@@ -329,28 +455,21 @@ async fn poll_auth(
             "error_type": "Missing state"
         }));
     };
-    if let Some(result) = state
-        .enablebanking
-        .completed
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .remove(auth_state)
-    {
-        return ok(result);
-    }
     let waiter_id = state.enablebanking.next_waiter();
     let (sender, receiver) = oneshot::channel();
-    if let Some((_, existing)) = state
-        .enablebanking
-        .pending
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .insert(auth_state.into(), (waiter_id, sender))
-    {
+    let (completed, existing) = state.enablebanking.register(auth_state, waiter_id, sender);
+    if let Some(result) = completed {
+        return ok(result);
+    }
+    if let Some(existing) = existing {
         let _ = existing.send(Err("Poll superseded".into()));
     }
-    let result = tokio::time::timeout(POLL_TIMEOUT, receiver).await;
-    state.enablebanking.cleanup_pending(auth_state, waiter_id);
+    let _guard = PendingPollGuard {
+        state: state.enablebanking.clone(),
+        auth_state: auth_state.into(),
+        waiter_id,
+    };
+    let result = tokio::time::timeout(poll_timeout(), receiver).await;
     match result {
         Ok(Ok(Ok(value))) => ok(value),
         Ok(Ok(Err(error))) => ok(json!({ "error": error })),
@@ -387,14 +506,22 @@ async fn transactions(
         }
     };
     let date_to = Utc::now().format("%Y-%m-%d").to_string();
-    let psu_headers = psu_headers(peer, &headers);
+    let psu_headers = psu_headers(&state, peer, &headers);
     let result = async {
         let balances_result = get_balances(&state, account_id, &psu_headers).await?;
         let balances = balances_result
             .get("balances")
             .and_then(Value::as_array)
-            .map(|balances| balances.iter().map(normalize_balance).collect::<Vec<_>>())
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                EnableBankingError::new(
+                    "INTERNAL_ERROR",
+                    "INTERNAL_ERROR",
+                    Some("Enable Banking balances must be an array".into()),
+                )
+            })?
+            .iter()
+            .map(normalize_balance)
+            .collect::<Vec<_>>();
         let starting_balance = balances
             .iter()
             .find(|balance| balance.get("balanceType").and_then(Value::as_str) == Some("CLAV"))
@@ -489,11 +616,14 @@ async fn build_session_result(
     }))
 }
 
-fn psu_headers(peer: SocketAddr, headers: &HeaderMap) -> PsuHeaders {
-    if is_blocked_ip(peer.ip(), false) {
+fn psu_headers(state: &AppState, peer: SocketAddr, headers: &HeaderMap) -> PsuHeaders {
+    let Ok(address) = client_ip(peer, headers, &state.config.trusted_proxies) else {
+        return Vec::new();
+    };
+    if is_blocked_ip(address, false) {
         return Vec::new();
     }
-    let mut result = vec![("Psu-Ip-Address", peer.ip().to_string())];
+    let mut result = vec![("Psu-Ip-Address", address.to_string())];
     if let Some(user_agent) = headers
         .get("user-agent")
         .and_then(|value| value.to_str().ok())

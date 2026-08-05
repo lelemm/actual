@@ -2,6 +2,7 @@ use std::{sync::OnceLock, time::Duration};
 
 use regex::Regex;
 use reqwest::{Method, Url};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::{app::AppState, services::secrets_service};
@@ -86,7 +87,7 @@ async fn request(
     state: &AppState,
     method: Method,
     url: Url,
-    body: Option<Value>,
+    body: Option<String>,
     authorization_override: Option<String>,
     psu_headers: &PsuHeaders,
 ) -> Result<Value, EnableBankingError> {
@@ -112,7 +113,7 @@ async fn request(
         outgoing = outgoing.header(*name, value);
     }
     if let Some(body) = body {
-        outgoing = outgoing.json(&body);
+        outgoing = outgoing.body(body);
     }
     let response = outgoing.send().await.map_err(|error| {
         if error.is_timeout() {
@@ -125,12 +126,14 @@ async fn request(
     let bytes = response.bytes().await.map_err(|error| {
         EnableBankingError::new("INTERNAL_ERROR", "INTERNAL_ERROR", Some(error.to_string()))
     })?;
-    let parsed = serde_json::from_slice::<Value>(&bytes)
-        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
     if !status.is_success() {
+        let parsed = serde_json::from_slice::<Value>(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
         return Err(handle_enable_banking_error(status.as_u16(), &parsed));
     }
-    Ok(parsed)
+    serde_json::from_slice::<Value>(&bytes).map_err(|error| {
+        EnableBankingError::new("INTERNAL_ERROR", "INTERNAL_ERROR", Some(error.to_string()))
+    })
 }
 
 pub async fn validate_credentials(
@@ -147,6 +150,18 @@ pub async fn validate_credentials(
         endpoint("application")?,
         None,
         Some(format!("Bearer {token}")),
+        &Vec::new(),
+    )
+    .await
+}
+
+pub async fn get_application(state: &AppState) -> Result<Value, EnableBankingError> {
+    request(
+        state,
+        Method::GET,
+        endpoint("application")?,
+        None,
+        None,
         &Vec::new(),
     )
     .await
@@ -171,26 +186,49 @@ pub async fn start_auth(
     max_consent_validity: Option<f64>,
     psu_type: &str,
 ) -> Result<Value, EnableBankingError> {
+    #[derive(Serialize)]
+    struct Aspsp {
+        name: Value,
+        country: Value,
+    }
+    #[derive(Serialize)]
+    struct Access {
+        valid_until: String,
+    }
+    #[derive(Serialize)]
+    struct AuthBody<'a> {
+        aspsp: Aspsp,
+        redirect_url: &'a str,
+        state: &'a str,
+        access: Access,
+        psu_type: &'a str,
+    }
     let default_seconds = 90.0 * 24.0 * 60.0 * 60.0;
     let consent_seconds = max_consent_validity
         .filter(|value| *value > 0.0)
         .map_or(default_seconds, |value| value.min(default_seconds));
     let valid_until =
         chrono::Utc::now() + chrono::Duration::milliseconds((consent_seconds * 1000.0) as i64);
+    let body = serde_json::to_string(&AuthBody {
+        aspsp: Aspsp {
+            name: aspsp.get("name").cloned().unwrap_or(Value::Null),
+            country: aspsp.get("country").cloned().unwrap_or(Value::Null),
+        },
+        redirect_url,
+        state: auth_state,
+        access: Access {
+            valid_until: valid_until.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        },
+        psu_type,
+    })
+    .map_err(|error| {
+        EnableBankingError::new("INTERNAL_ERROR", "INTERNAL_ERROR", Some(error.to_string()))
+    })?;
     request(
         state,
         Method::POST,
         endpoint("auth")?,
-        Some(json!({
-            "aspsp": {
-                "name": aspsp.get("name").cloned().unwrap_or(Value::Null),
-                "country": aspsp.get("country").cloned().unwrap_or(Value::Null)
-            },
-            "redirect_url": redirect_url,
-            "state": auth_state,
-            "access": { "valid_until": valid_until.to_rfc3339_opts(chrono::SecondsFormat::Millis, true) },
-            "psu_type": psu_type
-        })),
+        Some(body),
         None,
         &Vec::new(),
     )
@@ -202,11 +240,29 @@ pub async fn create_session(state: &AppState, code: &str) -> Result<Value, Enabl
         state,
         Method::POST,
         endpoint("sessions")?,
-        Some(json!({ "code": code })),
+        Some(
+            serde_json::to_string(&json!({ "code": code })).map_err(|error| {
+                EnableBankingError::new("INTERNAL_ERROR", "INTERNAL_ERROR", Some(error.to_string()))
+            })?,
+        ),
         None,
         &Vec::new(),
     )
     .await
+}
+
+pub async fn get_session(state: &AppState, session_id: &str) -> Result<Value, EnableBankingError> {
+    let mut url = base_url()?;
+    url.path_segments_mut()
+        .map_err(|_| {
+            EnableBankingError::new(
+                "INVALID_INPUT",
+                "INVALID_INPUT",
+                Some("Invalid API URL".into()),
+            )
+        })?
+        .extend(["sessions", session_id]);
+    request(state, Method::GET, url, None, None, &Vec::new()).await
 }
 
 pub async fn get_balances(
@@ -227,7 +283,7 @@ pub async fn get_balances(
     request(state, Method::GET, url, None, None, psu_headers).await
 }
 
-async fn get_transactions(
+pub async fn get_transactions(
     state: &AppState,
     account_uid: &str,
     date_from: &str,
@@ -274,15 +330,21 @@ pub async fn get_all_transactions(
             psu_headers,
         )
         .await?;
-        all.extend(
-            page.get("transactions")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default(),
-        );
+        let transactions = page
+            .get("transactions")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                EnableBankingError::new(
+                    "INTERNAL_ERROR",
+                    "INTERNAL_ERROR",
+                    Some("Enable Banking transactions must be an array".into()),
+                )
+            })?;
+        all.extend(transactions.iter().cloned());
         let next = page
             .get("continuation_key")
             .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
             .map(str::to_owned);
         if next.is_none() || next == continuation_key {
             break;

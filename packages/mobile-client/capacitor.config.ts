@@ -11,6 +11,9 @@ const baseConfig: CapacitorConfig = {
   appId: 'org.actualbudget',
   appName: 'Actual Budget',
   webDir: actualAppWebBuildPath,
+  android: {
+    allowMixedContent: true,
+  },
   plugins: {
     SplashScreen: {
       launchAutoHide: false,
@@ -20,10 +23,6 @@ const baseConfig: CapacitorConfig = {
 
 const devConfig: CapacitorConfig = {
   ...baseConfig,
-  android: {
-    ...baseConfig.android,
-    allowMixedContent: true,
-  },
   server: {
     cleartext: true,
     // Put in http://10.0.2.2:5006 for Android emulator to access server running on local machine.

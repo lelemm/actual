@@ -1,7 +1,9 @@
 use axum::{
     Json, Router,
-    extract::State,
-    http::HeaderMap,
+    body::{Body, Bytes, to_bytes},
+    extract::{Request, State},
+    http::{HeaderMap, Method, StatusCode},
+    middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
@@ -10,7 +12,9 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    app::AppState, app_gocardless::errors::GoCardlessErrorKind, util::middlewares::ValidatedSession,
+    app::{AppState, has_content_type},
+    app_gocardless::errors::GoCardlessErrorKind,
+    util::validate_user::{SessionError, validate_session},
 };
 
 const LINK_PAGE_HTML: &str = r#"<!doctype html>
@@ -32,7 +36,7 @@ const LINK_PAGE_HTML: &str = r#"<!doctype html>
   </body>
 </html>"#;
 
-pub fn router() -> Router<AppState> {
+pub fn router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/link", get(|| async { Html(LINK_PAGE_HTML) }))
         .route("/status", post(status))
@@ -41,13 +45,80 @@ pub fn router() -> Router<AppState> {
         .route("/get-banks", post(get_banks))
         .route("/remove-account", post(remove_account))
         .route("/transactions", post(transactions))
+        .layer(middleware::from_fn_with_state(state, authenticate))
 }
 
-async fn get_accounts(
-    State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
-    Json(body): Json<Value>,
-) -> Response {
+async fn authenticate(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    if matches!(*request.method(), Method::GET | Method::HEAD)
+        && request.uri().path().ends_with("/link")
+    {
+        return next.run(request).await;
+    }
+    let (parts, body) = request.into_parts();
+    let body = match to_bytes(body, usize::MAX).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let parsed_body = request_body(&parts.headers, &body);
+    let body_token = parsed_body
+        .get("token")
+        .and_then(Value::as_str)
+        .filter(|token| !token.is_empty());
+    if let Err(error) = validate_session(&state.database, &parts.headers, body_token) {
+        return session_error(error);
+    }
+    if parts.method != Method::GET
+        && parts.method != Method::HEAD
+        && (parts.method != Method::POST || parts.uri.path().ends_with("/link"))
+    {
+        return express_not_found(&parts.method, &format!("/gocardless{}", parts.uri.path()));
+    }
+    next.run(Request::from_parts(parts, Body::from(body))).await
+}
+
+fn express_not_found(method: &Method, path: &str) -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        Html(format!(
+            "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot {method} {path}</pre>\n</body>\n</html>\n"
+        )),
+    )
+        .into_response()
+}
+
+fn session_error(error: SessionError) -> Response {
+    match error {
+        SessionError::TokenNotFound => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "status": "error",
+                "reason": "unauthorized",
+                "details": "token-not-found"
+            })),
+        )
+            .into_response(),
+        SessionError::TokenExpired => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "status": "error", "reason": "token-expired" })),
+        )
+            .into_response(),
+        SessionError::Database(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "status": "error", "reason": "internal-error" })),
+        )
+            .into_response(),
+    }
+}
+
+fn request_body(headers: &HeaderMap, body: &[u8]) -> Value {
+    if !has_content_type(headers, "application/json") || body.is_empty() {
+        return json!({});
+    }
+    serde_json::from_slice(body).unwrap_or_else(|_| json!({}))
+}
+
+async fn get_accounts(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let body = request_body(&headers, &body);
     let requisition_id = match body_id(&body, "requisitionId") {
         Ok(requisition_id) => requisition_id,
         Err(error) => return handled_error(error),
@@ -78,10 +149,10 @@ async fn get_accounts(
 
 async fn create_web_token(
     State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
     headers: HeaderMap,
-    Json(body): Json<Value>,
+    body: Bytes,
 ) -> Response {
+    let body = request_body(&headers, &body);
     let institution_id = match body_id(&body, "institutionId") {
         Ok(institution_id) => institution_id,
         Err(error) => return handled_error(error),
@@ -104,30 +175,20 @@ async fn create_web_token(
     }
 }
 
-async fn status(
-    State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
-) -> Response {
+async fn status(State(state): State<AppState>) -> Response {
     let configured = state.gocardless.is_configured(&state);
     Json(json!({ "status": "ok", "data": { "configured": configured } })).into_response()
 }
 
-async fn get_banks(
-    State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
-    Json(body): Json<Value>,
-) -> Response {
+async fn get_banks(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let body = request_body(&headers, &body);
     let country = match body_id(&body, "country") {
         Ok(country) => country,
         Err(error) => return handled_error(error),
     };
     match state.gocardless.get_institutions(&state, country).await {
         Ok(Value::Array(mut institutions)) => {
-            if body
-                .get("showDemo")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
+            if body.get("showDemo").map(javascript_truthy).unwrap_or(false) {
                 institutions.insert(
                     0,
                     json!({
@@ -145,9 +206,10 @@ async fn get_banks(
 
 async fn remove_account(
     State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
-    Json(body): Json<Value>,
+    headers: HeaderMap,
+    body: Bytes,
 ) -> Response {
+    let body = request_body(&headers, &body);
     let requisition_id = match body_id(&body, "requisitionId") {
         Ok(requisition_id) => requisition_id,
         Err(error) => return handled_error(error),
@@ -169,11 +231,8 @@ async fn remove_account(
     }
 }
 
-async fn transactions(
-    State(state): State<AppState>,
-    ValidatedSession(_session): ValidatedSession,
-    Json(body): Json<Value>,
-) -> Response {
+async fn transactions(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let body = request_body(&headers, &body);
     let requisition_id = match body_id(&body, "requisitionId") {
         Ok(value) => value,
         Err(error) => return handled_error(error),
@@ -191,7 +250,7 @@ async fn transactions(
             body.get("startDate").and_then(Value::as_str),
             body.get("endDate").and_then(Value::as_str),
             body.get("includeBalance")
-                .and_then(Value::as_bool)
+                .map(javascript_truthy)
                 .unwrap_or(true),
         )
         .await
@@ -262,6 +321,16 @@ fn is_safe_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, b'_' | b'-'))
+}
+
+fn javascript_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64() != Some(0.0),
+        Value::String(value) => !value.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
 }
 
 fn body_id<'a>(body: &'a Value, key: &str) -> Result<&'a str, String> {
@@ -354,5 +423,41 @@ mod tests {
         assert_eq!(redirect_host(&headers).unwrap(), "http://127.0.0.1:5007");
         headers.insert("origin", "file://local".parse().unwrap());
         assert!(redirect_host(&headers).is_err());
+    }
+
+    #[test]
+    fn matches_express_json_and_javascript_truthiness() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(request_body(&headers, br#"{"token":"ignored"}"#), json!({}));
+        headers.insert(
+            "content-type",
+            "application/json; charset=utf-8".parse().unwrap(),
+        );
+        assert_eq!(
+            request_body(&headers, br#"{"token":"body-token"}"#),
+            json!({ "token": "body-token" })
+        );
+        assert_eq!(request_body(&headers, b""), json!({}));
+        for content_type in ["Application/JSON", "application/json ; charset=utf-8"] {
+            headers.insert("content-type", content_type.parse().unwrap());
+            assert_eq!(
+                request_body(&headers, br#"{"country":"FI"}"#)["country"],
+                "FI"
+            );
+        }
+
+        for value in [json!(null), json!(false), json!(0), json!(" ")] {
+            assert_eq!(javascript_truthy(&value), value == json!(" "));
+        }
+        for value in [json!(true), json!(1), json!("false"), json!([]), json!({})] {
+            assert!(javascript_truthy(&value));
+        }
+
+        let response = express_not_found(&Method::POST, "/gocardless/link");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
     }
 }

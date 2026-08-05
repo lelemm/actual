@@ -85,7 +85,7 @@ pub struct OpenIdIssuer {
 #[serde(untagged)]
 pub enum TokenExpiration {
     Named(String),
-    Seconds(u64),
+    Seconds(f64),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -116,6 +116,7 @@ pub fn load() -> Result<Config, String> {
     let environment = env::var("NODE_ENV").unwrap_or_else(|_| "development".into());
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let default_data_dir = env::var_os("ACTUAL_DATA_DIR")
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             if Path::new("/data").exists() {
@@ -125,7 +126,9 @@ pub fn load() -> Result<Config, String> {
             }
         });
     let mut value = default_value(&project_root, &default_data_dir, &environment);
+    apply_port_default(&mut value, env::var("PORT").ok());
     let config_path = env::var_os("ACTUAL_CONFIG_PATH")
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             let project_config = project_root.join("config.json");
@@ -141,6 +144,7 @@ pub fn load() -> Result<Config, String> {
         merge(&mut value, file);
     }
     apply_environment(&mut value)?;
+    coerce_loaded_values(&mut value)?;
     let config = from_value(value)?;
     validate(&config)?;
     Ok(config)
@@ -208,6 +212,78 @@ fn merge(target: &mut Value, source: Value) {
         }
         (target, source) => *target = source,
     }
+}
+
+fn apply_port_default(value: &mut Value, port: Option<String>) {
+    if let Some(port) = port.filter(|port| !port.is_empty()) {
+        value["port"] = Value::String(port);
+    }
+}
+
+fn coerce_loaded_values(value: &mut Value) -> Result<(), String> {
+    for path in [
+        &["port"][..],
+        &["upload", "fileSizeSyncLimitMB"],
+        &["upload", "syncEncryptedFileSizeLimitMB"],
+        &["upload", "fileSizeLimitMB"],
+    ] {
+        coerce_integer(value, path)?;
+    }
+    for path in [
+        &["allowedLoginMethods"][..],
+        &["trustedProxies"],
+        &["trustedAuthProxies"],
+    ] {
+        coerce_string(value, path, array)?;
+    }
+    for path in [&["enforceOpenId"][..], &["corsProxy", "enabled"]] {
+        coerce_string(value, path, boolean)?;
+    }
+    coerce_string(value, &["token_expiration"], token_expiration)
+}
+
+fn coerce_integer(value: &mut Value, path: &[&str]) -> Result<(), String> {
+    coerce_integer_number(value, path)?;
+    coerce_string(value, path, number)
+}
+
+fn coerce_integer_number(value: &mut Value, path: &[&str]) -> Result<(), String> {
+    let Some(target) = value_at_mut(value, path) else {
+        return Ok(());
+    };
+    if let Value::Number(number) = target
+        && number.as_u64().is_none()
+        && let Some(number) = number
+            .as_f64()
+            .filter(|number| number.is_finite() && *number >= 0.0 && number.fract() == 0.0)
+            .filter(|number| *number <= u64::MAX as f64)
+    {
+        *target = json!(number as u64);
+    }
+    Ok(())
+}
+
+fn coerce_string(
+    value: &mut Value,
+    path: &[&str],
+    parse: fn(String) -> Result<Value, String>,
+) -> Result<(), String> {
+    let Some(target) = value_at_mut(value, path) else {
+        return Ok(());
+    };
+    if let Value::String(raw) = target {
+        *target = parse(std::mem::take(raw))?;
+    }
+    Ok(())
+}
+
+fn value_at_mut<'a>(value: &'a mut Value, path: &[&str]) -> Option<&'a mut Value> {
+    let mut target = value;
+    for key in path {
+        let next = target.get_mut(*key)?;
+        target = next;
+    }
+    Some(target)
 }
 
 fn apply_environment(value: &mut Value) -> Result<(), String> {
@@ -323,28 +399,38 @@ fn string(value: String) -> Result<Value, String> {
 }
 
 fn number(value: String) -> Result<Value, String> {
-    value
+    let value = value.trim_start();
+    let (is_negative, value) = match value.as_bytes().first() {
+        Some(b'-') => (true, &value[1..]),
+        Some(b'+') => (false, &value[1..]),
+        _ => (false, value),
+    };
+    let digits = value
+        .as_bytes()
+        .iter()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    let value = value
+        .get(..digits)
+        .ok_or_else(|| "Invalid non-negative integer".to_owned())?;
+    let parsed = value
         .parse::<u64>()
-        .map(|value| Value::Number(value.into()))
-        .map_err(|_| format!("Invalid non-negative integer: {value}"))
+        .map_err(|_| format!("Invalid non-negative integer: {value}"))?;
+    if is_negative && parsed != 0 {
+        return Err(format!("Invalid non-negative integer: -{value}"));
+    }
+    Ok(Value::Number(parsed.into()))
 }
 
 fn boolean(value: String) -> Result<Value, String> {
-    match value.as_str() {
-        "true" | "1" => Ok(Value::Bool(true)),
-        "false" | "0" => Ok(Value::Bool(false)),
-        _ => Err(format!("Invalid boolean: {value}")),
-    }
+    Ok(Value::Bool(!value.eq_ignore_ascii_case("false")))
 }
 
 fn array(value: String) -> Result<Value, String> {
-    if value.trim_start().starts_with('[') {
-        return serde_json::from_str(&value).map_err(|error| error.to_string());
-    }
     Ok(Value::Array(
         value
             .split(',')
-            .map(|value| Value::String(value.trim().to_owned()))
+            .map(|value| Value::String(value.to_owned()))
             .collect(),
     ))
 }
@@ -353,7 +439,30 @@ fn token_expiration(value: String) -> Result<Value, String> {
     if matches!(value.as_str(), "never" | "openid-provider") {
         return Ok(Value::String(value));
     }
-    number(value)
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(json!(0));
+    }
+    let parsed = match [(("0x", "0X"), 16), (("0o", "0O"), 8), (("0b", "0B"), 2)]
+        .into_iter()
+        .find_map(|((lower, upper), radix)| {
+            value
+                .strip_prefix(lower)
+                .or_else(|| value.strip_prefix(upper))
+                .map(|value| (value, radix))
+        }) {
+        Some((value, radix)) if !value.is_empty() => {
+            num_bigint::BigUint::parse_bytes(value.as_bytes(), radix)
+                .and_then(|number| number.to_str_radix(10).parse::<f64>().ok())
+        }
+        Some(_) => None,
+        None => value.parse::<f64>().ok(),
+    };
+    parsed
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .and_then(serde_json::Number::from_f64)
+        .map(Value::Number)
+        .ok_or_else(|| format!("Invalid token_expiration value: {value}"))
 }
 
 fn validate(config: &Config) -> Result<(), String> {
@@ -390,6 +499,11 @@ fn validate(config: &Config) -> Result<(), String> {
     {
         return Err(format!("Invalid token_expiration value: {value}"));
     }
+    if let TokenExpiration::Seconds(value) = config.token_expiration
+        && (!value.is_finite() || value < 0.0)
+    {
+        return Err(format!("Invalid token_expiration value: {value}"));
+    }
     if !matches!(config.user_creation_mode.as_str(), "manual" | "login") {
         return Err(format!(
             "Invalid userCreationMode: {}",
@@ -422,9 +536,79 @@ mod tests {
 
     #[test]
     fn parses_every_token_expiration_form() {
-        assert_eq!(token_expiration("86400".into()).unwrap(), json!(86400));
+        for (value, expected) in [
+            ("86400", 86400.0),
+            ("1e3", 1000.0),
+            ("0x10", 16.0),
+            ("0x24ded6a2c8489d3", 166_049_801_551_776_220.0),
+            ("0b10", 2.0),
+            ("0o10", 8.0),
+            ("0.5", 0.5),
+            (" ", 0.0),
+        ] {
+            assert_eq!(
+                token_expiration(value.into()).unwrap().as_f64(),
+                Some(expected)
+            );
+        }
         assert_eq!(token_expiration("never".into()).unwrap(), json!("never"));
+        assert_eq!(
+            token_expiration("openid-provider".into()).unwrap(),
+            json!("openid-provider")
+        );
+        assert!(token_expiration("60minutes".into()).is_err());
         assert!(token_expiration("-1".into()).is_err());
+        assert!(token_expiration("Infinity".into()).is_err());
+        assert!(token_expiration("1e309".into()).is_err());
+        for value in ["0x", "0X", "0o", "0O", "0b", "0B"] {
+            assert!(token_expiration(value.into()).is_err());
+        }
+    }
+
+    #[test]
+    fn coerces_values_like_convict() {
+        assert_eq!(number("  +20MB".into()).unwrap(), json!(20));
+        assert_eq!(number("1e2".into()).unwrap(), json!(1));
+        assert_eq!(number("-0".into()).unwrap(), json!(0));
+        assert!(number("-1".into()).is_err());
+        assert_eq!(boolean("FALSE".into()).unwrap(), json!(false));
+        assert_eq!(boolean("0".into()).unwrap(), json!(true));
+        assert_eq!(
+            array("password, header".into()).unwrap(),
+            json!(["password", " header"])
+        );
+    }
+
+    #[test]
+    fn coerces_string_values_loaded_from_config_files() {
+        let mut value = default_value(Path::new("/tmp/project"), Path::new("/tmp/data"), "test");
+        value["port"] = json!(5007.0);
+        value["upload"]["fileSizeLimitMB"] = json!("21MB");
+        value["enforceOpenId"] = json!("0");
+        value["allowedLoginMethods"] = json!("password,header");
+        value["token_expiration"] = json!("6e1");
+
+        coerce_loaded_values(&mut value).unwrap();
+        let config = from_value(value).unwrap();
+
+        assert_eq!(config.port, 5007);
+        assert_eq!(config.upload.file_size_limit_mb, 21);
+        assert!(config.enforce_open_id);
+        assert_eq!(config.allowed_login_methods, ["password", "header"]);
+        assert!(matches!(
+            config.token_expiration,
+            TokenExpiration::Seconds(60.0)
+        ));
+    }
+
+    #[test]
+    fn legacy_port_is_only_a_default() {
+        let mut value = default_value(Path::new("/tmp/project"), Path::new("/tmp/data"), "test");
+        apply_port_default(&mut value, Some("5007".into()));
+        assert_eq!(value["port"], json!("5007"));
+
+        merge(&mut value, json!({ "port": 5008 }));
+        assert_eq!(value["port"], json!(5008));
     }
 
     #[test]

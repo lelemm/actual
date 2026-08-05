@@ -17,7 +17,7 @@ use crate::{
     account_db::{self, AccountError},
     accounts::openid,
     app::AppState,
-    util::validate_user::{SessionError, validate_auth_header, validate_session},
+    util::validate_user::{SessionError, client_ip, validate_auth_header, validate_session},
 };
 
 pub fn router() -> Router<AppState> {
@@ -139,28 +139,31 @@ async fn needs_bootstrap(State(state): State<AppState>) -> Response {
 async fn bootstrap(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    let attempt = match state.auth_rate_limiter.begin(peer.ip()) {
+    let address = client_ip(peer, &headers, &state.config.trusted_proxies).unwrap_or(peer.ip());
+    let attempt = match state.auth_rate_limiter.begin(address) {
         Ok(attempt) => attempt,
         Err(response) => return response,
     };
     let limiter = state.auth_rate_limiter.clone();
-    let response =
-        match tokio::task::spawn_blocking(move || account_db::bootstrap(&state.database, &body))
-            .await
-        {
-            Ok(Ok(token)) => {
-                Json(json!({ "status": "ok", "data": { "token": token } })).into_response()
-            }
-            Ok(Err(AccountError::Reason(reason))) => (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "status": "error", "reason": reason })),
-            )
-                .into_response(),
-            Ok(Err(error)) => internal_error(error),
-            Err(_) => internal_error_message(),
-        };
+    let response = match tokio::task::spawn_blocking(move || {
+        account_db::bootstrap(&state.database, &body, &state.config.token_expiration)
+    })
+    .await
+    {
+        Ok(Ok(token)) => {
+            Json(json!({ "status": "ok", "data": { "token": token } })).into_response()
+        }
+        Ok(Err(AccountError::Reason(reason))) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "status": "error", "reason": reason })),
+        )
+            .into_response(),
+        Ok(Err(error)) => internal_error(error),
+        Err(_) => internal_error_message(),
+    };
     limiter.finish(response, attempt)
 }
 
@@ -177,7 +180,8 @@ async fn login(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Response {
-    let attempt = match state.auth_rate_limiter.begin(peer.ip()) {
+    let address = client_ip(peer, &headers, &state.config.trusted_proxies).unwrap_or(peer.ip());
+    let attempt = match state.auth_rate_limiter.begin(address) {
         Ok(attempt) => attempt,
         Err(response) => return response,
     };
@@ -271,7 +275,11 @@ async fn login_inner(
             .to_owned()
     };
     match tokio::task::spawn_blocking(move || {
-        account_db::login_with_password(&state.database, Some(&password))
+        account_db::login_with_password(
+            &state.database,
+            Some(&password),
+            &state.config.token_expiration,
+        )
     })
     .await
     {
@@ -317,7 +325,7 @@ async fn change_password(
         )
             .into_response();
     }
-    if session.auth_method != "password" {
+    if session.auth_method.as_deref() != Some("password") {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({
@@ -462,3 +470,7 @@ fn internal_error_message() -> Response {
     )
         .into_response()
 }
+
+#[cfg(test)]
+#[path = "app_account/tests.rs"]
+mod tests;

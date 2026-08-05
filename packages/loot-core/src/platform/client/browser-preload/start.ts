@@ -9,6 +9,7 @@ export type StartBackendInit = {
   isDev: boolean;
   publicUrl?: string;
   hash?: string;
+  embeddedServerUrl?: string;
 };
 
 export type StartBackendOptions = {

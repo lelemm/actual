@@ -184,7 +184,7 @@ async function setupDocumentsDir() {
   fs._setDocumentDir(documentDir);
 }
 
-export async function initApp(isDev, socketName) {
+export async function initApp(isDev, socketName, embeddedServerUrl) {
   await sqlite.init();
   asyncStorage.init();
   await fs.init();
@@ -207,7 +207,12 @@ export async function initApp(isDev, socketName) {
     }
   }
 
-  const url = await asyncStorage.getItem('server-url');
+  let url = await asyncStorage.getItem('server-url');
+
+  if (!url && embeddedServerUrl) {
+    url = embeddedServerUrl;
+    await asyncStorage.setItem('server-url', url);
+  }
 
   if (!url) {
     await asyncStorage.removeItem('user-token');

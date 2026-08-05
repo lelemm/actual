@@ -227,7 +227,10 @@ export async function run() {
       sendServerStartedMessage();
     });
   } else {
-    app.listen(port, hostname, () => {
+    app.listen(port, hostname, error => {
+      if (error) {
+        throw error;
+      }
       sendServerStartedMessage();
     });
   }

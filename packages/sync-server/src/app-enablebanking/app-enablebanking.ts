@@ -185,7 +185,11 @@ const pendingAuths = new Map<string, PendingAuth>();
 const completedAuths = new Map<string, unknown>();
 let nextWaiterId = 0;
 
-const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const configuredPollTimeout = Number(process.env.ENABLEBANKING_POLL_TIMEOUT_MS);
+const POLL_TIMEOUT_MS =
+  Number.isSafeInteger(configuredPollTimeout) && configuredPollTimeout >= 0
+    ? configuredPollTimeout
+    : 5 * 60 * 1000;
 const COMPLETED_AUTH_TTL_MS = 30 * 1000; // 30 seconds
 
 function cleanupPendingAuth(state: string, waiterId?: string) {

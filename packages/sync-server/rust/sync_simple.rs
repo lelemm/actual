@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use chrono::DateTime;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 use crate::{load_config::Config, proto::MessageEnvelope, util::paths::get_path_for_group_file};
 
@@ -14,8 +14,28 @@ pub struct TrieNode {
     one: Option<Box<TrieNode>>,
     #[serde(rename = "2", skip_serializing_if = "Option::is_none")]
     two: Option<Box<TrieNode>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<u32>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_hash",
+        skip_serializing_if = "Option::is_none"
+    )]
+    hash: Option<i32>,
+}
+
+fn deserialize_hash<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<i64>::deserialize(deserializer)?;
+    value
+        .map(|value| {
+            if (i32::MIN as i64..=u32::MAX as i64).contains(&value) {
+                Ok(value as i32)
+            } else {
+                Err(D::Error::custom("merkle hash is outside the int32 range"))
+            }
+        })
+        .transpose()
 }
 
 pub fn sync(
@@ -65,9 +85,9 @@ pub fn sync(
             ],
         )?;
         if changes > 0 {
-            let (millis, hash) = parse_timestamp(&message.timestamp)
+            let (millis, canonical) = parse_timestamp(&message.timestamp)
                 .ok_or_else(|| format!("Invalid timestamp: {}", message.timestamp))?;
-            trie = insert(trie, millis, hash);
+            trie = insert(trie, millis, murmur3(canonical.as_bytes()) as i32);
         }
     }
     trie = prune(trie);
@@ -93,27 +113,48 @@ fn get_merkle(connection: &Connection) -> Result<TrieNode, Box<dyn std::error::E
     })
 }
 
-fn parse_timestamp(timestamp: &str) -> Option<(i64, u32)> {
+fn parse_timestamp(timestamp: &str) -> Option<(i64, String)> {
     let parts = timestamp.split('-').collect::<Vec<_>>();
-    if parts.len() != 5 || parts[4].len() > 16 || u16::from_str_radix(parts[3], 16).is_err() {
+    let counter = parts.get(3)?.trim_start();
+    let counter = counter.strip_prefix('+').unwrap_or(counter);
+    let counter = counter
+        .strip_prefix("0x")
+        .or_else(|| counter.strip_prefix("0X"))
+        .unwrap_or(counter);
+    let counter_digits = counter
+        .chars()
+        .take_while(char::is_ascii_hexdigit)
+        .collect::<String>();
+    let counter = u32::from_str_radix(&counter_digits, 16).ok()?;
+    if parts.len() != 5 || parts[4].len() > 16 || counter > u16::MAX.into() {
         return None;
     }
     let date = parts[..3].join("-");
-    let millis = DateTime::parse_from_rfc3339(&date).ok()?.timestamp_millis();
+    let date = DateTime::parse_from_rfc3339(&date)
+        .ok()?
+        .with_timezone(&chrono::Utc);
+    let millis = date.timestamp_millis();
     if millis < 0 {
         return None;
     }
-    Some((millis, murmur3(timestamp.as_bytes())))
+    Some((
+        millis,
+        format!(
+            "{}-{counter:04X}-{:0>16}",
+            date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            parts[4]
+        ),
+    ))
 }
 
-fn insert(mut trie: TrieNode, millis: i64, hash: u32) -> TrieNode {
+fn insert(mut trie: TrieNode, millis: i64, hash: i32) -> TrieNode {
     trie.hash = Some(trie.hash.unwrap_or(0) ^ hash);
     let key = to_base3(millis / 60_000);
     insert_key(&mut trie, key.as_bytes(), hash);
     trie
 }
 
-fn insert_key(trie: &mut TrieNode, key: &[u8], hash: u32) {
+fn insert_key(trie: &mut TrieNode, key: &[u8], hash: i32) {
     let Some((&digit, rest)) = key.split_first() else {
         return;
     };
@@ -214,6 +255,45 @@ mod tests {
         assert_eq!(
             murmur3(b"2015-04-24T22:23:42.123Z-1000-0123456789ABCDEF"),
             2_838_536_857
+        );
+        assert_eq!(
+            parse_timestamp("2015-04-24T23:23:42.123+01:00-a-node")
+                .unwrap()
+                .1,
+            "2015-04-24T22:23:42.123Z-000A-000000000000node"
+        );
+        assert_eq!(
+            parse_timestamp("2015-04-24T22:23:42.123Z-0x10-node")
+                .unwrap()
+                .1,
+            "2015-04-24T22:23:42.123Z-0010-000000000000node"
+        );
+        assert_eq!(
+            parse_timestamp("2015-04-24T22:23:42.123Z-+10-node")
+                .unwrap()
+                .1,
+            "2015-04-24T22:23:42.123Z-0010-000000000000node"
+        );
+        assert!(parse_timestamp("2015-04-24T22:23:42.123Z--1-node").is_none());
+    }
+
+    #[test]
+    fn serializes_merkle_hashes_with_javascript_signed_int32_semantics() {
+        let trie = insert(TrieNode::default(), 0, 2_838_536_857_u32 as i32);
+        let json = serde_json::to_value(trie).unwrap();
+
+        assert_eq!(json["hash"].as_i64(), Some(-1_456_430_439));
+        assert_eq!(json["0"]["hash"].as_i64(), Some(-1_456_430_439));
+    }
+
+    #[test]
+    fn reads_unsigned_merkle_hashes_written_by_older_rust_builds() {
+        let trie: TrieNode = serde_json::from_str(r#"{"hash":2334141718}"#).unwrap();
+
+        assert_eq!(trie.hash, Some(-1_960_825_578));
+        assert_eq!(
+            serde_json::to_string(&trie).unwrap(),
+            r#"{"hash":-1960825578}"#
         );
     }
 }

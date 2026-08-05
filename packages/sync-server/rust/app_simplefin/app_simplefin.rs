@@ -1,12 +1,14 @@
 use axum::{
     Json, Router,
     extract::State,
+    http::{HeaderValue, header},
+    middleware,
     response::{IntoResponse, Response},
     routing::post,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::{Datelike, Local, NaiveDate, Offset, TimeZone, Utc};
-use reqwest::{StatusCode, Url, header};
+use reqwest::{StatusCode, Url};
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -23,6 +25,21 @@ pub fn router() -> Router<AppState> {
         .route("/status", post(status))
         .route("/accounts", post(accounts))
         .route("/transactions", post(transactions))
+        .layer(middleware::map_response(express_json_content_type))
+}
+
+async fn express_json_content_type(mut response: Response) -> Response {
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .is_some_and(|value| value.as_bytes().starts_with(b"application/json"))
+    {
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        );
+    }
+    response
 }
 
 async fn status(State(state): State<AppState>, ValidatedSession(_): ValidatedSession) -> Response {
@@ -48,11 +65,13 @@ async fn accounts(
         Err(response) => return response,
     };
     match get_accounts(&state, &access_key, None, None, None, true).await {
-        Ok(results) => Json(json!({
-            "status": "ok",
-            "data": { "accounts": results.get("accounts").cloned().unwrap_or(Value::Null) }
-        }))
-        .into_response(),
+        Ok(results) => {
+            let mut data = Map::new();
+            if let Some(accounts) = results.get("accounts") {
+                data.insert("accounts".into(), accounts.clone());
+            }
+            Json(json!({ "status": "ok", "data": data })).into_response()
+        }
         Err(error) => {
             eprintln!("SimpleFIN accounts error: {error}");
             server_down()
@@ -81,8 +100,13 @@ async fn transactions(
         None => return internal_error(),
     };
     let uses_arrays = account_id.is_array();
-    if uses_arrays != start_date.is_array() || account_ids.len() != start_dates.len() {
-        return internal_error();
+    if uses_arrays != start_date.is_array() {
+        return provider_internal_error(
+            "accountId and startDate must either both be arrays or both be strings",
+        );
+    }
+    if uses_arrays && account_ids.len() != start_dates.len() {
+        return provider_internal_error("accountId and startDate arrays must be the same length");
     }
     let parsed_dates = match start_dates
         .iter()
@@ -113,6 +137,10 @@ async fn transactions(
             return server_down();
         }
     };
+
+    if results.get("errors").is_none() {
+        return provider_internal_error("Cannot read properties of undefined (reading 'find')");
+    }
 
     let sferrors = results
         .get("errors")
@@ -263,7 +291,11 @@ async fn get_accounts(
                 return Err("Forbidden".into());
             }
             let text = response.text().await.map_err(|error| error.to_string())?;
-            return serde_json::from_str::<Value>(&text).map_err(|error| error.to_string());
+            let value = serde_json::from_str::<Value>(&text).map_err(|error| error.to_string())?;
+            if !value.is_object() && !value.is_array() {
+                return Err("SimpleFIN response does not support properties".into());
+            }
+            return Ok(value);
         }
         if hop == 5 {
             return Err("Too many redirects".into());
@@ -271,7 +303,7 @@ async fn get_accounts(
         let next = url
             .join(location.expect("checked location"))
             .map_err(|error| error.to_string())?;
-        include_authorization = next.origin() == url.origin();
+        include_authorization &= next.origin() == url.origin();
         url = next;
     }
     Err("Too many redirects".into())
@@ -565,4 +597,15 @@ fn internal_error() -> Response {
         Json(json!({ "status": "error", "reason": "internal-error" })),
     )
         .into_response()
+}
+
+fn provider_internal_error(reason: &str) -> Response {
+    Json(json!({
+        "status": "ok",
+        "data": {
+            "error_code": "INTERNAL_ERROR",
+            "error_type": reason,
+        }
+    }))
+    .into_response()
 }

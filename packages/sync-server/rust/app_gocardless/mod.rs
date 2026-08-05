@@ -4,3 +4,6 @@ pub mod banks;
 pub mod errors;
 pub mod services;
 pub mod utils;
+
+#[cfg(test)]
+mod tests;

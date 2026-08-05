@@ -19,3 +19,16 @@ pub fn up(connection: &Connection) -> rusqlite::Result<()> {
          COMMIT;",
     )
 }
+
+pub fn down(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch(
+        "BEGIN TRANSACTION;
+         ALTER TABLE auth RENAME TO auth_temp;
+         CREATE TABLE auth (password TEXT);
+         INSERT INTO auth (password)
+           SELECT extra_data FROM auth_temp WHERE method = 'password';
+         DROP TABLE auth_temp;
+         DROP TABLE pending_openid_requests;
+         COMMIT;",
+    )
+}

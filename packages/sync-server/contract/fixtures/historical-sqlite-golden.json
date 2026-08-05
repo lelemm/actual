@@ -1,0 +1,599 @@
+{
+  "version": 2,
+  "migrationTitles": [
+    "1694360000000-create-folders.js",
+    "1694360479680-create-account-db.js",
+    "1694362247011-create-secret-table.js",
+    "1702667624000-rename-nordigen-secrets.js",
+    "1718889148000-openid.js",
+    "1719409568000-multiuser.js",
+    "1763873568237-server-global-prefs.js",
+    "1763873600000-backfill-files-owner.js"
+  ],
+  "storedPaths": {
+    "migrationState": ".migrate",
+    "accountDatabase": "server-files/account.sqlite",
+    "messageDatabasePattern": "user-files/group-{groupId}.sqlite"
+  },
+  "accountBaseSql": "CREATE TABLE auth (password TEXT PRIMARY KEY); CREATE TABLE sessions (token TEXT PRIMARY KEY); CREATE TABLE files (id TEXT PRIMARY KEY, group_id TEXT, sync_version SMALLINT, encrypt_meta TEXT, encrypt_keyid TEXT, encrypt_salt TEXT, encrypt_test TEXT, deleted BOOLEAN DEFAULT FALSE, name TEXT); INSERT INTO auth VALUES ('legacy-password-hash'); INSERT INTO sessions VALUES ('legacy-session'); INSERT INTO files (id, group_id, sync_version, encrypt_meta, encrypt_keyid, encrypt_salt, encrypt_test, name) VALUES ('file-id', 'group-id', 7, 'encrypt-meta', 'encrypt-key-id', 'encrypt-salt', 'encrypt-test', 'Budget');",
+  "accountSteps": [
+    {
+      "completed": 3,
+      "sql": "CREATE TABLE secrets (name TEXT PRIMARY KEY, value BLOB); INSERT INTO secrets VALUES ('nordigen_secretId', X'00017f80ff'); INSERT INTO secrets VALUES ('nordigen_secretKey', X'ff002a');"
+    },
+    {
+      "completed": 4,
+      "sql": "UPDATE secrets SET name = 'gocardless_secretId' WHERE name = 'nordigen_secretId'; UPDATE secrets SET name = 'gocardless_secretKey' WHERE name = 'nordigen_secretKey';"
+    },
+    {
+      "completed": 5,
+      "sql": "CREATE TABLE auth_new (method TEXT PRIMARY KEY, display_name TEXT, extra_data TEXT, active INTEGER); INSERT INTO auth_new SELECT 'password', 'Password', password, 1 FROM auth; DROP TABLE auth; ALTER TABLE auth_new RENAME TO auth; CREATE TABLE pending_openid_requests (state TEXT PRIMARY KEY, code_verifier TEXT, return_url TEXT, expiry_time INTEGER); INSERT INTO pending_openid_requests VALUES ('openid-state', 'verifier', 'actual://return', 4102444800000);"
+    },
+    {
+      "completed": 6,
+      "sql": "CREATE TABLE users (id TEXT PRIMARY KEY, user_name TEXT, display_name TEXT, role TEXT, enabled INTEGER NOT NULL DEFAULT 1, owner INTEGER NOT NULL DEFAULT 0); CREATE TABLE user_access (user_id TEXT, file_id TEXT, PRIMARY KEY (user_id, file_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (file_id) REFERENCES files(id)); ALTER TABLE files ADD COLUMN owner TEXT; ALTER TABLE sessions ADD COLUMN expires_at INTEGER; ALTER TABLE sessions ADD COLUMN user_id TEXT; ALTER TABLE sessions ADD COLUMN auth_method TEXT; INSERT INTO users (id, user_name, display_name, role) VALUES ('000-admin', '', '', 'ADMIN'); UPDATE users SET owner = 1 WHERE id = '000-admin'; INSERT INTO users (id, role) VALUES ('zzz-default', 'USER'); UPDATE sessions SET user_id = '000-admin', expires_at = -1, auth_method = 'password'; INSERT INTO user_access VALUES ('000-admin', 'file-id');"
+    },
+    {
+      "completed": 7,
+      "sql": "CREATE TABLE server_prefs (key TEXT NOT NULL PRIMARY KEY, value TEXT); INSERT INTO server_prefs VALUES ('prefs-key', '{\"enabled\":true}'); INSERT INTO server_prefs VALUES ('prefs-null', NULL);"
+    },
+    {
+      "completed": 8,
+      "sql": "UPDATE files SET owner = '000-admin';"
+    }
+  ],
+  "currentAccountTables": [
+    "auth",
+    "files",
+    "pending_openid_requests",
+    "secrets",
+    "server_prefs",
+    "sessions",
+    "user_access",
+    "users"
+  ],
+  "currentAccountSchema": {
+    "auth": [
+      "method|TEXT|0||1",
+      "display_name|TEXT|0||0",
+      "extra_data|TEXT|0||0",
+      "active|INTEGER|0||0"
+    ],
+    "files": [
+      "id|TEXT|0||1",
+      "group_id|TEXT|0||0",
+      "sync_version|SMALLINT|0||0",
+      "encrypt_meta|TEXT|0||0",
+      "encrypt_keyid|TEXT|0||0",
+      "encrypt_salt|TEXT|0||0",
+      "encrypt_test|TEXT|0||0",
+      "deleted|BOOLEAN|0|FALSE|0",
+      "name|TEXT|0||0",
+      "owner|TEXT|0||0"
+    ],
+    "pending_openid_requests": [
+      "state|TEXT|0||1",
+      "code_verifier|TEXT|0||0",
+      "return_url|TEXT|0||0",
+      "expiry_time|INTEGER|0||0"
+    ],
+    "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+    "server_prefs": ["key|TEXT|1||1", "value|TEXT|0||0"],
+    "sessions": [
+      "token|TEXT|0||1",
+      "expires_at|INTEGER|0||0",
+      "user_id|TEXT|0||0",
+      "auth_method|TEXT|0||0"
+    ],
+    "user_access": ["user_id|TEXT|0||1", "file_id|TEXT|0||2"],
+    "users": [
+      "id|TEXT|0||1",
+      "user_name|TEXT|0||0",
+      "display_name|TEXT|0||0",
+      "role|TEXT|0||0",
+      "enabled|INTEGER|1|1|0",
+      "owner|INTEGER|1|0|0"
+    ]
+  },
+  "stateVariants": [
+    { "id": "absent", "completed": 0, "format": "absent", "result": "success" },
+    { "id": "empty", "completed": 0, "format": "empty", "result": "success" },
+    {
+      "id": "legacy-position",
+      "completed": 5,
+      "format": "legacy-position",
+      "result": "success"
+    },
+    {
+      "id": "unknown-unrun",
+      "completed": 3,
+      "format": "unknown-unrun",
+      "title": "1694363000000-never-shipped.js",
+      "result": "success"
+    },
+    {
+      "id": "unknown-run",
+      "completed": 8,
+      "format": "unknown-run",
+      "title": "1694363000000-missing.js",
+      "result": "missing-migration",
+      "expectedError": "Missing migration file: 1694363000000-missing.js"
+    }
+  ],
+  "rollback": {
+    "completed": 5,
+    "conflictSql": "CREATE TABLE user_access (dummy TEXT);",
+    "expectedLastRun": "1718889148000-openid.js",
+    "expectedSessionsColumns": ["token"],
+    "expectedUserAccessColumns": ["dummy"]
+  },
+  "downgradeStates": [
+    {
+      "title": "1763873600000-backfill-files-owner.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": [
+        "auth",
+        "files",
+        "pending_openid_requests",
+        "secrets",
+        "server_prefs",
+        "sessions",
+        "user_access",
+        "users"
+      ],
+      "schema": {
+        "auth": [
+          "method|TEXT|0||1",
+          "display_name|TEXT|0||0",
+          "extra_data|TEXT|0||0",
+          "active|INTEGER|0||0"
+        ],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0",
+          "owner|TEXT|0||0"
+        ],
+        "pending_openid_requests": [
+          "state|TEXT|0||1",
+          "code_verifier|TEXT|0||0",
+          "return_url|TEXT|0||0",
+          "expiry_time|INTEGER|0||0"
+        ],
+        "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+        "server_prefs": ["key|TEXT|1||1", "value|TEXT|0||0"],
+        "sessions": [
+          "token|TEXT|0||1",
+          "expires_at|INTEGER|0||0",
+          "user_id|TEXT|0||0",
+          "auth_method|TEXT|0||0"
+        ],
+        "user_access": ["user_id|TEXT|0||1", "file_id|TEXT|0||2"],
+        "users": [
+          "id|TEXT|0||1",
+          "user_name|TEXT|0||0",
+          "display_name|TEXT|0||0",
+          "role|TEXT|0||0",
+          "enabled|INTEGER|1|1|0",
+          "owner|INTEGER|1|0|0"
+        ]
+      },
+      "rows": {
+        "auth": [["password", "Password", "legacy-password-hash", 1]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget",
+            "000-admin"
+          ]
+        ],
+        "pending_openid_requests": [
+          ["openid-state", "verifier", "actual://return", 4102444800000]
+        ],
+        "secrets": [
+          ["gocardless_secretId", { "blobHex": "00017f80ff" }],
+          ["gocardless_secretKey", { "blobHex": "ff002a" }]
+        ],
+        "server_prefs": [
+          ["prefs-key", "{\"enabled\":true}"],
+          ["prefs-null", null]
+        ],
+        "sessions": [["legacy-session", -1, "000-admin", "password"]],
+        "user_access": [["000-admin", "file-id"]],
+        "users": [
+          ["000-admin", "", "", "ADMIN", 1, 1],
+          ["zzz-default", null, null, "USER", 1, 0]
+        ]
+      }
+    },
+    {
+      "title": "1763873568237-server-global-prefs.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": [
+        "auth",
+        "files",
+        "pending_openid_requests",
+        "secrets",
+        "sessions",
+        "user_access",
+        "users"
+      ],
+      "schema": {
+        "auth": [
+          "method|TEXT|0||1",
+          "display_name|TEXT|0||0",
+          "extra_data|TEXT|0||0",
+          "active|INTEGER|0||0"
+        ],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0",
+          "owner|TEXT|0||0"
+        ],
+        "pending_openid_requests": [
+          "state|TEXT|0||1",
+          "code_verifier|TEXT|0||0",
+          "return_url|TEXT|0||0",
+          "expiry_time|INTEGER|0||0"
+        ],
+        "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+        "sessions": [
+          "token|TEXT|0||1",
+          "expires_at|INTEGER|0||0",
+          "user_id|TEXT|0||0",
+          "auth_method|TEXT|0||0"
+        ],
+        "user_access": ["user_id|TEXT|0||1", "file_id|TEXT|0||2"],
+        "users": [
+          "id|TEXT|0||1",
+          "user_name|TEXT|0||0",
+          "display_name|TEXT|0||0",
+          "role|TEXT|0||0",
+          "enabled|INTEGER|1|1|0",
+          "owner|INTEGER|1|0|0"
+        ]
+      },
+      "rows": {
+        "auth": [["password", "Password", "legacy-password-hash", 1]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget",
+            "000-admin"
+          ]
+        ],
+        "pending_openid_requests": [
+          ["openid-state", "verifier", "actual://return", 4102444800000]
+        ],
+        "secrets": [
+          ["gocardless_secretId", { "blobHex": "00017f80ff" }],
+          ["gocardless_secretKey", { "blobHex": "ff002a" }]
+        ],
+        "sessions": [["legacy-session", -1, "000-admin", "password"]],
+        "user_access": [["000-admin", "file-id"]],
+        "users": [
+          ["000-admin", "", "", "ADMIN", 1, 1],
+          ["zzz-default", null, null, "USER", 1, 0]
+        ]
+      }
+    },
+    {
+      "title": "1719409568000-multiuser.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": [
+        "auth",
+        "files",
+        "pending_openid_requests",
+        "secrets",
+        "sessions"
+      ],
+      "schema": {
+        "auth": [
+          "method|TEXT|0||1",
+          "display_name|TEXT|0||0",
+          "extra_data|TEXT|0||0",
+          "active|INTEGER|0||0"
+        ],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0"
+        ],
+        "pending_openid_requests": [
+          "state|TEXT|0||1",
+          "code_verifier|TEXT|0||0",
+          "return_url|TEXT|0||0",
+          "expiry_time|INTEGER|0||0"
+        ],
+        "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+        "sessions": ["token|TEXT|0||1"]
+      },
+      "rows": {
+        "auth": [["password", "Password", "legacy-password-hash", 1]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget"
+          ]
+        ],
+        "pending_openid_requests": [
+          ["openid-state", "verifier", "actual://return", 4102444800000]
+        ],
+        "secrets": [
+          ["gocardless_secretId", { "blobHex": "00017f80ff" }],
+          ["gocardless_secretKey", { "blobHex": "ff002a" }]
+        ],
+        "sessions": [["legacy-session"]]
+      }
+    },
+    {
+      "title": "1718889148000-openid.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": ["auth", "files", "secrets", "sessions"],
+      "schema": {
+        "auth": ["password|TEXT|0||0"],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0"
+        ],
+        "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+        "sessions": ["token|TEXT|0||1"]
+      },
+      "rows": {
+        "auth": [["legacy-password-hash"]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget"
+          ]
+        ],
+        "secrets": [
+          ["gocardless_secretId", { "blobHex": "00017f80ff" }],
+          ["gocardless_secretKey", { "blobHex": "ff002a" }]
+        ],
+        "sessions": [["legacy-session"]]
+      }
+    },
+    {
+      "title": "1702667624000-rename-nordigen-secrets.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": ["auth", "files", "secrets", "sessions"],
+      "schema": {
+        "auth": ["password|TEXT|0||0"],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0"
+        ],
+        "secrets": ["name|TEXT|0||1", "value|BLOB|0||0"],
+        "sessions": ["token|TEXT|0||1"]
+      },
+      "rows": {
+        "auth": [["legacy-password-hash"]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget"
+          ]
+        ],
+        "secrets": [
+          ["nordigen_secretId", { "blobHex": "00017f80ff" }],
+          ["nordigen_secretKey", { "blobHex": "ff002a" }]
+        ],
+        "sessions": [["legacy-session"]]
+      }
+    },
+    {
+      "title": "1694362247011-create-secret-table.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": ["auth", "files", "sessions"],
+      "schema": {
+        "auth": ["password|TEXT|0||0"],
+        "files": [
+          "id|TEXT|0||1",
+          "group_id|TEXT|0||0",
+          "sync_version|SMALLINT|0||0",
+          "encrypt_meta|TEXT|0||0",
+          "encrypt_keyid|TEXT|0||0",
+          "encrypt_salt|TEXT|0||0",
+          "encrypt_test|TEXT|0||0",
+          "deleted|BOOLEAN|0|FALSE|0",
+          "name|TEXT|0||0"
+        ],
+        "sessions": ["token|TEXT|0||1"]
+      },
+      "rows": {
+        "auth": [["legacy-password-hash"]],
+        "files": [
+          [
+            "file-id",
+            "group-id",
+            7,
+            "encrypt-meta",
+            "encrypt-key-id",
+            "encrypt-salt",
+            "encrypt-test",
+            0,
+            "Budget"
+          ]
+        ],
+        "sessions": [["legacy-session"]]
+      }
+    },
+    {
+      "title": "1694360479680-create-account-db.js",
+      "directoriesExist": true,
+      "accountDatabaseExists": true,
+      "tables": [],
+      "schema": {},
+      "rows": {}
+    },
+    {
+      "title": "1694360000000-create-folders.js",
+      "directoriesExist": false,
+      "accountDatabaseExists": false,
+      "tables": [],
+      "schema": {},
+      "rows": {}
+    }
+  ],
+  "downgradeRollback": {
+    "conflictSql": "CREATE TABLE sessions_backup (sentinel TEXT); INSERT INTO sessions_backup VALUES ('keep-me');",
+    "expectedLastRun": "1719409568000-multiuser.js",
+    "expectedTables": [
+      "auth",
+      "files",
+      "pending_openid_requests",
+      "secrets",
+      "sessions",
+      "sessions_backup",
+      "user_access",
+      "users"
+    ],
+    "expectedConflictSchema": ["sentinel|TEXT|0||0"],
+    "expectedRows": {
+      "auth": [["password", "Password", "legacy-password-hash", 1]],
+      "files": [
+        [
+          "file-id",
+          "group-id",
+          7,
+          "encrypt-meta",
+          "encrypt-key-id",
+          "encrypt-salt",
+          "encrypt-test",
+          0,
+          "Budget",
+          "000-admin"
+        ]
+      ],
+      "pending_openid_requests": [
+        ["openid-state", "verifier", "actual://return", 4102444800000]
+      ],
+      "secrets": [
+        ["gocardless_secretId", { "blobHex": "00017f80ff" }],
+        ["gocardless_secretKey", { "blobHex": "ff002a" }]
+      ],
+      "sessions": [["legacy-session", -1, "000-admin", "password"]],
+      "sessions_backup": [["keep-me"]],
+      "user_access": [["000-admin", "file-id"]],
+      "users": [
+        ["000-admin", "", "", "ADMIN", 1, 1],
+        ["zzz-default", null, null, "USER", 1, 0]
+      ]
+    }
+  },
+  "messageSchema": {
+    "messages_binary": [
+      "timestamp|TEXT|0||1",
+      "is_encrypted|BOOLEAN|0||0",
+      "content|bytea|0||0"
+    ],
+    "messages_merkles": ["id|INTEGER|0||1", "merkle|TEXT|0||0"]
+  },
+  "messageStates": [
+    {
+      "id": "absent",
+      "groupId": "historical-absent",
+      "sql": null,
+      "expectedMessages": 0,
+      "expectedRows": [],
+      "expectedMerkle": "{}"
+    },
+    {
+      "id": "empty-current-schema",
+      "groupId": "historical-empty",
+      "sql": "CREATE TABLE messages_binary (timestamp TEXT PRIMARY KEY, is_encrypted BOOLEAN, content bytea); CREATE TABLE messages_merkles (id INTEGER PRIMARY KEY, merkle TEXT);",
+      "expectedMessages": 0,
+      "expectedRows": [],
+      "expectedMerkle": "{}"
+    },
+    {
+      "id": "populated-current-schema",
+      "groupId": "historical-populated",
+      "sql": "CREATE TABLE messages_binary (timestamp TEXT PRIMARY KEY, is_encrypted BOOLEAN, content bytea); CREATE TABLE messages_merkles (id INTEGER PRIMARY KEY, merkle TEXT); INSERT INTO messages_binary VALUES ('2026-01-01T00:00:00.001Z-0000-0000000000000001', 0, X'7b226d656d6f223a22636166c3a920f09f92b0222c22616d6f756e74223a2d31322e33347d'); INSERT INTO messages_merkles VALUES (1, '{\"hash\":471510395}');",
+      "expectedMessages": 1,
+      "expectedRows": [
+        {
+          "timestamp": "2026-01-01T00:00:00.001Z-0000-0000000000000001",
+          "isEncrypted": 0,
+          "contentHex": "7b226d656d6f223a22636166c3a920f09f92b0222c22616d6f756e74223a2d31322e33347d"
+        }
+      ],
+      "expectedMerkle": "{\"hash\":471510395}"
+    }
+  ]
+}

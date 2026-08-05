@@ -19,6 +19,18 @@ const shebangPlugin = (entryFile: string): Plugin => ({
 });
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^\.\/src\/migrations$/,
+        replacement: path.resolve(__dirname, 'src/migrations.ts'),
+      },
+      {
+        find: /^\.\/src\/app\.js$/,
+        replacement: path.resolve(__dirname, 'src/app.ts'),
+      },
+    ],
+  },
   ssr: {
     target: 'node',
     // Inline workspace deps that ship as TS source. Anything else

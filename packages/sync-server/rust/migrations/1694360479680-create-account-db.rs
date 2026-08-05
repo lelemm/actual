@@ -16,3 +16,11 @@ pub fn up(connection: &Connection) -> rusqlite::Result<()> {
             name TEXT);",
     )
 }
+
+pub fn down(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch(
+        "DROP TABLE auth;
+         DROP TABLE sessions;
+         DROP TABLE files;",
+    )
+}

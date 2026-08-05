@@ -13,9 +13,15 @@ pub mod app_secrets;
 pub mod app_simplefin;
 pub mod app_sync;
 pub mod db;
+pub mod embedded;
+#[cfg(target_os = "android")]
+mod jni;
 pub mod load_config;
 pub mod migrations;
 pub mod proto;
+pub mod scripts;
 pub mod services;
 pub mod sync_simple;
+#[cfg(test)]
+pub mod test_support;
 pub mod util;

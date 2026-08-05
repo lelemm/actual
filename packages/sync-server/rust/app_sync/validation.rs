@@ -31,7 +31,12 @@ pub fn validate_synced_file(
     if uploaded_key_id.as_deref() != current_file.encrypt_key_id.as_deref() {
         return Some("file-key-mismatch");
     }
-    if group_id != current_file.group_id.as_deref() {
+    if group_id
+        != current_file
+            .group_id
+            .as_ref()
+            .map(|group_id| group_id.as_str())
+    {
         return Some("file-has-reset");
     }
     if key_id != current_file.encrypt_key_id.as_deref() {
@@ -45,7 +50,12 @@ pub fn validate_uploaded_file(
     key_id: Option<&str>,
     current_file: &File,
 ) -> Option<&'static str> {
-    if group_id != current_file.group_id.as_deref() {
+    if group_id
+        != current_file
+            .group_id
+            .as_ref()
+            .map(|group_id| group_id.as_str())
+    {
         return Some("file-has-reset");
     }
     if key_id != current_file.encrypt_key_id.as_deref() {

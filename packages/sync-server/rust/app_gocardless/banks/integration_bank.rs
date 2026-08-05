@@ -1,6 +1,8 @@
 use serde_json::{Map, Value, json};
 
-use crate::app_gocardless::utils::{amount_to_integer, sort_by_booking_date_or_value_date};
+use crate::app_gocardless::utils::{
+    amount_to_integer, print_iban, sort_by_booking_date_or_value_date,
+};
 use crate::util::payee_name::format_payee_name;
 
 const SORTED_BALANCE_TYPES: [&str; 7] = [
@@ -23,8 +25,9 @@ pub fn normalize_account(account: &Map<String, Value>) -> Value {
     {
         name.push(value.to_owned());
     }
-    if let Some(iban) = iban {
-        name.push(format!("(XXX {})", tail(iban, 4)));
+    let printed_iban = print_iban(account);
+    if !printed_iban.is_empty() {
+        name.push(printed_iban);
     }
     if let Some(currency) = string(account, "currency") {
         name.push(currency.to_owned());

@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "id": 1,
+      "textValue": "alpha",
+      "numberValue": 7,
+      "nullableValue": null,
+      "blobHex": "00017fff"
+    },
+    {
+      "id": 2,
+      "textValue": "",
+      "numberValue": -1.25,
+      "nullableValue": null,
+      "blobHex": ""
+    }
+  ],
+  "numberBindings": [
+    {
+      "id": "integer-looking",
+      "source": "7",
+      "jsStorageClass": "real",
+      "rustBinding": "integer",
+      "rustStorageClass": "integer",
+      "readValue": "7",
+      "isNegativeZero": false,
+      "isSafeInteger": true
+    },
+    {
+      "id": "fraction",
+      "source": "-1.25",
+      "jsStorageClass": "real",
+      "rustBinding": "real",
+      "rustStorageClass": "real",
+      "readValue": "-1.25",
+      "isNegativeZero": false,
+      "isSafeInteger": false
+    },
+    {
+      "id": "negative-zero",
+      "source": "-0",
+      "jsStorageClass": "real",
+      "rustBinding": "real",
+      "rustStorageClass": "real",
+      "readValue": "0",
+      "isNegativeZero": true,
+      "isSafeInteger": true
+    },
+    {
+      "id": "max-safe-integer",
+      "source": "9007199254740991",
+      "jsStorageClass": "real",
+      "rustBinding": "integer",
+      "rustStorageClass": "integer",
+      "readValue": "9007199254740991",
+      "isNegativeZero": false,
+      "isSafeInteger": true
+    },
+    {
+      "id": "exact-first-unsafe-integer",
+      "source": "9007199254740992",
+      "jsStorageClass": "real",
+      "rustBinding": "integer",
+      "rustStorageClass": "integer",
+      "readValue": "9007199254740992",
+      "isNegativeZero": false,
+      "isSafeInteger": false
+    }
+  ],
+  "mutation": {
+    "firstInsert": { "changes": 1, "insertId": 1 },
+    "secondInsert": { "changes": 1, "insertId": 2 },
+    "update": { "changes": 2, "insertId": 2 },
+    "noChange": { "changes": 0, "insertId": 2 }
+  },
+  "transaction": {
+    "returnValue": "committed",
+    "afterRollback": ["updated", "updated", "committed"],
+    "afterNestedRollback": ["updated", "updated", "committed", "outer"]
+  },
+  "errors": {
+    "constraintCode": "SQLITE_CONSTRAINT_UNIQUE",
+    "invalidDatabaseCode": "SQLITE_NOTADB",
+    "lockedCode": "SQLITE_BUSY",
+    "invalidPathCode": "SQLITE_CANTOPEN",
+    "readOnlyCode": "SQLITE_READONLY"
+  }
+}

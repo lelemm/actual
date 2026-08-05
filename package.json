@@ -22,6 +22,8 @@
     "start:server": "yarn workspace @actual-app/sync-server start",
     "start:server-monitor": "yarn workspace @actual-app/sync-server start-monitor",
     "start:server-dev": "NODE_ENV=development BROWSER_OPEN=localhost:5006 yarn npm-run-all --parallel 'start:server-monitor' 'start'",
+    "start:server-rust": "cargo run --manifest-path packages/sync-server/Cargo.toml --bin actual-server",
+    "start:server-dev:rust": "NODE_ENV=development BROWSER_OPEN=localhost:5006 yarn npm-run-all --parallel 'start:server-rust' 'start'",
     "start:desktop": "yarn desktop-dependencies && npm-run-all --parallel 'start:desktop-*'",
     "start:docs": "yarn workspace docs start",
     "desktop-dependencies": "npm-run-all --parallel rebuild-electron build:plugins-service",

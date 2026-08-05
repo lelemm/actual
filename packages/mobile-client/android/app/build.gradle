@@ -10,6 +10,9 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -22,6 +25,24 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+def syncServerDir = file('../../../sync-server')
+def rustJniLibsDir = file('src/main/jniLibs')
+
+tasks.register('buildRustSyncServer', Exec) {
+    workingDir syncServerDir
+    commandLine 'cargo', 'ndk',
+        '-t', 'arm64-v8a',
+        '-t', 'x86_64',
+        '-o', rustJniLibsDir.absolutePath,
+        'build', '--release', '--lib'
+    inputs.files(fileTree("${syncServerDir}/rust"), "${syncServerDir}/Cargo.toml", "${syncServerDir}/Cargo.lock")
+    outputs.dir rustJniLibsDir
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('buildRustSyncServer')
 }
 
 repositories {

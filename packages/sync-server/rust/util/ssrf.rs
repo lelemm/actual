@@ -9,7 +9,11 @@ pub async fn assert_url_allowed(target: &Url, allow_private_network: bool) -> Re
             target.scheme()
         ));
     }
-    let hostname = target.host_str().ok_or("Invalid URL")?;
+    let hostname = target
+        .host_str()
+        .ok_or("Invalid URL")?
+        .trim_start_matches('[')
+        .trim_end_matches(']');
     if let Ok(address) = hostname.parse::<IpAddr>() {
         if is_blocked_ip(address, allow_private_network) {
             return Err(format!("Blocked request to private/local IP: {hostname}"));
@@ -46,6 +50,9 @@ pub(crate) fn is_blocked_ip(address: IpAddr, allow_private_network: bool) -> boo
                 || (!allow_private_network && (address.is_private() || address.is_loopback()))
         }
         IpAddr::V6(address) => {
+            if let Some(address) = address.to_ipv4_mapped() {
+                return is_blocked_ip(IpAddr::V4(address), allow_private_network);
+            }
             address.is_unspecified()
                 || address.is_multicast()
                 || is_ipv6_link_local(address)
@@ -71,6 +78,21 @@ mod tests {
     fn private_network_opt_in_never_allows_metadata_addresses() {
         assert!(!is_blocked_ip("127.0.0.1".parse().unwrap(), true));
         assert!(is_blocked_ip("169.254.169.254".parse().unwrap(), true));
+        assert!(is_blocked_ip(
+            "::ffff:169.254.169.254".parse().unwrap(),
+            true
+        ));
         assert!(is_blocked_ip("127.0.0.1".parse().unwrap(), false));
+    }
+
+    #[tokio::test]
+    async fn blocks_ipv4_mapped_ipv6_metadata_urls_before_dns() {
+        let url = Url::parse("http://[::ffff:169.254.169.254]/latest/meta-data/").unwrap();
+        assert!(
+            assert_url_allowed(&url, true)
+                .await
+                .unwrap_err()
+                .starts_with("Blocked request to private/local IP:")
+        );
     }
 }

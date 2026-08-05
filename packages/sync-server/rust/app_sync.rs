@@ -2,7 +2,10 @@ pub mod errors;
 pub mod services;
 pub mod validation;
 
-use std::{fs, sync::MutexGuard};
+#[cfg(test)]
+mod tests;
+
+use std::{borrow::Cow, fs, sync::MutexGuard};
 
 use axum::{
     Json, Router,
@@ -15,6 +18,7 @@ use axum::{
 use percent_encoding::percent_decode_str;
 use prost::Message;
 use rusqlite::Connection;
+use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -22,7 +26,7 @@ use crate::{
     app::AppState,
     app_sync::{
         errors::FileError,
-        services::files_service::{self, File},
+        services::files_service::{self, File, FileUpdate, SqliteText},
         validation::{validate_synced_file, validate_uploaded_file},
     },
     proto::{SyncRequest, SyncResponse},
@@ -30,7 +34,8 @@ use crate::{
     util::{
         middlewares::ValidatedSession,
         paths::{
-            get_path_for_group_file, get_path_for_user_file, is_valid_file_id, is_valid_group_id,
+            FileId, GroupId, get_path_for_group_file, get_path_for_user_file, parse_file_id,
+            parse_group_id,
         },
     },
 };
@@ -69,8 +74,12 @@ fn megabytes(value: u64) -> usize {
 async fn sync(
     State(state): State<AppState>,
     ValidatedSession(session): ValidatedSession,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    if !has_media_type(&headers, "application/actual-sync") {
+        return internal_error();
+    }
     let request = match SyncRequest::decode(body) {
         Ok(request) => request,
         Err(error) => {
@@ -97,7 +106,11 @@ async fn sync(
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, &request.file_id) {
+    let file_id = match valid_file_id(&request.file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "file-not-found"),
     };
@@ -159,11 +172,15 @@ async fn user_get_key(
         .get("fileId")
         .and_then(Value::as_str)
         .unwrap_or_default();
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "file-not-found"),
     };
@@ -190,25 +207,44 @@ async fn user_create_key(
         .get("fileId")
         .and_then(Value::as_str)
         .unwrap_or_default();
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "file-not-found"),
     };
     if let Err(response) = require_file_owner(&connection, &file, &session.user_id) {
         return response;
     }
-    match files_service::update_key(
+    let key_id = match sqlite_text(&body, "keyId") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let key_salt = match sqlite_text(&body, "keySalt") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let test_content = match sqlite_text(&body, "testContent") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match files_service::update(
         &connection,
-        file_id,
-        body.get("keyId").and_then(Value::as_str),
-        body.get("keySalt").and_then(Value::as_str),
-        body.get("testContent").and_then(Value::as_str),
+        &file_id,
+        &FileUpdate {
+            encrypt_key_id: key_id,
+            encrypt_salt: key_salt,
+            encrypt_test: test_content,
+            ..FileUpdate::default()
+        },
     ) {
-        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+        Ok(_) => Json(json!({ "status": "ok" })).into_response(),
         Err(error) => file_error(error, "file-not-found"),
     }
 }
@@ -222,23 +258,34 @@ async fn reset_user_file(
         .get("fileId")
         .and_then(Value::as_str)
         .unwrap_or_default();
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "User or file not found"),
     };
     if let Err(response) = require_file_owner(&connection, &file, &session.user_id) {
         return response;
     }
-    if let Err(error) = files_service::reset_group(&connection, file_id) {
+    if let Err(error) = files_service::update(
+        &connection,
+        &file_id,
+        &FileUpdate {
+            group_id: Some(None),
+            ..FileUpdate::default()
+        },
+    ) {
         return file_error(error, "User or file not found");
     }
     drop(connection);
     if let Some(group_id) = file.group_id {
-        let _ = fs::remove_file(get_path_for_group_file(&state.config, &group_id));
+        let _ = fs::remove_file(get_path_for_group_file(&state.config, group_id.as_str()));
     }
     Json(json!({ "status": "ok" })).into_response()
 }
@@ -252,36 +299,38 @@ async fn upload_user_file(
     let Some(name) = header_string(&headers, "x-actual-name") else {
         return (StatusCode::BAD_REQUEST, "single x-actual-name is required").into_response();
     };
-    let name = match percent_decode_str(name).decode_utf8() {
-        Ok(name) => name.into_owned(),
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid x-actual-name").into_response(),
+    let name = match decode_uri_component(name) {
+        Ok(name) => name,
+        Err(response) => return response,
     };
     let Some(file_id) = header_string(&headers, "x-actual-file-id") else {
         return (StatusCode::BAD_REQUEST, "fileId is required").into_response();
     };
-    if !is_valid_file_id(file_id) {
-        return (StatusCode::BAD_REQUEST, "invalid fileId").into_response();
-    }
-    let group_id = header_string(&headers, "x-actual-group-id");
-    if group_id.is_some_and(|group_id| !is_valid_group_id(group_id)) {
-        return (StatusCode::BAD_REQUEST, "invalid groupId").into_response();
-    }
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
+    let group_id = match header_string(&headers, "x-actual-group-id") {
+        Some(group_id) => match parse_group_id(group_id) {
+            Some(group_id) => Some(group_id),
+            None => return (StatusCode::BAD_REQUEST, "invalid groupId").into_response(),
+        },
+        None => None,
+    };
     let encrypt_meta = header_string(&headers, "x-actual-encrypt-meta");
-    let key_id = encrypt_meta
-        .and_then(|value| serde_json::from_str::<Value>(value).ok())
-        .and_then(|value| {
-            value
+    let key_id = match encrypt_meta {
+        Some(value) => match serde_json::from_str::<Value>(value) {
+            Ok(Value::Null) => return internal_error(),
+            Ok(value) => value
                 .get("keyId")
                 .and_then(Value::as_str)
-                .map(str::to_owned)
-        });
+                .map(str::to_owned),
+            Err(_) => return internal_error(),
+        },
+        None => None,
+    };
     let sync_version = header_string(&headers, "x-actual-format");
-    if headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(';').next())
-        .is_none_or(|value| value.trim() != "application/encrypted-file")
-    {
+    if !has_media_type(&headers, "application/encrypted-file") {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "status": "error" })),
@@ -293,20 +342,27 @@ async fn upload_user_file(
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let current_file = match files_service::get(&connection, file_id) {
+    let current_file = match files_service::get(&connection, &file_id) {
         Ok(file) => Some(file),
-        Err(FileError::NotFound) => None,
+        Err(FileError::NotFound { .. }) => None,
         Err(error) => return file_error(error, "file-not-found"),
     };
     if let Some(current_file) = &current_file {
         if let Err(response) = require_file_access(&connection, current_file, &session.user_id) {
             return response;
         }
-        if let Some(error) = validate_uploaded_file(group_id, key_id.as_deref(), current_file) {
+        if let Some(error) = validate_uploaded_file(
+            group_id.as_ref().map(GroupId::as_str),
+            key_id.as_deref(),
+            current_file,
+        ) {
             return (StatusCode::BAD_REQUEST, error).into_response();
         }
     }
-    if let Err(error) = fs::write(get_path_for_user_file(&state.config, file_id), &body) {
+    if let Err(error) = fs::write(
+        get_path_for_user_file(&state.config, file_id.as_str()),
+        &body,
+    ) {
         eprintln!("Error writing file: {error}");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -317,10 +373,10 @@ async fn upload_user_file(
 
     let group_id = match current_file {
         None => {
-            let group_id = Uuid::new_v4().to_string();
+            let group_id = new_group_id();
             let sync_version = sync_version.and_then(|value| value.parse::<i64>().ok());
             let file = File {
-                id: file_id.into(),
+                id: file_id.clone(),
                 group_id: Some(group_id.clone()),
                 sync_version,
                 name: Some(name),
@@ -337,16 +393,17 @@ async fn upload_user_file(
             group_id
         }
         Some(current_file) => {
-            let group_id = current_file
-                .group_id
-                .unwrap_or_else(|| Uuid::new_v4().to_string());
-            if let Err(error) = files_service::update_upload(
+            let group_id = current_file.group_id.unwrap_or_else(new_group_id);
+            if let Err(error) = files_service::update(
                 &connection,
-                file_id,
-                &group_id,
-                sync_version,
-                encrypt_meta,
-                &name,
+                &file_id,
+                &FileUpdate {
+                    group_id: Some(Some(&group_id)),
+                    sync_version: Some(sync_version.and_then(|value| value.parse().ok())),
+                    encrypt_meta: Some(encrypt_meta),
+                    name: Some(Some(SqliteText::Text(&name))),
+                    ..FileUpdate::default()
+                },
             ) {
                 return file_error(error, "file-not-found");
             }
@@ -364,11 +421,15 @@ async fn download_user_file(
     let Some(file_id) = header_string(&headers, "x-actual-file-id") else {
         return (StatusCode::BAD_REQUEST, "Single file ID is required").into_response();
     };
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "User or file not found"),
     };
@@ -376,7 +437,7 @@ async fn download_user_file(
         return response;
     }
     drop(connection);
-    let bytes = match fs::read(get_path_for_user_file(&state.config, file_id)) {
+    let bytes = match fs::read(get_path_for_user_file(&state.config, file_id.as_str())) {
         Ok(bytes) => bytes,
         Err(_) => return (StatusCode::NOT_FOUND, "Not Found").into_response(),
     };
@@ -385,6 +446,10 @@ async fn download_user_file(
         header::CONTENT_DISPOSITION,
         HeaderValue::from_str(&format!("attachment;filename={file_id}"))
             .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
     );
     response
 }
@@ -398,23 +463,34 @@ async fn update_user_filename(
         .get("fileId")
         .and_then(Value::as_str)
         .unwrap_or_default();
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "file-not-found"),
     };
     if let Err(response) = require_file_access(&connection, &file, &session.user_id) {
         return response;
     }
-    match files_service::update_name(
+    let name = match sqlite_text(&body, "name") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match files_service::update(
         &connection,
-        file_id,
-        body.get("name").unwrap_or(&Value::Null),
+        &file_id,
+        &FileUpdate {
+            name,
+            ..FileUpdate::default()
+        },
     ) {
-        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+        Ok(_) => Json(json!({ "status": "ok" })).into_response(),
         Err(error) => file_error(error, "file-not-found"),
     }
 }
@@ -456,13 +532,17 @@ async fn get_user_file_info(
     headers: HeaderMap,
 ) -> Response {
     let file_id = header_string(&headers, "x-actual-file-id").unwrap_or_default();
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
-        Err(FileError::NotFound) => {
+        Err(FileError::NotFound { .. }) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "status": "error", "reason": "file-not-found" })),
@@ -512,19 +592,30 @@ async fn delete_user_file(
         )
             .into_response();
     };
+    let file_id = match valid_file_id(file_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let connection = match connection(&state) {
         Ok(connection) => connection,
         Err(response) => return response,
     };
-    let file = match files_service::get(&connection, file_id) {
+    let file = match files_service::get(&connection, &file_id) {
         Ok(file) => file,
         Err(error) => return file_error(error, "file-not-found"),
     };
     if let Err(response) = require_file_owner(&connection, &file, &session.user_id) {
         return response;
     }
-    match files_service::mark_deleted(&connection, file_id) {
-        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+    match files_service::update(
+        &connection,
+        &file_id,
+        &FileUpdate {
+            deleted: Some(true),
+            ..FileUpdate::default()
+        },
+    ) {
+        Ok(_) => Json(json!({ "status": "ok" })).into_response(),
         Err(error) => file_error(error, "file-not-found"),
     }
 }
@@ -577,8 +668,11 @@ fn users_with_access_json(connection: &Connection, file: &File) -> Result<Vec<Va
 
 fn file_error(error: FileError, not_found: &'static str) -> Response {
     match error {
-        FileError::NotFound => (StatusCode::BAD_REQUEST, not_found).into_response(),
-        FileError::InvalidId => (StatusCode::BAD_REQUEST, "invalid fileId").into_response(),
+        FileError::NotFound { .. } => (StatusCode::BAD_REQUEST, not_found).into_response(),
+        FileError::Generic { message, details } => {
+            eprintln!("File error: {message}; details={details}");
+            internal_error()
+        }
         FileError::Database(error) => {
             eprintln!("File database error: {error}");
             internal_error()
@@ -587,9 +681,21 @@ fn file_error(error: FileError, not_found: &'static str) -> Response {
 }
 
 fn internal_error() -> Response {
+    #[derive(Serialize)]
+    struct InternalError {
+        status: &'static str,
+        reason: &'static str,
+    }
     (
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({ "status": "error", "reason": "internal-error" })),
+        [(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        )],
+        Json(InternalError {
+            status: "error",
+            reason: "internal-error",
+        }),
     )
         .into_response()
 }
@@ -598,6 +704,55 @@ fn header_string<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name)?.to_str().ok()
 }
 
+fn has_media_type(headers: &HeaderMap, expected: &str) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case(expected))
+}
+
+fn sqlite_text<'a>(body: &'a Value, key: &str) -> Result<Option<Option<SqliteText<'a>>>, Response> {
+    Ok(match body.get(key) {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(Value::String(value)) => Some(Some(SqliteText::Text(value))),
+        Some(Value::Number(value)) => {
+            let value = value.as_f64().ok_or_else(internal_error)?;
+            Some(Some(SqliteText::Number(value)))
+        }
+        Some(_) => return Err(internal_error()),
+    })
+}
+
+fn decode_uri_component(value: &str) -> Result<String, Response> {
+    let bytes = value.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'%'
+            && (bytes
+                .get(index + 1)
+                .is_none_or(|byte| !byte.is_ascii_hexdigit())
+                || bytes
+                    .get(index + 2)
+                    .is_none_or(|byte| !byte.is_ascii_hexdigit()))
+        {
+            return Err(internal_error());
+        }
+    }
+    percent_decode_str(value)
+        .decode_utf8()
+        .map(Cow::into_owned)
+        .map_err(|_| internal_error())
+}
+
 fn nonempty(value: &str) -> Option<&str> {
     (!value.is_empty()).then_some(value)
+}
+
+fn valid_file_id(value: &str) -> Result<FileId, Response> {
+    parse_file_id(value).ok_or_else(|| (StatusCode::BAD_REQUEST, "invalid fileId").into_response())
+}
+
+fn new_group_id() -> GroupId {
+    parse_group_id(&Uuid::new_v4().to_string()).expect("UUID must be a valid group ID")
 }

@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use regex::Regex;
 use serde_json::Value;
 
@@ -26,14 +27,13 @@ pub fn normalize_transaction(transaction: &Value, booked: bool) -> Option<Value>
                 .trim()
                 .into(),
         );
-        if booked {
-            edited["date"] = Value::String(
-                captures
-                    .get(2)
-                    .map(|value| value.as_str())
-                    .unwrap_or_default()
-                    .into(),
-            );
+        if booked
+            && let Some(date) = captures
+                .get(2)
+                .and_then(|value| NaiveDate::parse_from_str(value.as_str(), "%Y-%m-%d").ok())
+                .filter(|date| chrono::Datelike::year(date) != 0)
+        {
+            edited["date"] = Value::String(date.format("%Y-%m-%d").to_string());
         }
     }
     integration_bank::normalize_transaction_with(transaction, &edited)

@@ -466,3 +466,7 @@ fn internal_error() -> Response {
     )
         .into_response()
 }
+
+#[cfg(test)]
+#[path = "app_admin/tests.rs"]
+mod tests;

@@ -1,3 +1,5 @@
+import { gzipSync } from 'node:zlib';
+
 import {
   create,
   fromBinary,
@@ -56,12 +58,18 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
     it('reports its health and build identity', async () => {
       const health = await request('/health');
       expect(health.status).toBe(200);
-      expect(health.headers.get('content-type')).toContain('application/json');
+      expect(health.headers.get('content-type')).toBe(
+        'application/json; charset=utf-8',
+      );
       expect(health.headers.get('access-control-allow-origin')).toBe('*');
+      expect(health.headers.get('content-security-policy')).toBeNull();
       expect(await health.json()).toEqual({ status: 'UP' });
 
       const info = await request('/info');
       expect(info.status).toBe(200);
+      expect(info.headers.get('content-type')).toBe(
+        'application/json; charset=utf-8',
+      );
       expect(await info.json()).toEqual({
         build: {
           name: '@actual-app/sync-server',
@@ -72,12 +80,19 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
 
       const mode = await request('/mode');
       expect(mode.status).toBe(200);
-      expect(mode.headers.get('content-type')).toContain('text/html');
+      expect(mode.headers.get('content-type')).toBe('text/html; charset=utf-8');
       expect(await mode.text()).toBe('development');
 
       const metrics = await request('/metrics');
       expect(metrics.status).toBe(200);
-      expect(await metrics.json()).toEqual({
+      expect(metrics.headers.get('content-type')).toBe(
+        'application/json; charset=utf-8',
+      );
+      const metricBody = (await metrics.json()) as {
+        mem: Record<string, number>;
+        uptime: number;
+      };
+      expect(metricBody).toEqual({
         mem: {
           rss: expect.any(Number),
           heapTotal: expect.any(Number),
@@ -87,6 +102,10 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
         },
         uptime: expect.any(Number),
       });
+      expect(Object.values(metricBody.mem).every(value => value > 0)).toBe(
+        true,
+      );
+      expect(metricBody.uptime).toBeGreaterThan(0);
 
       const preflight = await request('/health', {
         method: 'OPTIONS',
@@ -100,19 +119,90 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
       expect(preflight.headers.get('access-control-allow-headers')).toBe(
         'X-Actual-Token',
       );
+      expect(preflight.headers.get('vary')).toBe(
+        'Access-Control-Request-Headers',
+      );
 
       const frontend = await request('/contract/frontend');
       expect(frontend.status).toBe(200);
+      expect(frontend.headers.get('content-type')).toBe(
+        'text/html; charset=utf-8',
+      );
+      expect(await frontend.text()).toBe('<!doctype html>contract frontend');
       expect(frontend.headers.get('cross-origin-opener-policy')).toBe(
         'same-origin',
       );
       expect(frontend.headers.get('cross-origin-embedder-policy')).toBe(
         'require-corp',
       );
-      expect(frontend.headers.get('content-security-policy')).toContain(
-        "default-src 'self' blob:",
+      expect(frontend.headers.get('content-security-policy')).toBe(
+        "default-src 'self' blob:; img-src 'self' blob: data:; script-src 'self' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src http: https:",
+      );
+
+      const missingPost = await request('/contract/frontend', {
+        method: 'POST',
+      });
+      expect(missingPost.status).toBe(404);
+      expect(missingPost.headers.get('content-type')).toBe(
+        'text/html; charset=utf-8',
+      );
+      expect(missingPost.headers.get('content-security-policy')).toBe(
+        "default-src 'none'",
+      );
+      expect(await missingPost.text()).toContain(
+        'Cannot POST /contract/frontend',
+      );
+      expect(missingPost.headers.get('cross-origin-opener-policy')).toBe(
+        'same-origin',
+      );
+      expect(missingPost.headers.get('cross-origin-embedder-policy')).toBe(
+        'require-corp',
+      );
+
+      const malformed = await request('/contract/missing', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+        body: '{',
+      });
+      expect(malformed.status).toBe(400);
+      expect(malformed.headers.get('content-type')).toBe(
+        'text/html; charset=utf-8',
+      );
+      expect(malformed.headers.get('content-security-policy')).toBe(
+        "default-src 'none'",
       );
     });
+
+    it('applies JSON limits to the decoded compressed body', async () => {
+      const megabyte = 1024 * 1024;
+      const boundary = gzipSync(
+        JSON.stringify({ x: 'x'.repeat(20 * megabyte - 8) }),
+      );
+      const bomb = gzipSync(
+        JSON.stringify({ x: 'x'.repeat(20 * megabyte - 7) }),
+      );
+      expect(bomb.byteLength).toBeLessThan(32 * 1024);
+
+      const accepted = await request('/contract/compressed-boundary', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+        },
+        body: boundary,
+      });
+      expect(accepted.status).toBe(404);
+
+      const rejected = await request('/contract/compressed-bomb', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+        },
+        body: bomb,
+      });
+      expect(rejected.status).toBe(413);
+    }, 30_000);
 
     it('bootstraps password authentication once', async () => {
       const initial = await request('/account/needs-bootstrap');
@@ -173,6 +263,57 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
           loginMethod: 'password',
           prefs: {},
         },
+      });
+    });
+
+    it('preserves sync file lookup and malformed-ID error responses', async () => {
+      for (const fileId of [null, 7, {}, 'budget@invalid']) {
+        const malformed = await request('/sync/user-get-key', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-actual-token': token,
+          },
+          body: JSON.stringify({ fileId }),
+        });
+        expect(malformed.status, JSON.stringify(fileId)).toBe(400);
+        expect(await malformed.text(), JSON.stringify(fileId)).toBe(
+          'invalid fileId',
+        );
+      }
+
+      const missingKey = await request('/sync/user-get-key', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: JSON.stringify({ fileId: 'missing' }),
+      });
+      expect(missingKey.status).toBe(400);
+      expect(await missingKey.text()).toBe('file-not-found');
+
+      const missingReset = await request('/sync/reset-user-file', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: JSON.stringify({ fileId: 'missing' }),
+      });
+      expect(missingReset.status).toBe(400);
+      expect(await missingReset.text()).toBe('User or file not found');
+
+      const missingInfo = await request('/sync/get-user-file-info', {
+        headers: {
+          'x-actual-token': token,
+          'x-actual-file-id': 'missing',
+        },
+      });
+      expect(missingInfo.status).toBe(400);
+      expect(await missingInfo.json()).toEqual({
+        status: 'error',
+        reason: 'file-not-found',
       });
     });
 
@@ -253,6 +394,36 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
       expect(missingMediaType.status).toBe(500);
       expect(await missingMediaType.json()).toEqual({ status: 'error' });
 
+      for (const [invalidId, extraHeaders] of [
+        [
+          'MalformedName',
+          { 'x-actual-name': '%ZZ', 'x-actual-encrypt-meta': undefined },
+        ],
+        [
+          'MalformedEncryptMeta',
+          { 'x-actual-name': 'Budget', 'x-actual-encrypt-meta': '{' },
+        ],
+        [
+          'NullEncryptMeta',
+          { 'x-actual-name': 'Budget', 'x-actual-encrypt-meta': 'null' },
+        ],
+      ] as const) {
+        const response = await request('/sync/upload-user-file', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/encrypted-file',
+            'x-actual-token': token,
+            'x-actual-file-id': invalidId,
+            'x-actual-format': '2',
+            ...Object.fromEntries(
+              Object.entries(extraHeaders).filter(([, value]) => value),
+            ),
+          },
+          body: fileContent,
+        });
+        expect(response.status).toBe(500);
+      }
+
       const upload = await request('/sync/upload-user-file', {
         method: 'POST',
         headers: {
@@ -323,6 +494,46 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
           ],
         },
       });
+
+      const numericName = await request('/sync/update-user-filename', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: `{"fileId":"${fileId}","name":1e20}`,
+      });
+      expect(numericName.status).toBe(200);
+      const renamedInfo = await request('/sync/get-user-file-info', {
+        headers: {
+          'x-actual-token': token,
+          'x-actual-file-id': fileId,
+        },
+      });
+      const renamedBody = (await renamedInfo.json()) as {
+        data: { name: string };
+      };
+      expect(renamedBody.data.name).toBe('1.0e+20');
+
+      const negativeZeroName = await request('/sync/update-user-filename', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: `{"fileId":"${fileId}","name":-0}`,
+      });
+      expect(negativeZeroName.status).toBe(200);
+      const negativeZeroInfo = await request('/sync/get-user-file-info', {
+        headers: {
+          'x-actual-token': token,
+          'x-actual-file-id': fileId,
+        },
+      });
+      expect(
+        ((await negativeZeroInfo.json()) as { data: { name: string } }).data
+          .name,
+      ).toBe('0.0');
 
       const download = await request('/sync/download-user-file', {
         headers: {
@@ -437,6 +648,30 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
         );
       }
 
+      const negativeCounter = await request('/sync/sync', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/actual-sync',
+          'x-actual-token': token,
+        },
+        body: toBinary(
+          SyncRequestSchema,
+          create(SyncRequestSchema, {
+            fileId,
+            groupId,
+            since: '2025-01-01T00:00:00.000Z',
+            messages: [
+              {
+                timestamp: '2026-01-01T00:00:00.000Z--1-node',
+                isEncrypted: false,
+                content: new Uint8Array([0]),
+              },
+            ],
+          }),
+        ),
+      });
+      expect(negativeCounter.status).toBe(500);
+
       const inserted = await exchange(
         [later, earlier],
         '2025-01-01T00:00:00.000Z',
@@ -462,6 +697,45 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
         '2026-01-01T00:00:00.001Z-0000-0000000000000001',
       );
       expect(afterEarlier.messages).toEqual([expectedLater]);
+
+      const nonCanonical = {
+        timestamp: '2026-01-01T00:00:00.003+00:00-0x10-1',
+        isEncrypted: false,
+        content: new Uint8Array([7]),
+      };
+      const canonical = {
+        ...nonCanonical,
+        timestamp: '2026-01-01T00:00:00.003Z-0010-0000000000000001',
+        content: new Uint8Array([8]),
+      };
+      const nonCanonicalResult = await exchange(
+        [nonCanonical],
+        '2025-01-01T00:00:00.000Z',
+      );
+      expect(JSON.parse(nonCanonicalResult.merkle).hash).not.toBe(471510395);
+      const canonicalResult = await exchange(
+        [canonical],
+        '2025-01-01T00:00:00.000Z',
+      );
+      expect(JSON.parse(canonicalResult.merkle).hash).toBe(471510395);
+
+      const signed = {
+        timestamp: '2026-01-01T00:00:00.004+00:00-+10-2',
+        isEncrypted: false,
+        content: new Uint8Array([9]),
+      };
+      const signedCanonical = {
+        ...signed,
+        timestamp: '2026-01-01T00:00:00.004Z-0010-0000000000000002',
+        content: new Uint8Array([10]),
+      };
+      const signedResult = await exchange([signed], '2025-01-01T00:00:00.000Z');
+      expect(JSON.parse(signedResult.merkle).hash).not.toBe(471510395);
+      const signedCanonicalResult = await exchange(
+        [signedCanonical],
+        '2025-01-01T00:00:00.000Z',
+      );
+      expect(JSON.parse(signedCanonicalResult.merkle).hash).toBe(471510395);
     });
 
     it('serves the GoCardless callback and reports credential status', async () => {
@@ -806,7 +1080,9 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
         nonExpiring: false,
       });
       for (const upstreamRequest of upstreamRequests.slice(1)) {
-        expect(upstreamRequest.apiKey).toMatch(/^[^.]+\.[^.]+\.signature$/);
+        expect(upstreamRequest.apiKey).toMatch(
+          /^[^.]+\.[^.]+\.contract-client$/,
+        );
         expect(upstreamRequest.contentType).toBe('application/json');
       }
     });
@@ -1002,7 +1278,7 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
       );
       expect(firstPage.searchParams.has('cursor')).toBe(false);
       const secondPage = new URL(upstreamRequests[3].url, akahuMockUrl);
-      expect(secondPage.searchParams.get('cursor')).toBe('cursor-two');
+      expect(secondPage.searchParams.get('cursor')).toBe('cursor two/+value');
       for (const upstreamRequest of upstreamRequests) {
         expect(upstreamRequest.authorization).toBe(
           'Bearer user_token_contract',
@@ -1131,6 +1407,47 @@ describe.runIf(!process.env.ACTUAL_CONTRACT_VARIANT)(
     });
 
     it('completes an OpenID authorization-code login', async () => {
+      const missingClient = await request('/openid/enable', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: JSON.stringify({
+          openId: {
+            issuer: openIdMockUrl,
+            client_secret: 'contract-secret',
+            server_hostname: serverUrl,
+          },
+        }),
+      });
+      expect(missingClient.status).toBe(500);
+      expect(await missingClient.json()).toEqual({
+        status: 'error',
+        reason: 'missing-client-id',
+      });
+
+      const malformedDiscovery = await request('/openid/enable', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-actual-token': token,
+        },
+        body: JSON.stringify({
+          openId: {
+            issuer: `${openIdMockUrl}/.well-known/malformed`,
+            client_id: 'contract-client',
+            client_secret: 'contract-secret',
+            server_hostname: serverUrl,
+          },
+        }),
+      });
+      expect(malformedDiscovery.status).toBe(500);
+      expect(await malformedDiscovery.json()).toEqual({
+        status: 'error',
+        reason: 'configuration-error',
+      });
+
       const enabled = await request('/openid/enable', {
         method: 'POST',
         headers: {

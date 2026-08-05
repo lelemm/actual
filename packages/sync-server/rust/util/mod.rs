@@ -1,6 +1,9 @@
+pub mod http;
 pub mod middlewares;
 pub mod paths;
 pub mod payee_name;
+pub mod prompt;
 pub mod ssrf;
 pub mod title;
+pub mod types;
 pub mod validate_user;

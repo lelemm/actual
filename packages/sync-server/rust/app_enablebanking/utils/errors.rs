@@ -36,10 +36,13 @@ impl Display for EnableBankingError {
 impl std::error::Error for EnableBankingError {}
 
 pub fn handle_enable_banking_error(status_code: u16, body: &Value) -> EnableBankingError {
-    let body_string = body
-        .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| body.to_string());
+    let body_string = if body.is_null() {
+        "\"unknown\"".into()
+    } else {
+        body.as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| body.to_string())
+    };
     let message = body
         .get("message")
         .and_then(Value::as_str)

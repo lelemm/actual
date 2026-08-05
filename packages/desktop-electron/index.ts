@@ -69,6 +69,7 @@ if (isPlaywrightTest) {
 let clientWin: BrowserWindow | null;
 let serverProcess: UtilityProcess | null;
 let syncServerProcess: UtilityProcess | null;
+let syncServerUsesRust = false;
 
 let oAuthServer: ReturnType<typeof createServer> | null;
 
@@ -251,7 +252,23 @@ async function startSyncServer() {
     const syncServerRoot = path.dirname(
       require.resolve('@actual-app/sync-server/package.json'),
     );
-    const serverPath = path.join(syncServerRoot, 'build/app.js');
+    syncServerUsesRust = process.env.ACTUAL_ELECTRON_SYNC_SERVER === 'rust';
+    const rustBinaryName =
+      process.platform === 'win32' ? 'actual-server.exe' : 'actual-server';
+    const rustBinary = process.env.ACTUAL_RUST_SERVER_BINARY
+      ? path.resolve(process.env.ACTUAL_RUST_SERVER_BINARY)
+      : app.isPackaged
+        ? path.join(process.resourcesPath, 'actual-server', rustBinaryName)
+        : path.join(syncServerRoot, 'target', 'release', rustBinaryName);
+    const serverPath = syncServerUsesRust
+      ? path.join(__dirname, 'rust-sync-server.js')
+      : path.join(syncServerRoot, 'build/app.js');
+
+    if (syncServerUsesRust && !fs.existsSync(rustBinary)) {
+      throw new Error(
+        `Rust sync-server binary not found at ${rustBinary}. Build it with cargo build --release --manifest-path packages/sync-server/Cargo.toml --bin actual-server or set ACTUAL_RUST_SERVER_BINARY.`,
+      );
+    }
 
     const webRoot = path.join(
       // require.resolve will recursively search up the workspace for the module
@@ -268,6 +285,7 @@ async function startSyncServer() {
       ACTUAL_USER_FILES: `${syncServerConfig.ACTUAL_USER_FILES}`,
       ACTUAL_DATA_DIR: `${syncServerConfig.ACTUAL_SERVER_DATA_DIR}`,
       ACTUAL_WEB_ROOT: webRoot,
+      ...(syncServerUsesRust ? { ACTUAL_RUST_SERVER_BINARY: rustBinary } : {}),
     };
 
     // ACTUAL_SERVER_DATA_DIR is the root directory for the sync-server
@@ -286,20 +304,21 @@ async function startSyncServer() {
 
     let syncServerStarted = false;
 
-    const syncServerPromise = new Promise<void>(resolve => {
-      syncServerProcess = utilityProcess.fork(serverPath, [], forkOptions);
+    const syncServerPromise = new Promise<void>((resolve, reject) => {
+      const launchedProcess = utilityProcess.fork(serverPath, [], forkOptions);
+      syncServerProcess = launchedProcess;
 
-      syncServerProcess.stdout?.on('data', (chunk: Buffer) => {
+      launchedProcess.stdout?.on('data', (chunk: Buffer) => {
         // Send the Server console.log messages to the main browser window
         logMessage('info', `Sync-Server: ${chunk.toString('utf8')}`);
       });
 
-      syncServerProcess.stderr?.on('data', (chunk: Buffer) => {
+      launchedProcess.stderr?.on('data', (chunk: Buffer) => {
         // Send the Server console.error messages out to the main browser window
         logMessage('error', `Sync-Server: ${chunk.toString('utf8')}`);
       });
 
-      syncServerProcess.on('message', msg => {
+      launchedProcess.on('message', msg => {
         switch (msg.type) {
           case 'server-started':
             logMessage('info', 'Sync-Server: Actual Sync Server has started!');
@@ -311,6 +330,17 @@ async function startSyncServer() {
               'info',
               'Sync-Server: Unknown server message: ' + msg.type,
             );
+        }
+      });
+
+      launchedProcess.once('exit', code => {
+        if (syncServerProcess === launchedProcess) {
+          syncServerProcess = null;
+        }
+        if (!syncServerStarted) {
+          reject(
+            new Error(`Sync-Server: Exited before readiness with code ${code}`),
+          );
         }
       });
     });
@@ -329,16 +359,38 @@ async function startSyncServer() {
 
     return await Promise.race([syncServerPromise, syncServerTimeout]); // Either the server has started or the timeout is reached
   } catch (error) {
+    await stopSyncServer();
     logMessage(
       'error',
       `Sync-Server: Error starting sync server: ${String(error)}`,
     );
+    throw error;
   }
 }
 
 async function stopSyncServer() {
-  syncServerProcess?.kill();
+  const processToStop = syncServerProcess;
   syncServerProcess = null;
+  if (processToStop) {
+    if (syncServerUsesRust) {
+      const exited = new Promise<void>(resolve => {
+        processToStop.once('exit', () => resolve());
+      });
+      processToStop.postMessage({ type: 'stop' });
+      await Promise.race([
+        exited,
+        new Promise<void>(resolve => {
+          setTimeout(() => {
+            processToStop.kill();
+            resolve();
+          }, 5000);
+        }),
+      ]);
+    } else {
+      processToStop.kill();
+    }
+  }
+  syncServerUsesRust = false;
   logMessage('info', 'Sync-Server: Stopped');
 }
 
@@ -537,6 +589,7 @@ app.on('before-quit', () => {
     serverProcess.kill();
     serverProcess = null;
   }
+  void stopSyncServer();
 });
 
 app.on('activate', () => {

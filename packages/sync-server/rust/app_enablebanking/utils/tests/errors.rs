@@ -24,4 +24,7 @@ fn maps_enable_banking_api_errors() {
         handle_enable_banking_error(500, &Value::String("raw error".into())).error_type,
         "raw error"
     );
+    let null = handle_enable_banking_error(500, &Value::Null);
+    assert_eq!(null.message, "\"unknown\"");
+    assert_eq!(null.error_type, "\"unknown\"");
 }

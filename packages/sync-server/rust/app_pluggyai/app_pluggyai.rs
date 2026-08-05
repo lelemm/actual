@@ -1,12 +1,15 @@
 use axum::{
     Json, Router,
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    middleware,
     response::{IntoResponse, Response},
     routing::post,
 };
 use chrono::{DateTime, Datelike, Months, NaiveDate, Utc};
 use serde_json::{Map, Value, json};
+
+use super::pluggyai_service::PluggyError;
 
 use crate::{
     app::AppState,
@@ -20,6 +23,21 @@ pub fn router() -> Router<AppState> {
         .route("/status", post(status))
         .route("/accounts", post(accounts))
         .route("/transactions", post(transactions))
+        .layer(middleware::map_response(express_json_content_type))
+}
+
+async fn express_json_content_type(mut response: Response) -> Response {
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .is_some_and(|value| value.as_bytes().starts_with(b"application/json"))
+    {
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json; charset=utf-8"),
+        );
+    }
+    response
 }
 
 async fn status(
@@ -71,13 +89,11 @@ async fn accounts(
             Ok(partial) => partial,
             Err(error) => return provider_error(error),
         };
-        accounts.extend(
-            partial
-                .get("results")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default(),
-        );
+        match partial.get("results") {
+            Some(Value::Array(results)) => accounts.extend(results.iter().cloned()),
+            Some(result) => accounts.push(result.clone()),
+            None => accounts.push(Value::Null),
+        }
     }
     Json(json!({ "status": "ok", "data": { "accounts": accounts } })).into_response()
 }
@@ -97,11 +113,15 @@ async fn transactions(
         Ok(None) => return not_configured(),
         Err(_) => return internal_error(),
     }
-    let account_id = javascript_string(body.get("accountId"));
+    let raw_account_id = body.get("accountId");
+    let account_id = javascript_string(raw_account_id);
+    let account_query_id = raw_account_id
+        .filter(|value| !value.is_null())
+        .map(|_| account_id.as_str());
     let start_date = body.get("startDate").and_then(Value::as_str);
     let transactions = match state
         .pluggyai
-        .get_transactions_by_account_id(&state, &account_id, start_date, file_id)
+        .get_transactions_by_account_id(&state, &account_id, account_query_id, start_date, file_id)
         .await
     {
         Ok(transactions) => transactions,
@@ -123,12 +143,17 @@ async fn transactions(
 
 fn normalize_transactions(account: &Value, transactions: Vec<Value>) -> Result<Value, String> {
     let credit = account.get("type").and_then(Value::as_str) == Some("CREDIT");
-    let mut starting_balance = amount_to_integer(account.get("balance").unwrap_or(&Value::Null));
-    if credit {
-        starting_balance = -starting_balance;
-    }
+    let starting_balance = account.get("balance").map_or(Value::Null, |balance| {
+        let amount = match balance {
+            Value::String(value) if !value.parse::<f64>().is_ok_and(|value| value.is_finite()) => {
+                return Value::Null;
+            }
+            _ => amount_to_integer(balance),
+        };
+        json!(if credit { -amount } else { amount })
+    });
     let reference_date = pluggy_date(account.get("updatedAt"))?;
-    let mut balance_amount = Map::from_iter([("amount".into(), json!(starting_balance))]);
+    let mut balance_amount = Map::from_iter([("amount".into(), starting_balance.clone())]);
     if let Some(currency) = account.get("currencyCode") {
         balance_amount.insert("currency".into(), currency.clone());
     }
@@ -344,13 +369,49 @@ fn add_months_clamped(date: DateTime<Utc>, months: i64) -> Result<DateTime<Utc>,
 }
 
 fn parse_pluggy_date(value: Option<&Value>) -> Result<DateTime<Utc>, String> {
-    let value = value
-        .and_then(Value::as_str)
-        .filter(|value| is_iso_date(value))
-        .ok_or_else(|| "Pluggy response contained an invalid date".to_owned())?;
-    DateTime::parse_from_rfc3339(value)
-        .map(|date| date.with_timezone(&Utc))
-        .map_err(|error| error.to_string())
+    let value = match value {
+        None => {
+            return Err("Cannot read properties of undefined (reading 'toISOString')".into());
+        }
+        Some(Value::Null) => {
+            return Err("Cannot read properties of null (reading 'toISOString')".into());
+        }
+        Some(value) => value
+            .as_str()
+            .filter(|value| is_iso_date_shape(value))
+            .ok_or_else(|| "date.toISOString is not a function".to_owned())?,
+    };
+    parse_sdk_date(value).ok_or_else(|| "Invalid time value".to_owned())
+}
+
+fn parse_sdk_date(value: &str) -> Option<DateTime<Utc>> {
+    let year: i32 = date_component(value, 0..4)?;
+    let month: u32 = date_component(value, 5..7)?;
+    let day: i64 = date_component::<u32>(value, 8..10)?.into();
+    let hour: i64 = date_component::<u32>(value, 11..13)?.into();
+    let minute: i64 = date_component::<u32>(value, 14..16)?.into();
+    let second: i64 = date_component::<u32>(value, 17..19)?.into();
+    let millis: u32 = date_component(value, 20..23)?;
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 24
+        || minute > 59
+        || second > 59
+        || (hour == 24 && (minute != 0 || second != 0 || millis != 0))
+    {
+        return None;
+    }
+    let date = NaiveDate::from_ymd_opt(year, month, 1)?
+        .and_hms_milli_opt(0, 0, 0, millis)?
+        .checked_add_signed(chrono::Duration::days(day - 1))?
+        .checked_add_signed(chrono::Duration::hours(hour))?
+        .checked_add_signed(chrono::Duration::minutes(minute))?
+        .checked_add_signed(chrono::Duration::seconds(second))?;
+    Some(DateTime::from_naive_utc_and_offset(date, Utc))
+}
+
+fn date_component<T: std::str::FromStr>(value: &str, range: std::ops::Range<usize>) -> Option<T> {
+    value.get(range)?.parse().ok()
 }
 
 fn pluggy_date(value: Option<&Value>) -> Result<String, String> {
@@ -358,16 +419,25 @@ fn pluggy_date(value: Option<&Value>) -> Result<String, String> {
 }
 
 fn is_sdk_date(value: &Value) -> bool {
-    value.as_str().is_some_and(is_iso_date)
+    value.as_str().is_some_and(is_iso_date_shape)
 }
 
-fn is_iso_date(value: &str) -> bool {
+fn is_iso_date_shape(value: &str) -> bool {
     value.len() == 24
+        && value.as_bytes()[..4].iter().all(u8::is_ascii_digit)
         && value.as_bytes().get(4) == Some(&b'-')
+        && value.as_bytes()[5..7].iter().all(u8::is_ascii_digit)
         && value.as_bytes().get(7) == Some(&b'-')
+        && value.as_bytes()[8..10].iter().all(u8::is_ascii_digit)
         && value.as_bytes().get(10) == Some(&b'T')
+        && value.as_bytes()[11..13].iter().all(u8::is_ascii_digit)
+        && value.as_bytes().get(13) == Some(&b':')
+        && value.as_bytes()[14..16].iter().all(u8::is_ascii_digit)
+        && value.as_bytes().get(16) == Some(&b':')
+        && value.as_bytes()[17..19].iter().all(u8::is_ascii_digit)
+        && value.as_bytes().get(19) == Some(&b'.')
+        && value.as_bytes()[20..23].iter().all(u8::is_ascii_digit)
         && value.as_bytes().get(23) == Some(&b'Z')
-        && DateTime::parse_from_rfc3339(value).is_ok()
 }
 
 fn number(value: &Value) -> Result<f64, String> {
@@ -442,8 +512,13 @@ fn not_configured() -> Response {
         .into_response()
 }
 
-fn provider_error(error: String) -> Response {
-    Json(json!({ "status": "ok", "data": { "error": error } })).into_response()
+fn provider_error(error: impl Into<PluggyError>) -> Response {
+    let error = error.into();
+    let data = match error.message {
+        Some(message) => json!({ "error": message }),
+        None => json!({}),
+    };
+    Json(json!({ "status": "ok", "data": data })).into_response()
 }
 
 fn internal_error() -> Response {
@@ -490,6 +565,13 @@ mod tests {
                 .to_string(),
             "2024-02-29"
         );
+        assert_eq!(
+            parse_sdk_date("2024-02-30T12:00:00.000Z")
+                .unwrap()
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            "2024-03-01T12:00:00.000Z"
+        );
+        assert!(parse_sdk_date("2024-13-01T12:00:00.000Z").is_none());
     }
 
     #[test]

@@ -13,3 +13,7 @@ pub fn up(connection: &Connection) -> rusqlite::Result<()> {
     }
     Ok(())
 }
+
+pub fn down(_connection: &Connection) -> rusqlite::Result<()> {
+    Ok(())
+}

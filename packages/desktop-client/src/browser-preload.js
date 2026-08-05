@@ -20,6 +20,10 @@ const ACTUAL_VERSION = Platform.isPlaywright
   : import.meta.env.REACT_APP_REVIEW_ID
     ? '.preview'
     : packageJson.version;
+const EMBEDDED_SERVER_URL =
+  Platform.isAndroid && 'Capacitor' in window
+    ? 'http://127.0.0.1:5006'
+    : undefined;
 
 // The OIDC callback (/openid-cb) is reached via a full-page navigation back
 // from the OpenID provider. Routing it through the SharedWorker coordinator is
@@ -48,6 +52,7 @@ const worker = startBrowserBackend({
     isDev: IS_DEV,
     publicUrl: import.meta.env.BASE_URL.slice(0, -1),
     hash: import.meta.env.REACT_APP_BACKEND_WORKER_HASH,
+    embeddedServerUrl: EMBEDDED_SERVER_URL,
   },
   createSharedWorker: () =>
     new SharedBrowserServerWorker({ name: 'actual-backend' }),

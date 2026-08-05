@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "fileNotFound": {
+    "message": "File does not exist or you don't have access to it",
+    "cases": [
+      { "id": "omitted", "argument": "omitted", "details": {} },
+      { "id": "explicit-null", "argument": "null", "details": null },
+      { "id": "string", "argument": "string", "details": "detail" },
+      {
+        "id": "object",
+        "argument": "object",
+        "details": { "fileId": "budget", "value": null }
+      }
+    ]
+  },
+  "generic": [
+    {
+      "id": "omitted-details",
+      "message": "Could not update File",
+      "argument": "omitted",
+      "details": {}
+    },
+    {
+      "id": "null-details",
+      "message": "File not found",
+      "argument": "null",
+      "details": null
+    },
+    {
+      "id": "string-details",
+      "message": "Invalid file ID",
+      "argument": "string",
+      "details": "detail"
+    },
+    {
+      "id": "object-details",
+      "message": "Invalid group ID",
+      "argument": "object",
+      "details": { "groupId": "group@invalid" }
+    }
+  ]
+}

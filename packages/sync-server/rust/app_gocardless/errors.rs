@@ -1,3 +1,6 @@
+use std::sync::OnceLock;
+
+use regex::{Regex, RegexBuilder};
 use serde_json::{Value, json};
 
 use super::services::gocardless_api::GoCardlessApiError;
@@ -63,13 +66,20 @@ impl std::fmt::Display for GoCardlessError {
 impl std::error::Error for GoCardlessError {}
 
 fn is_eua_expired(error: &GoCardlessApiError) -> bool {
+    static EUA_EXPIRED: OnceLock<Regex> = OnceLock::new();
     error
         .data
         .as_ref()
         .and_then(|data| data.get("summary"))
         .and_then(Value::as_str)
         .is_some_and(|summary| {
-            let summary = summary.to_ascii_lowercase();
-            summary.contains("end user agreement") && summary.contains("expired")
+            EUA_EXPIRED
+                .get_or_init(|| {
+                    RegexBuilder::new("end user agreement[^\n\r\u{2028}\u{2029}]*expired")
+                        .case_insensitive(true)
+                        .build()
+                        .expect("valid EUA-expired expression")
+                })
+                .is_match(summary)
         })
 }

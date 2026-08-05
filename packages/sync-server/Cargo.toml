@@ -13,29 +13,94 @@ crate-type = ["rlib", "cdylib"]
 name = "actual-server"
 path = "rust/main.rs"
 
+[[bin]]
+name = "health-check"
+path = "rust/scripts/bin/health_check.rs"
+
+[[bin]]
+name = "run-migrations"
+path = "rust/scripts/bin/run_migrations.rs"
+
+[[bin]]
+name = "reset-password"
+path = "rust/scripts/bin/reset_password.rs"
+
+[[bin]]
+name = "enable-openid"
+path = "rust/scripts/bin/enable_openid.rs"
+
+[[bin]]
+name = "disable-openid"
+path = "rust/scripts/bin/disable_openid.rs"
+
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
+axum-server = { version = "0.8", features = ["tls-rustls"] }
+async-compression = { version = "0.4", features = [
+  "brotli",
+  "gzip",
+  "tokio",
+  "zlib",
+] }
 argon2 = "0.5"
 base64 = "0.23"
 bcrypt = "0.19"
 bytes = "1"
+brotli = "8"
 chrono = "0.4"
 chrono-tz = "0.10"
+ctrlc = "3"
 jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+futures-util = "0.3"
+flate2 = "1"
 percent-encoding = "2"
 prost = "0.14"
 rand_core = { version = "0.6", features = ["getrandom"] }
-openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+openidconnect = { version = "4", default-features = false, features = [
+  "reqwest",
+  "rustls-tls",
+] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "brotli",
+  "deflate",
+  "gzip",
+  "json",
+  "rustls-tls",
+] }
 regex = "1"
+log = "0.4"
+memory-stats = "1.2"
+num-bigint = "0.4"
+rpassword = "7"
 rusqlite = "0.40"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "1", features = [
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+  "time",
+] }
+tokio-tungstenite = "0.28"
+tokio-util = { version = "0.7", features = ["io"] }
 tower = { version = "0.5", features = ["make"] }
-tower-http = { version = "0.6", features = ["fs", "normalize-path", "set-header"] }
+tower-http = { version = "0.6", features = [
+  "fs",
+  "normalize-path",
+  "set-header",
+] }
 uuid = { version = "1", features = ["v4"] }
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pemfile = "2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+[dev-dependencies]
 
 [build-dependencies]
 prost-build = "0.14"

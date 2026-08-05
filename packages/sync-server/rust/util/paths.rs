@@ -1,6 +1,21 @@
 use std::path::PathBuf;
 
-use crate::load_config::Config;
+use crate::{load_config::Config, util::types::BrandedId};
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FileIdBrand {}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum GroupIdBrand {}
+
+/// ```compile_fail
+/// use actual_sync_server::util::paths::{FileId, GroupId};
+///
+/// fn open_group(_id: GroupId) {}
+/// open_group(FileId::new("budget"));
+/// ```
+pub type FileId = BrandedId<FileIdBrand>;
+pub type GroupId = BrandedId<GroupIdBrand>;
 
 pub fn is_valid_file_id(id: &str) -> bool {
     !id.is_empty()
@@ -11,6 +26,14 @@ pub fn is_valid_file_id(id: &str) -> bool {
 
 pub fn is_valid_group_id(id: &str) -> bool {
     is_valid_file_id(id)
+}
+
+pub fn parse_file_id(id: &str) -> Option<FileId> {
+    is_valid_file_id(id).then(|| FileId::new(id))
+}
+
+pub fn parse_group_id(id: &str) -> Option<GroupId> {
+    is_valid_group_id(id).then(|| GroupId::new(id))
 }
 
 pub fn get_path_for_user_file(config: &Config, file_id: &str) -> PathBuf {
@@ -31,5 +54,10 @@ mod tests {
         assert!(!is_valid_file_id(""));
         assert!(!is_valid_file_id("budget@2026"));
         assert!(!is_valid_file_id("../budget"));
+        assert_eq!(
+            parse_file_id("abc-DEF_012").unwrap().as_str(),
+            "abc-DEF_012"
+        );
+        assert!(parse_group_id("../budget").is_none());
     }
 }

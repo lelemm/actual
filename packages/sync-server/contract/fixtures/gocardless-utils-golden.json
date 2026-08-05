@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "sortCases": [
+    {
+      "id": "booking-date-newest-first",
+      "transactions": [
+        { "id": "old", "bookingDate": "2023-01-01" },
+        { "id": "new", "bookingDate": "2023-01-20" },
+        { "id": "middle", "bookingDate": "2023-01-10" }
+      ],
+      "expectedIds": ["new", "middle", "old"]
+    },
+    {
+      "id": "value-date-when-booking-date-missing",
+      "transactions": [
+        { "id": "old", "valueDate": "2023-01-01" },
+        { "id": "new", "valueDate": "2023-01-20" },
+        { "id": "middle", "valueDate": "2023-01-10" }
+      ],
+      "expectedIds": ["new", "middle", "old"]
+    },
+    {
+      "id": "booking-date-before-booking-date-time",
+      "transactions": [
+        {
+          "id": "old-midnight",
+          "bookingDate": "2023-01-01",
+          "bookingDateTime": "2023-01-01T00:00:00Z"
+        },
+        {
+          "id": "new-noon",
+          "bookingDate": "2023-01-10",
+          "bookingDateTime": "2023-01-01T12:00:00Z"
+        },
+        {
+          "id": "old-noon",
+          "bookingDate": "2023-01-01",
+          "bookingDateTime": "2023-01-01T12:00:00Z"
+        },
+        {
+          "id": "new-midnight",
+          "bookingDate": "2023-01-10",
+          "bookingDateTime": "2023-01-01T00:00:00Z"
+        }
+      ],
+      "expectedIds": [
+        "new-noon",
+        "new-midnight",
+        "old-noon",
+        "old-midnight"
+      ]
+    },
+    {
+      "id": "booking-date-before-value-date-time",
+      "transactions": [
+        {
+          "id": "old",
+          "bookingDate": "2023-01-01",
+          "valueDateTime": "2023-01-31T00:00:00Z"
+        },
+        {
+          "id": "middle",
+          "bookingDate": "2023-01-02",
+          "valueDateTime": "2023-01-02T12:00:00Z"
+        },
+        {
+          "id": "new-noon",
+          "bookingDate": "2023-01-30",
+          "valueDateTime": "2023-01-01T12:00:00Z"
+        },
+        {
+          "id": "new-midnight",
+          "bookingDate": "2023-01-30",
+          "valueDateTime": "2023-01-01T00:00:00Z"
+        }
+      ],
+      "expectedIds": ["new-noon", "new-midnight", "middle", "old"]
+    },
+    {
+      "id": "null-and-missing-fall-through",
+      "transactions": [
+        { "id": "missing" },
+        { "id": "null-with-value", "bookingDate": null, "valueDate": "2024-03-01" },
+        { "id": "booked", "bookingDate": "2024-01-01" }
+      ],
+      "expectedIds": ["missing", "null-with-value", "booked"]
+    },
+    {
+      "id": "numeric-millisecond-dates",
+      "transactions": [
+        { "id": "epoch", "bookingDate": 0 },
+        { "id": "after", "bookingDate": 86400000 },
+        { "id": "before", "bookingDate": -86400000 }
+      ],
+      "expectedIds": ["after", "epoch", "before"]
+    },
+    {
+      "id": "invalid-date-comparisons-are-stable",
+      "transactions": [
+        { "id": "invalid-first", "bookingDate": "not-a-date", "valueDate": "2099-01-01" },
+        { "id": "valid-second", "bookingDate": "2024-01-01" }
+      ],
+      "expectedIds": ["invalid-first", "valid-second"]
+    }
+  ],
+  "ibanCases": [
+    { "id": "missing", "account": {}, "expected": "" },
+    { "id": "null", "account": { "iban": null }, "expected": "" },
+    { "id": "empty", "account": { "iban": "" }, "expected": "" },
+    { "id": "short", "account": { "iban": "12" }, "expected": "(XXX 12)" },
+    { "id": "full", "account": { "iban": "DE001234" }, "expected": "(XXX 1234)" }
+  ],
+  "amountCases": [
+    { "id": "number", "input": 1.234, "expected": 123 },
+    { "id": "negative-number", "input": -1.235, "expected": -124 },
+    { "id": "binary-round-down", "input": "1.005", "expected": 100 },
+    { "id": "binary-round-up", "input": "100.005", "expected": 10001 },
+    { "id": "negative-round", "input": "-1.005", "expected": -100 },
+    { "id": "small-round-up", "input": "0.105", "expected": 11 },
+    { "id": "negative-zero", "input": "-0.005", "expected": 0 },
+    { "id": "empty", "input": "", "expected": 0 },
+    { "id": "whitespace", "input": "  ", "expected": 0 },
+    { "id": "exponent", "input": "1e2", "expected": 10000 },
+    { "id": "hex", "input": "0x10", "expected": 1600 }
+  ],
+  "escapeCases": [
+    { "id": "plain", "input": "Merchant", "typescriptEscaped": "Merchant" },
+    {
+      "id": "all-typescript-metacharacters",
+      "input": ".*+?^${}()|[]\\",
+      "typescriptEscaped": "\\.\\*\\+\\?\\^\\$\\{\\}\\(\\)\\|\\[\\]\\\\"
+    },
+    { "id": "rust-additional-metacharacters", "input": "A&B-#~", "typescriptEscaped": "A&B-#~" },
+    {
+      "id": "caller-shaped",
+      "input": "ACME (Shop) [42]\\desk",
+      "typescriptEscaped": "ACME \\(Shop\\) \\[42\\]\\\\desk"
+    },
+    { "id": "ordinary-punctuation", "input": "a/b c,d", "typescriptEscaped": "a/b c,d" }
+  ]
+}

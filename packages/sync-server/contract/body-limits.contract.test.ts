@@ -1,3 +1,5 @@
+import { gzipSync } from 'node:zlib';
+
 import { inject } from 'vitest';
 
 const serverUrl = inject('contractServerUrl');
@@ -14,6 +16,16 @@ describe.runIf(process.env.ACTUAL_CONTRACT_VARIANT === 'body-limits')(
       });
       const token = ((await bootstrap.json()) as { data: { token: string } })
         .data.token;
+
+      const compressedLogin = await fetch(serverUrl + '/account/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+        },
+        body: gzipSync(JSON.stringify({ password: 'contract-password' })),
+      });
+      expect(compressedLogin.status).toBe(200);
 
       const oversizedJson = await fetch(serverUrl + '/account/login', {
         method: 'POST',

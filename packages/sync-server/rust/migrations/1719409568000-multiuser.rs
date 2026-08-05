@@ -35,3 +35,34 @@ pub fn up(connection: &mut Connection) -> rusqlite::Result<()> {
     )?;
     transaction.commit()
 }
+
+pub fn down(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch(
+        "BEGIN TRANSACTION;
+         DROP TABLE IF EXISTS user_access;
+         CREATE TABLE sessions_backup (token TEXT PRIMARY KEY);
+         INSERT INTO sessions_backup (token) SELECT token FROM sessions;
+         DROP TABLE sessions;
+         ALTER TABLE sessions_backup RENAME TO sessions;
+         CREATE TABLE files_backup (
+           id TEXT PRIMARY KEY,
+           group_id TEXT,
+           sync_version SMALLINT,
+           encrypt_meta TEXT,
+           encrypt_keyid TEXT,
+           encrypt_salt TEXT,
+           encrypt_test TEXT,
+           deleted BOOLEAN DEFAULT FALSE,
+           name TEXT
+         );
+         INSERT INTO files_backup (
+           id, group_id, sync_version, encrypt_meta, encrypt_keyid,
+           encrypt_salt, encrypt_test, deleted, name
+         ) SELECT id, group_id, sync_version, encrypt_meta, encrypt_keyid,
+                  encrypt_salt, encrypt_test, deleted, name FROM files;
+         DROP TABLE files;
+         ALTER TABLE files_backup RENAME TO files;
+         DROP TABLE IF EXISTS users;
+         COMMIT;",
+    )
+}

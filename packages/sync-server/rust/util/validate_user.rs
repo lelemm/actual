@@ -35,11 +35,15 @@ pub fn validate_session(
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() as i64;
-    if session.expires_at != TOKEN_EXPIRATION_NEVER && session.expires_at <= now {
+        .as_secs_f64();
+    if is_expired(session.expires_at, now) {
         return Err(SessionError::TokenExpired);
     }
     Ok(session)
+}
+
+fn is_expired(expires_at: f64, now: f64) -> bool {
+    expires_at != TOKEN_EXPIRATION_NEVER as f64 && expires_at <= now
 }
 
 pub fn validate_auth_header(peer: SocketAddr, trusted: &[String]) -> Result<bool, String> {
@@ -165,5 +169,12 @@ mod tests {
             .unwrap(),
             "203.0.113.2".parse::<IpAddr>().unwrap()
         );
+    }
+
+    #[test]
+    fn compares_fractional_session_expiration_without_expiring_never() {
+        assert!(!is_expired(TOKEN_EXPIRATION_NEVER as f64, 100.0));
+        assert!(!is_expired(100.5, 100.0));
+        assert!(is_expired(100.5, 100.5));
     }
 }

@@ -12,7 +12,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    account_db::TOKEN_EXPIRATION_NEVER,
+    account_db::{TOKEN_EXPIRATION_NEVER, expiration_value},
     accounts::password::{hash_password, verify_password},
     app::AppState,
     load_config::TokenExpiration,
@@ -44,7 +44,12 @@ pub async fn bootstrap_openid(state: &AppState, config: &Value) -> Result<(), &'
         }
     }
     let mut config = config.clone();
-    if let Some(discovery_url) = config.remove("discoveryURL") {
+    if config
+        .get("discoveryURL")
+        .and_then(Value::as_str)
+        .is_some_and(|discovery_url| !discovery_url.is_empty())
+    {
+        let discovery_url = config.remove("discoveryURL").expect("checked above");
         config.insert("issuer".into(), discovery_url);
     }
     let config = Value::Object(config);
@@ -249,13 +254,19 @@ pub async fn login_finalize(
     let expiration = match &state.config.token_expiration {
         TokenExpiration::Named(value) if value == "openid-provider" => token
             .expires_in()
-            .map(|expires| now_seconds().unwrap_or_default() + expires.as_secs() as i64)
-            .unwrap_or(TOKEN_EXPIRATION_NEVER),
-        TokenExpiration::Named(value) if value == "never" => TOKEN_EXPIRATION_NEVER,
-        TokenExpiration::Seconds(seconds) => {
-            now_seconds().map_err(|_| "openid-grant-failed")? + *seconds as i64
+            .map(|expires| {
+                expiration_value(now_seconds().unwrap_or_default(), expires.as_secs_f64())
+            })
+            .unwrap_or(rusqlite::types::Value::Integer(TOKEN_EXPIRATION_NEVER)),
+        TokenExpiration::Named(value) if value == "never" => {
+            rusqlite::types::Value::Integer(TOKEN_EXPIRATION_NEVER)
         }
-        TokenExpiration::Named(_) => now_seconds().map_err(|_| "openid-grant-failed")? + 600,
+        TokenExpiration::Seconds(seconds) => {
+            expiration_value(now_seconds().map_err(|_| "openid-grant-failed")?, *seconds)
+        }
+        TokenExpiration::Named(_) => {
+            expiration_value(now_seconds().map_err(|_| "openid-grant-failed")?, 600.0)
+        }
     };
     let session_token = Uuid::new_v4().to_string();
     let connection = state.database.lock().map_err(|_| "openid-grant-failed")?;
@@ -384,12 +395,28 @@ pub fn get_config(state: &AppState) -> Result<Option<Value>, String> {
 async fn setup_client(state: &AppState, config: &Value) -> Result<OpenIdClient, String> {
     let issuer = config.get("issuer").ok_or("missing issuer")?;
     let (issuer, authorization, token, user_info, jwks) = if let Some(issuer) = issuer.as_str() {
-        let metadata = CoreProviderMetadata::discover_async(
-            IssuerUrl::new(issuer.to_owned()).map_err(|error| error.to_string())?,
-            &state.http,
-        )
-        .await
-        .map_err(|error| error.to_string())?;
+        // openid-client accepts either an issuer identifier or a full metadata
+        // URL. Preserve that distinction after `discoveryURL` is persisted as
+        // the string issuer: full well-known URLs are exact, base issuers use
+        // standard discovery.
+        let issuer_url = IssuerUrl::new(issuer.to_owned()).map_err(|error| error.to_string())?;
+        let metadata = if issuer_url.url().path().contains("/.well-known/") {
+            state
+                .http
+                .get(issuer)
+                .send()
+                .await
+                .map_err(|error| error.to_string())?
+                .error_for_status()
+                .map_err(|error| error.to_string())?
+                .json::<CoreProviderMetadata>()
+                .await
+                .map_err(|error| error.to_string())?
+        } else {
+            CoreProviderMetadata::discover_async(issuer_url, &state.http)
+                .await
+                .map_err(|error| error.to_string())?
+        };
         (
             metadata.issuer().clone(),
             metadata.authorization_endpoint().clone(),
@@ -523,6 +550,7 @@ fn now_seconds() -> Result<i64, std::time::SystemTimeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::TestApp;
     use serde_json::json;
 
     #[test]
@@ -536,5 +564,26 @@ mod tests {
             .into_iter()
             .find_map(|key| user.get(key).and_then(Value::as_str));
         assert_eq!(identity, Some("preferred"));
+    }
+
+    #[tokio::test]
+    async fn blank_discovery_url_keeps_and_persists_the_direct_issuer() {
+        let app = TestApp::new();
+        let config = json!({
+            "discoveryURL": "",
+            "issuer": {
+                "name": "https://issuer.example",
+                "authorization_endpoint": "https://issuer.example/authorize",
+                "token_endpoint": "https://issuer.example/token",
+                "userinfo_endpoint": "https://issuer.example/userinfo"
+            },
+            "client_id": "client",
+            "client_secret": "secret",
+            "server_hostname": "https://budget.example"
+        });
+
+        bootstrap_openid(&app.state, &config).await.unwrap();
+
+        assert_eq!(get_config(&app.state).unwrap(), Some(config));
     }
 }

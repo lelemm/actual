@@ -11,7 +11,10 @@ use serde_json::{Value, json};
 use crate::{
     app::AppState,
     services::secrets_service,
-    util::{middlewares::ValidatedSession, paths::is_valid_file_id},
+    util::{
+        middlewares::ValidatedSession,
+        paths::{FileId, parse_file_id},
+    },
 };
 
 pub fn router() -> Router<AppState> {
@@ -43,11 +46,17 @@ async fn set_secret(
         Ok(connection) => connection,
         Err(_) => return internal_error(),
     };
-    if let Err(response) = authorize(&connection, file_id, &session.user_id) {
-        return response;
-    }
+    let file_id = match authorize(&connection, file_id, &session.user_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
     let value = body.get("value").and_then(Value::as_str);
-    match secrets_service::set(&connection, name, value, file_id) {
+    match secrets_service::set(
+        &connection,
+        name,
+        value,
+        file_id.as_ref().map(FileId::as_str),
+    ) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(_) => internal_error(),
     }
@@ -67,10 +76,11 @@ async fn delete_secret(
         Ok(connection) => connection,
         Err(_) => return internal_error(),
     };
-    if let Err(response) = authorize(&connection, file_id, &session.user_id) {
-        return response;
-    }
-    match secrets_service::reset(&connection, &name, file_id) {
+    let file_id = match authorize(&connection, file_id, &session.user_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
+    match secrets_service::reset(&connection, &name, file_id.as_ref().map(FileId::as_str)) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(_) => internal_error(),
     }
@@ -90,10 +100,11 @@ async fn has_secret(
         Ok(connection) => connection,
         Err(_) => return internal_error(),
     };
-    if let Err(response) = authorize(&connection, file_id, &session.user_id) {
-        return response;
-    }
-    match secrets_service::get(&connection, &name, file_id) {
+    let file_id = match authorize(&connection, file_id, &session.user_id) {
+        Ok(file_id) => file_id,
+        Err(response) => return response,
+    };
+    match secrets_service::get(&connection, &name, file_id.as_ref().map(FileId::as_str)) {
         Ok(Some(_)) => StatusCode::NO_CONTENT.into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "key not found").into_response(),
         Err(_) => internal_error(),
@@ -104,7 +115,7 @@ fn authorize(
     connection: &Connection,
     file_id: Option<&str>,
     user_id: &str,
-) -> Result<(), Response> {
+) -> Result<Option<FileId>, Response> {
     let is_admin = connection
         .query_row("SELECT role FROM users WHERE id = ?", [user_id], |row| {
             row.get::<_, String>(0)
@@ -115,7 +126,7 @@ fn authorize(
         == Some("ADMIN");
     let Some(file_id) = file_id else {
         return if is_admin {
-            Ok(())
+            Ok(None)
         } else {
             Err((
                 StatusCode::FORBIDDEN,
@@ -128,8 +139,8 @@ fn authorize(
                 .into_response())
         };
     };
-    if !is_valid_file_id(file_id) {
-        return Err((
+    let file_id = parse_file_id(file_id).ok_or_else(|| {
+        (
             StatusCode::BAD_REQUEST,
             Json(json!({
                 "status": "error",
@@ -137,19 +148,19 @@ fn authorize(
                 "details": "invalid fileId"
             })),
         )
-            .into_response());
-    }
+            .into_response()
+    })?;
     let is_owner = connection
         .query_row(
             "SELECT 1 FROM files WHERE id = ? AND owner = ?",
-            params![file_id, user_id],
+            params![&file_id, user_id],
             |_| Ok(()),
         )
         .optional()
         .map_err(|_| internal_error())?
         .is_some();
     if is_admin || is_owner {
-        Ok(())
+        Ok(Some(file_id))
     } else {
         Err((
             StatusCode::FORBIDDEN,
@@ -174,3 +185,7 @@ fn internal_error() -> Response {
     )
         .into_response()
 }
+
+#[cfg(test)]
+#[path = "app_secrets/tests.rs"]
+mod tests;

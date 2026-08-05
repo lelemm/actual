@@ -23,7 +23,7 @@ of hiding multiple concerns behind a new framework layer.
 | Current dependency role            | Rust dependency role                                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------- |
 | Express and middleware routing     | Axum routers, extractors, and narrowly scoped Tower middleware                  |
-| `better-sqlite3`                   | `rusqlite` using the system/platform SQLite library                             |
+| `better-sqlite3`                   | `rusqlite`; system SQLite on desktop, SQLite compiled per Android ABI            |
 | `argon2` and `bcrypt`              | Rust `argon2` and `bcrypt` crates with the existing hash formats and parameters |
 | Buf protobuf runtime               | generated Rust protobuf types using the same schemas                            |
 | Node `fetch` and provider SDK HTTP | one Rust HTTP client with Rust-native TLS                                       |
@@ -79,9 +79,39 @@ encrypt_salt, encrypt_test, deleted, name, owner)`;
 - `user_access(user_id, file_id)` with its composite primary key;
 - `server_prefs(key, value)`.
 
-Desktop Rust uses the system SQLite library. Android links the platform SQLite
-library through the same Rust database layer; it does not ship
-`better-sqlite3` or an Android-only database implementation.
+Desktop Rust uses the system SQLite library. Android uses `rusqlite` through the
+same database layer and compiles SQLite into each native ABI. Android's framework
+SQLite API is Java-only and does not expose the native `sqlite3` ABI required by
+`rusqlite`; using it would require a separate JNI database backend. The APK does
+not ship `better-sqlite3` or an Android-only server implementation.
+
+## Android Build And Smoke Test
+
+The Gradle app build invokes `cargo-ndk` and packages only `arm64-v8a` and
+`x86_64`. One-time host setup:
+
+```bash
+rustup target add aarch64-linux-android x86_64-linux-android
+cargo install cargo-ndk
+```
+
+With Android SDK/NDK variables configured, build from the repository root:
+
+```bash
+yarn workspace mobile-client build:android
+```
+
+For a quick lifecycle check without an Android toolchain:
+
+```bash
+cargo test --manifest-path packages/sync-server/Cargo.toml \
+  embedded::tests::starts_reports_and_stops_a_persistent_server --lib
+```
+
+On an emulator, launch the APK and verify `http://127.0.0.1:5006/health` from
+the WebView or `adb shell`; the app-private database is stored under
+`files/sync-server/server-files/account.sqlite` and the listener stops when the
+activity is destroyed.
 
 ## Protocol and HTTP Surfaces
 
