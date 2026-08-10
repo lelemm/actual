@@ -13,7 +13,7 @@ const baseConfig: CapacitorConfig = {
   webDir: actualAppWebBuildPath,
   plugins: {
     SplashScreen: {
-      launchAutoHide: false,
+      launchAutoHide: true,
     },
   },
 };

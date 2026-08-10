@@ -8,6 +8,18 @@ import { t } from 'i18next';
 import { pushModal } from '#modals/modalsSlice';
 import type { AppDispatch } from '#redux/store';
 
+export function getEnableBankingRedirectUrl() {
+  const capacitor = (
+    window as Window & {
+      Capacitor?: { isNativePlatform?: () => boolean };
+    }
+  ).Capacitor;
+
+  return capacitor?.isNativePlatform?.()
+    ? 'actual://enablebanking/auth_callback'
+    : `${window.location.origin}/enablebanking/auth_callback`;
+}
+
 function _authorize(
   dispatch: AppDispatch,
   {
@@ -32,7 +44,7 @@ function _authorize(
             psuType = 'personal',
             onStateReady,
           }) => {
-            const redirectUrl = `${window.location.origin}/enablebanking/auth_callback`;
+            const redirectUrl = getEnableBankingRedirectUrl();
             const resp = await sendCatch('enablebanking-start-auth', {
               aspspId,
               country,

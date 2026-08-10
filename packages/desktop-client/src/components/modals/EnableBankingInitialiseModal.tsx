@@ -20,6 +20,7 @@ import {
   ModalHeader,
 } from '#components/common/Modal';
 import { FormField, FormLabel } from '#components/forms';
+import { getEnableBankingRedirectUrl } from '#enablebanking';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { getSecretsError } from '#util/error';
 
@@ -40,6 +41,7 @@ export function EnableBankingInitialiseModal({
   const [error, setError] = useState(
     t('It is required to provide both the Application ID and the secret key.'),
   );
+  const redirectUrl = getEnableBankingRedirectUrl();
 
   async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -142,10 +144,10 @@ export function EnableBankingInitialiseModal({
                 When setting up your application, use the following as the
                 redirect URL:
               </Trans>{' '}
-              <code>{window.location.origin}/enablebanking/auth_callback</code>
+              <code>{redirectUrl}</code>
             </Text>
 
-            {window.location.protocol === 'http:' && (
+            {redirectUrl.startsWith('http:') && (
               <ErrorAlert>
                 <Trans>
                   Enable Banking requires HTTPS for the redirect URL. Your

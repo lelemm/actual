@@ -6,10 +6,11 @@
     "build"
   ],
   "scripts": {
-    "sync:ios": "cap sync ios",
-    "sync:android": "cap sync android",
+    "prepare:web": "cd ../.. && yarn build:wasm",
+    "sync:ios": "yarn prepare:web && cap sync ios",
+    "sync:android": "yarn prepare:web && cap sync android",
     "build:ios": "yarn sync:ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -archivePath ./build/App.xcarchive archive CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO",
-    "build:android": "yarn sync:android && cd android/ && ./gradlew assembleDebug && cp ./app/build/outputs/apk/debug/app-debug.apk ../build/",
+    "build:android": "yarn sync:android && mkdir -p build && cd android/ && ./gradlew assembleDebug && cp ./app/build/outputs/apk/debug/app-debug.apk ../build/",
     "release:ios": "yarn sync:ios && cap build ios",
     "release:android": "yarn sync:android && cap build android",
     "build": "yarn build:ios && yarn build:android",
@@ -19,6 +20,7 @@
   "dependencies": {
     "@actual-app/web": "workspace:*",
     "@capacitor/android": "^8.4.2",
+    "@capacitor/app": "^8.0.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/ios": "^8.4.2",
     "@capacitor/splash-screen": "^8.0.2"

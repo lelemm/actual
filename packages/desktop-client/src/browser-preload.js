@@ -21,6 +21,28 @@ const ACTUAL_VERSION = Platform.isPlaywright
     ? '.preview'
     : packageJson.version;
 const SIMPLEFIN_WASM = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
+const CAPACITOR_PLATFORM = window.Capacitor?.getPlatform?.();
+const IS_CAPACITOR =
+  window.Capacitor?.isNativePlatform?.() ??
+  (CAPACITOR_PLATFORM != null && CAPACITOR_PLATFORM !== 'web');
+
+if (IS_CAPACITOR) {
+  localStorage.setItem('SharedArrayBufferOverride', 'true');
+  window.Capacitor?.Plugins?.App?.addListener?.('appUrlOpen', ({ url }) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (
+        parsedUrl.protocol === 'actual:' &&
+        parsedUrl.hostname === 'enablebanking' &&
+        parsedUrl.pathname === '/auth_callback'
+      ) {
+        window.location.href = `/enablebanking/auth_callback${parsedUrl.search}`;
+      }
+    } catch {
+      // Ignore malformed external URLs.
+    }
+  });
+}
 
 // The OIDC callback (/openid-cb) is reached via a full-page navigation back
 // from the OpenID provider. Routing it through the SharedWorker coordinator is
