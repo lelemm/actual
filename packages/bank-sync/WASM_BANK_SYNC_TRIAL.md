@@ -18,8 +18,8 @@ yarn start:wasm
 
 - Rust owns SimpleFIN token claiming, account retrieval, transaction retrieval,
   response normalization, and provider error mapping.
-- The native Axum routes and WASM exports delegate to the same
-  `rust/app_simplefin/core.rs` implementation.
+- The WASM exports delegate to the same `rust/app_simplefin/core.rs`
+  implementation.
 - loot-core loads the generated WASM module directly from `/bank-sync-wasm`.
 - SimpleFIN setup token and access key use loot-core async storage in WASM mode.
 - No fake HTTP server, synthetic HTTPS endpoint, or service worker transport is

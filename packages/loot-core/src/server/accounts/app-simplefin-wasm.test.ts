@@ -4,6 +4,7 @@ import { post } from '#server/post';
 import { app } from './app';
 import {
   checkSimpleFinSecret,
+  getAkahuStatus,
   getSimpleFinAccounts,
   getSimpleFinStatus,
   setSimpleFinSecret,
@@ -17,9 +18,14 @@ vi.mock('#server/post', () => ({
 
 vi.mock('./simplefin-wasm', () => ({
   checkSimpleFinSecret: vi.fn(),
+  getAkahuStatus: vi.fn(),
   getSimpleFinAccounts: vi.fn(),
   getSimpleFinStatus: vi.fn(),
-  isSimpleFinSecret: vi.fn(name => name.startsWith('simplefin_')),
+  isSimpleFinSecret: vi.fn(name =>
+    ['simplefin_token', 'simplefin_accessKey', 'akahu_userToken'].includes(
+      name,
+    ),
+  ),
   isSimpleFinWasmEnabled: vi.fn(() => true),
   setSimpleFinSecret: vi.fn(),
 }));
@@ -65,24 +71,22 @@ it('stores and checks SimpleFIN secrets without authentication or HTTP', async (
   expect(post).not.toHaveBeenCalled();
 });
 
-it('leaves other provider handlers on the HTTP path', async () => {
+it('keeps GoCardless on HTTP and routes Akahu through WASM', async () => {
   vi.mocked(post).mockResolvedValue({ configured: true });
+  vi.mocked(getAkahuStatus).mockResolvedValue({ configured: true });
 
   await app.handlers['gocardless-status']();
-  await app.handlers['akahu-status']();
+  await expect(app.handlers['akahu-status']()).resolves.toEqual({
+    configured: true,
+  });
 
-  expect(post).toHaveBeenNthCalledWith(
-    1,
+  expect(post).toHaveBeenCalledWith(
     'https://test.env/gocardless/status',
     {},
     { 'X-ACTUAL-TOKEN': 'user-token' },
   );
-  expect(post).toHaveBeenNthCalledWith(
-    2,
-    'https://test.env/akahu/status',
-    {},
-    { 'X-ACTUAL-TOKEN': 'user-token' },
-  );
+  expect(post).toHaveBeenCalledOnce();
+  expect(getAkahuStatus).toHaveBeenCalledOnce();
   expect(getSimpleFinStatus).not.toHaveBeenCalled();
   expect(getSimpleFinAccounts).not.toHaveBeenCalled();
 });

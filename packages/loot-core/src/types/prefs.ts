@@ -155,6 +155,11 @@ export type GlobalPrefsJson = Partial<{
   'user-token'?: string;
   simplefin_token?: string;
   simplefin_accessKey?: string;
+  akahu_userToken?: string;
+  akahu_appToken?: string;
+  pluggyai_clientId?: string;
+  pluggyai_clientSecret?: string;
+  pluggyai_itemIds?: string;
   'floating-sidebar'?: string; // "true" or "false"
   'max-months'?: string; // e.g. "2" or "3"
   'category-expanded-state'?: string; // "0" or "1" or "2"

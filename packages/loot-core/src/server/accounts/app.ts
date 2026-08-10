@@ -43,6 +43,10 @@ import * as link from './link';
 import { getStartingBalancePayee } from './payees';
 import {
   checkSimpleFinSecret,
+  getAkahuAccounts,
+  getAkahuStatus,
+  getPluggyAiAccounts,
+  getPluggyAiStatus,
   getSimpleFinAccounts,
   getSimpleFinStatus,
   isSimpleFinSecret,
@@ -928,6 +932,10 @@ async function simpleFinStatus() {
 }
 
 async function pluggyAiStatus(): Promise<BankSyncProviderStatus> {
+  if (isSimpleFinWasmEnabled()) {
+    return getPluggyAiStatus() as Promise<BankSyncProviderStatus>;
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -951,6 +959,10 @@ async function pluggyAiStatus(): Promise<BankSyncProviderStatus> {
 }
 
 async function akahuStatus() {
+  if (isSimpleFinWasmEnabled()) {
+    return getAkahuStatus();
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -1006,6 +1018,14 @@ async function simpleFinAccounts() {
 }
 
 async function pluggyAiAccounts() {
+  if (isSimpleFinWasmEnabled()) {
+    try {
+      return await getPluggyAiAccounts();
+    } catch {
+      return { error_code: 'TIMED_OUT' };
+    }
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -1034,6 +1054,14 @@ async function pluggyAiAccounts() {
 }
 
 async function akahuAccounts() {
+  if (isSimpleFinWasmEnabled()) {
+    try {
+      return await getAkahuAccounts();
+    } catch {
+      return { error_code: 'TIMED_OUT' };
+    }
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -1470,7 +1498,7 @@ async function accountsBankSync({
     FROM accounts a
     LEFT JOIN banks b ON a.bank = b.id
     WHERE a.tombstone = 0 AND a.closed = 0
-      ${isSimpleFinWasmEnabled() ? "AND a.account_sync_source = 'simpleFin'" : ''}
+      ${isSimpleFinWasmEnabled() ? "AND a.account_sync_source IN ('simpleFin', 'pluggyai', 'akahu')" : ''}
       ${ids.length ? `AND a.id IN (${ids.map(() => '?').join(', ')})` : ''}
     ORDER BY a.offbudget, a.sort_order
   `,

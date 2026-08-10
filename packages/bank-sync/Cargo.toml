@@ -1,9 +1,9 @@
 [package]
-name = "actual-sync-server"
+name = "actual-bank-sync"
 version = "26.8.0"
 edition = "2024"
 license = "MIT"
-description = "Actual Budget sync server"
+description = "Actual Budget bank sync"
 
 [features]
 default = []
@@ -16,6 +16,7 @@ crate-type = ["rlib", "cdylib"]
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 base64 = "0.23"
 chrono = "0.4"
+chrono-tz = "0.10"
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false }
 wasm-bindgen = { version = "0.2", optional = true }

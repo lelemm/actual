@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-PACKAGE_DIR="$ROOT/packages/sync-server"
+PACKAGE_DIR="$ROOT/packages/bank-sync"
 LOCKFILE="$PACKAGE_DIR/Cargo.lock"
 OUTPUT_DIR="$ROOT/packages/desktop-client/generated/bank-sync-wasm"
 TARGET=wasm32-unknown-unknown
@@ -46,7 +46,7 @@ cargo build \
 generated_dir=$(mktemp -d)
 trap 'rm -rf "$generated_dir"' EXIT
 wasm-bindgen \
-  "$PACKAGE_DIR/target/$TARGET/release/actual_sync_server.wasm" \
+  "$PACKAGE_DIR/target/$TARGET/release/actual_bank_sync.wasm" \
   --target web \
   --no-typescript \
   --out-dir "$generated_dir"

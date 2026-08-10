@@ -37,6 +37,8 @@ import type {
 
 import { getStartingBalancePayee } from './payees';
 import {
+  getAkahuTransactions,
+  getPluggyAiTransactions,
   getSimpleFinTransactions,
   isSimpleFinWasmEnabled,
 } from './simplefin-wasm';
@@ -289,23 +291,29 @@ async function downloadPluggyAiTransactions(
   since: string,
   fileId?: string,
 ) {
-  const userToken = await asyncStorage.getItem('user-token');
-  if (!userToken) return;
-
   logger.log('Pulling transactions from Pluggy.ai');
 
-  const res = await post(
-    getServer().PLUGGYAI_SERVER + '/transactions',
-    {
-      accountId: acctId,
-      startDate: since,
-    },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-      ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
-    },
-    60000,
-  );
+  const body = {
+    accountId: acctId,
+    startDate: since,
+  };
+  let res;
+  if (isSimpleFinWasmEnabled()) {
+    res = await getPluggyAiTransactions(body);
+  } else {
+    const userToken = await asyncStorage.getItem('user-token');
+    if (!userToken) return;
+
+    res = await post(
+      getServer().PLUGGYAI_SERVER + '/transactions',
+      body,
+      {
+        'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
+      },
+      60000,
+    );
+  }
 
   if (res.error_code) {
     throw BankSyncError(res.error_type, res.error_code);
@@ -329,22 +337,28 @@ async function downloadAkahuTransactions(
   acctId: AccountEntity['id'],
   since: string,
 ) {
-  const userToken = await asyncStorage.getItem('user-token');
-  if (!userToken) return;
-
   logger.log('Pulling transactions from Akahu');
 
-  const res = await post(
-    getServer().AKAHU_SERVER + '/transactions',
-    {
-      accountId: acctId,
-      startDate: since,
-    },
-    {
-      'X-ACTUAL-TOKEN': userToken,
-    },
-    60000,
-  );
+  const body = {
+    accountId: acctId,
+    startDate: since,
+  };
+  let res;
+  if (isSimpleFinWasmEnabled()) {
+    res = await getAkahuTransactions(body);
+  } else {
+    const userToken = await asyncStorage.getItem('user-token');
+    if (!userToken) return;
+
+    res = await post(
+      getServer().AKAHU_SERVER + '/transactions',
+      body,
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+      60000,
+    );
+  }
 
   if (res.error_code) {
     throw BankSyncError(res.error_type, res.error_code);
