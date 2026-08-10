@@ -26,6 +26,7 @@ packages/crdt/dist
 packages/desktop-client/build-stats
 packages/desktop-client/dev-dist
 packages/desktop-client/public/kcab
+packages/desktop-client/generated/bank-sync-wasm
 packages/desktop-client/locale
 packages/desktop-client/playwright-report
 packages/desktop-client/test-results
@@ -80,6 +81,7 @@ bundle.mobile.js.map
 
 # build output
 package.tgz
+packages/sync-server/target/
 
 # Fly.io configuration
 fly.toml

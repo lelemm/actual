@@ -1,7 +1,15 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { cp, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -97,6 +105,7 @@ const pluginsServiceDistDir = path.resolve(
   '../plugins-service/dist',
 );
 const serviceWorkerDir = path.resolve(__dirname, 'service-worker');
+const bankSyncWasmDir = path.resolve(__dirname, 'generated/bank-sync-wasm');
 
 const WORKER_FILENAME_RE = /^kcab\.worker\.(.+)\.js$/;
 
@@ -236,9 +245,55 @@ const pluginsServiceAssets = (): Plugin => ({
   },
 });
 
+const bankSyncWasmAssets = (): Plugin => ({
+  name: 'bank-sync-wasm-assets',
+  configureServer(server) {
+    server.middlewares.use('/bank-sync-wasm', (req, res, next) => {
+      const pathname = decodeURIComponent(
+        new URL(req.url ?? '/', 'http://localhost').pathname,
+      );
+      const filePath = path.resolve(bankSyncWasmDir, `.${pathname}`);
+      if (!filePath.startsWith(bankSyncWasmDir + path.sep)) return next();
+      const stream = createReadStream(filePath);
+      stream
+        .on('open', () => {
+          res.setHeader(
+            'Content-Type',
+            CONTENT_TYPES[path.extname(filePath)] ?? 'application/octet-stream',
+          );
+          stream.pipe(res);
+        })
+        .on('error', () => next());
+    });
+  },
+  async generateBundle() {
+    const entries = await readdir(bankSyncWasmDir, {
+      recursive: true,
+      withFileTypes: true,
+    });
+    await Promise.all(
+      entries
+        .filter(entry => entry.isFile())
+        .map(async entry => {
+          const sourcePath = path.join(entry.parentPath, entry.name);
+          const relativePath = path
+            .relative(bankSyncWasmDir, sourcePath)
+            .replaceAll(path.sep, '/');
+          this.emitFile({
+            type: 'asset',
+            fileName: `bank-sync-wasm/${relativePath}`,
+            source: await readFile(sourcePath),
+          });
+        }),
+    );
+  },
+});
+
 export default defineConfig(async ({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isVitest = process.env.VITEST === 'true';
+  const isBrowserMode = mode === 'browser' || mode === 'wasm';
+  const isWasmMode = mode === 'wasm';
   const devHeaders = {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -329,7 +384,7 @@ export default defineConfig(async ({ mode, command }) => {
       },
     },
     resolve: {
-      ...(mode !== 'browser' && {
+      ...(!isBrowserMode && {
         conditions: ['electron-renderer', 'module', 'browser', 'default'],
       }),
       tsconfigPaths: true,
@@ -386,6 +441,7 @@ export default defineConfig(async ({ mode, command }) => {
       addWatchers(),
       mode === 'desktop' || isVitest ? undefined : lootCoreBackend(),
       mode === 'desktop' ? undefined : pluginsServiceAssets(),
+      isWasmMode ? bankSyncWasmAssets() : undefined,
       react(),
       babel({
         include: [reactCompilerInclude],

@@ -20,6 +20,7 @@ const ACTUAL_VERSION = Platform.isPlaywright
   : import.meta.env.REACT_APP_REVIEW_ID
     ? '.preview'
     : packageJson.version;
+const SIMPLEFIN_WASM = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
 
 // The OIDC callback (/openid-cb) is reached via a full-page navigation back
 // from the OpenID provider. Routing it through the SharedWorker coordinator is
@@ -48,6 +49,7 @@ const worker = startBrowserBackend({
     isDev: IS_DEV,
     publicUrl: import.meta.env.BASE_URL.slice(0, -1),
     hash: import.meta.env.REACT_APP_BACKEND_WORKER_HASH,
+    simpleFinWasm: SIMPLEFIN_WASM,
   },
   createSharedWorker: () =>
     new SharedBrowserServerWorker({ name: 'actual-backend' }),
@@ -55,6 +57,7 @@ const worker = startBrowserBackend({
     Platform.isPlaywright ||
     Platform.isIOS ||
     Platform.isAndroid ||
+    SIMPLEFIN_WASM ||
     isOpenIdCallback,
 });
 

@@ -41,6 +41,14 @@ import type {
 
 import * as link from './link';
 import { getStartingBalancePayee } from './payees';
+import {
+  checkSimpleFinSecret,
+  getSimpleFinAccounts,
+  getSimpleFinStatus,
+  isSimpleFinSecret,
+  isSimpleFinWasmEnabled,
+  setSimpleFinSecret,
+} from './simplefin-wasm';
 import * as bankSync from './sync';
 
 // Shared base type for link account parameters
@@ -721,6 +729,10 @@ async function setSecret({
   value: string | null;
   fileId?: string | null;
 }) {
+  if (isSimpleFinWasmEnabled() && isSimpleFinSecret(name)) {
+    return setSimpleFinSecret(name, value);
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -762,6 +774,10 @@ async function setSecret({
   }
 }
 async function checkSecret(name: string) {
+  if (isSimpleFinWasmEnabled() && isSimpleFinSecret(name)) {
+    return checkSimpleFinSecret(name);
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -887,6 +903,10 @@ async function goCardlessStatus() {
 }
 
 async function simpleFinStatus() {
+  if (isSimpleFinWasmEnabled()) {
+    return getSimpleFinStatus();
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -952,6 +972,14 @@ async function akahuStatus() {
 }
 
 async function simpleFinAccounts() {
+  if (isSimpleFinWasmEnabled()) {
+    try {
+      return await getSimpleFinAccounts();
+    } catch {
+      return { error_code: 'TIMED_OUT' };
+    }
+  }
+
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -1442,6 +1470,7 @@ async function accountsBankSync({
     FROM accounts a
     LEFT JOIN banks b ON a.bank = b.id
     WHERE a.tombstone = 0 AND a.closed = 0
+      ${isSimpleFinWasmEnabled() ? "AND a.account_sync_source = 'simpleFin'" : ''}
       ${ids.length ? `AND a.id IN (${ids.map(() => '?').join(', ')})` : ''}
     ORDER BY a.offbudget, a.sort_order
   `,

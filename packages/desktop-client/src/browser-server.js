@@ -84,7 +84,7 @@ self.addEventListener('message', async event => {
           { maxRetries: isDev ? 5 : 3 },
         );
 
-        backend.initApp(isDev, self).catch(err => {
+        backend.initApp(isDev, self, msg.simpleFinWasm).catch(err => {
           console.log(err);
           appInitFailureInterval = postMessageWithRetry({
             type: 'app-init-failure',

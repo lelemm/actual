@@ -5,12 +5,18 @@ import { loadMappings } from '#server/db/mappings';
 import { isMutating, runHandler, runMutator } from '#server/mutators';
 
 import { app } from './app';
+import * as simpleFinWasm from './simplefin-wasm';
 import * as bankSync from './sync';
 
 vi.mock('./sync', async () => ({
   ...(await vi.importActual('./sync')),
   simpleFinBatchSync: vi.fn(),
   syncAccount: vi.fn(),
+}));
+
+vi.mock('./simplefin-wasm', async () => ({
+  ...(await vi.importActual('./simplefin-wasm')),
+  isSimpleFinWasmEnabled: vi.fn(() => false),
 }));
 
 const simpleFinBatchSyncHandler = app.handlers['simplefin-batch-sync'];
@@ -44,6 +50,7 @@ async function setupSimpleFinAccounts(
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.mocked(simpleFinWasm.isSimpleFinWasmEnabled).mockReturnValue(false);
   vi.mocked(asyncStorage.multiGet).mockResolvedValue({
     'user-id': 'user-1',
     'user-key': 'key-1',
@@ -144,6 +151,45 @@ describe('simpleFinBatchSync', () => {
 });
 
 describe('accountsBankSync', () => {
+  it('skips non-SimpleFIN accounts in WASM mode', async () => {
+    vi.mocked(simpleFinWasm.isSimpleFinWasmEnabled).mockReturnValue(true);
+    insertBank({ id: 'simplefin-bank', bank_id: 'sf-bank', name: 'SimpleFIN' });
+    insertBank({ id: 'other-bank', bank_id: 'gc-bank', name: 'GoCardless' });
+    await db.insertAccount({
+      id: 'simplefin-account',
+      name: 'SimpleFIN account',
+      bank: 'simplefin-bank',
+      account_id: 'sf-account',
+      account_sync_source: 'simpleFin',
+    });
+    await db.insertAccount({
+      id: 'other-account',
+      name: 'Other account',
+      bank: 'other-bank',
+      account_id: 'gc-account',
+      account_sync_source: 'goCardless',
+    });
+    vi.mocked(bankSync.syncAccount).mockResolvedValue({
+      added: [],
+      updated: [],
+      updatedPreview: [],
+    });
+
+    await accountsBankSyncHandler({ ids: [] });
+
+    expect(bankSync.syncAccount).toHaveBeenCalledOnce();
+    expect(bankSync.syncAccount).toHaveBeenCalledWith(
+      'user-1',
+      'key-1',
+      'simplefin-account',
+      'sf-account',
+      'sf-bank',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
   it('persists ok status after a successful sync', async () => {
     insertBank({ id: 'bank1', bank_id: 'gc-bank', name: 'GoCardless' });
     await db.insertAccount({

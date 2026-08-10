@@ -5,6 +5,8 @@ import { send } from '@actual-app/core/platform/client/connection';
 import { useSyncServerStatus } from './useSyncServerStatus';
 
 export function useSimpleFinStatus() {
+  const isSimpleFinWasm =
+    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const [configuredSimpleFin, setConfiguredSimpleFin] = useState<
     boolean | null
   >(null);
@@ -21,10 +23,10 @@ export function useSimpleFinStatus() {
       setIsLoading(false);
     }
 
-    if (status === 'online') {
+    if (status === 'online' || isSimpleFinWasm) {
       void fetch();
     }
-  }, [status]);
+  }, [isSimpleFinWasm, status]);
 
   return {
     configuredSimpleFin,

@@ -9,6 +9,7 @@ export type StartBackendInit = {
   isDev: boolean;
   publicUrl?: string;
   hash?: string;
+  simpleFinWasm?: boolean;
 };
 
 export type StartBackendOptions = {

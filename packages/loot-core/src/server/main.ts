@@ -9,6 +9,7 @@ import { amountToInteger, integerToAmount } from '#shared/util';
 import type { Handlers } from '#types/handlers';
 
 import { app as accountsApp } from './accounts/app';
+import { configureSimpleFinWasm } from './accounts/simplefin-wasm';
 import { app as adminApp } from './admin/app';
 import { installAPI } from './api';
 import { aqlQuery } from './aql';
@@ -184,11 +185,12 @@ async function setupDocumentsDir() {
   fs._setDocumentDir(documentDir);
 }
 
-export async function initApp(isDev, socketName) {
+export async function initApp(isDev, socketName, simpleFinWasm = false) {
   await sqlite.init();
   asyncStorage.init();
   await fs.init();
   await setupDocumentsDir();
+  configureSimpleFinWasm(simpleFinWasm);
 
   const keysStr = await asyncStorage.getItem('encrypt-keys');
   if (keysStr) {

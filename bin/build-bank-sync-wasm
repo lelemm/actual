@@ -1,0 +1,59 @@
+#!/bin/sh -e
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PACKAGE_DIR="$ROOT/packages/sync-server"
+LOCKFILE="$PACKAGE_DIR/Cargo.lock"
+OUTPUT_DIR="$ROOT/packages/desktop-client/generated/bank-sync-wasm"
+TARGET=wasm32-unknown-unknown
+
+expected_bindgen_version=$(awk '
+  $0 == "name = \"wasm-bindgen\"" { found = 1; next }
+  found && /^version = / {
+    gsub(/^version = "|"$/, "")
+    print
+    exit
+  }
+' "$LOCKFILE")
+
+if ! rustup target list --installed | grep -qx "$TARGET"; then
+  echo "Missing Rust target $TARGET. Install it with:" >&2
+  echo "  rustup target add $TARGET" >&2
+  exit 1
+fi
+
+if ! command -v wasm-bindgen >/dev/null 2>&1; then
+  echo "Missing wasm-bindgen CLI $expected_bindgen_version. Install it with:" >&2
+  echo "  cargo install wasm-bindgen-cli --version $expected_bindgen_version --locked" >&2
+  exit 1
+fi
+
+actual_bindgen_version=$(wasm-bindgen --version | awk '{ print $2 }')
+if [ "$actual_bindgen_version" != "$expected_bindgen_version" ]; then
+  echo "wasm-bindgen CLI version $actual_bindgen_version does not match Cargo.lock ($expected_bindgen_version)." >&2
+  echo "Install the matching CLI with:" >&2
+  echo "  cargo install wasm-bindgen-cli --version $expected_bindgen_version --locked --force" >&2
+  exit 1
+fi
+
+cargo build \
+  --manifest-path "$PACKAGE_DIR/Cargo.toml" \
+  --lib \
+  --target "$TARGET" \
+  --release \
+  --no-default-features \
+  --features wasm
+
+generated_dir=$(mktemp -d)
+trap 'rm -rf "$generated_dir"' EXIT
+wasm-bindgen \
+  "$PACKAGE_DIR/target/$TARGET/release/actual_sync_server.wasm" \
+  --target web \
+  --no-typescript \
+  --out-dir "$generated_dir"
+
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$(dirname -- "$OUTPUT_DIR")"
+mv "$generated_dir" "$OUTPUT_DIR"
+trap - EXIT
+
+echo "Bank-sync WASM assets written to $OUTPUT_DIR"

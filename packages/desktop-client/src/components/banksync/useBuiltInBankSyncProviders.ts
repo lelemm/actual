@@ -107,6 +107,8 @@ async function ensureSuccessResponse(
 export function useBuiltInBankSyncProviders({
   upgradingAccountId,
 }: UseBuiltInBankSyncProvidersOptions = {}) {
+  const isSimpleFinWasm =
+    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const syncServerStatus = useSyncServerStatus();
@@ -645,7 +647,9 @@ export function useBuiltInBankSyncProviders({
 
   const providers = useMemo<BuiltInBankSyncProviderState[]>(() => {
     const baseProviders: BuiltInBankSyncProviderState[] =
-      BUILT_IN_BANK_SYNC_PROVIDERS.map(providerId => {
+      BUILT_IN_BANK_SYNC_PROVIDERS.filter(
+        providerId => !isSimpleFinWasm || providerId === 'simpleFin',
+      ).map(providerId => {
         if (providerId === 'goCardless') {
           return {
             id: providerId,
@@ -673,7 +677,7 @@ export function useBuiltInBankSyncProviders({
             isConfigured: configuredProviders.simpleFin,
             credentialSource: 'global',
             supportsPerBudgetFile: false,
-            canConfigure: canConfigureProviders,
+            canConfigure: isSimpleFinWasm || canConfigureProviders,
             isLoading: loadingSimpleFinAccounts,
             onConfigure: onSimpleFinInit,
             onLink: onConnectSimpleFin,
@@ -699,7 +703,7 @@ export function useBuiltInBankSyncProviders({
         };
       });
 
-    if (akahuEnabled) {
+    if (!isSimpleFinWasm && akahuEnabled) {
       baseProviders.push({
         id: 'akahu',
         displayName: 'Akahu',
@@ -717,7 +721,7 @@ export function useBuiltInBankSyncProviders({
       });
     }
 
-    if (enableBankingEnabled) {
+    if (!isSimpleFinWasm && enableBankingEnabled) {
       baseProviders.push({
         id: 'enableBanking',
         displayName: 'Enable Banking',
@@ -738,6 +742,7 @@ export function useBuiltInBankSyncProviders({
     return baseProviders;
   }, [
     canConfigureProviders,
+    isSimpleFinWasm,
     isAdmin,
     isFileOwner,
     configuredProviders.enableBanking,
@@ -778,7 +783,7 @@ export function useBuiltInBankSyncProviders({
 
   return {
     providers,
-    syncServerStatus,
+    syncServerStatus: isSimpleFinWasm ? 'online' : syncServerStatus,
     permissionWarning,
   };
 }
