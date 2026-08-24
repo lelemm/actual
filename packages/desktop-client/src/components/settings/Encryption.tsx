@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trans } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
+import { send } from '@actual-app/core/platform/client/connection';
 
 import { Link } from '#components/common/Link';
 import { useServerURL } from '#components/ServerContext';
@@ -136,5 +137,116 @@ export function EncryptionSettings() {
         </Link>
       </Text>
     </Setting>
+  );
+}
+
+type ServerAccessState = {
+  available: boolean;
+  status: 'disabled' | 'starting' | 'ready' | 'degraded';
+  fingerprint?: string;
+};
+
+export function ServerAccessSettings() {
+  const serverURL = useServerURL();
+  const [state, setState] = useState<ServerAccessState>({
+    available: false,
+    status: 'disabled',
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  async function refresh() {
+    try {
+      setState(await send('server-access/get'));
+    } catch {
+      setState({ available: false, status: 'disabled' });
+      setHasError(true);
+    }
+  }
+
+  useEffect(() => {
+    if (serverURL) void refresh();
+  }, [serverURL]);
+
+  async function toggle() {
+    setIsSaving(true);
+    setHasError(false);
+    try {
+      const result =
+        state.status === 'disabled'
+          ? await send('server-access/enable', {
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            })
+          : await send('server-access/disable');
+      setHasError(Boolean(result?.error));
+      await refresh();
+    } catch {
+      setHasError(true);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const isEnabled = state.status !== 'disabled';
+  return (
+    <div data-testid="server-access-settings" style={{ width: '100%' }}>
+      <Setting
+        primaryAction={
+          <Button
+            isDisabled={isSaving || (!state.available && !isEnabled)}
+            onPress={toggle}
+            data-testid="server-access-toggle"
+          >
+            {isEnabled ? (
+              <Trans>Disable server access</Trans>
+            ) : (
+              <Trans>Allow server access</Trans>
+            )}
+          </Button>
+        }
+      >
+        <Text style={{ fontWeight: 600 }}>
+          <Trans>Server API and schedule automation</Trans>
+        </Text>
+        <Text>
+          <Trans>
+            Allowing server access lets this server decrypt this budget, keep an
+            encrypted database mirror, expose the budget API, and automatically
+            post scheduled transactions. This budget is no longer end-to-end
+            encrypted while access is enabled. Only enable this on a server you
+            trust and control.
+          </Trans>{' '}
+          <Link
+            variant="external"
+            to="https://actualbudget.org/docs/getting-started/sync/#server-access"
+            linkColor="purple"
+          >
+            <Trans>Learn more</Trans>
+          </Link>
+        </Text>
+        {!serverURL && (
+          <Text style={{ color: theme.noticeTextLight }}>
+            <Trans>
+              Connect this budget to a sync server to use this feature.
+            </Trans>
+          </Text>
+        )}
+        {serverURL && !state.available && !isEnabled && (
+          <Text style={{ color: theme.noticeTextLight }}>
+            <Trans>This server has not configured server access.</Trans>
+          </Text>
+        )}
+        {isEnabled && (
+          <Text style={{ color: theme.noticeTextLight }}>
+            <Trans>Server mirror status: {state.status}</Trans>
+          </Text>
+        )}
+        {hasError && (
+          <Text style={{ color: theme.errorText }}>
+            <Trans>Actual could not change server access. Try again.</Trans>
+          </Text>
+        )}
+      </Setting>
+    </div>
   );
 }

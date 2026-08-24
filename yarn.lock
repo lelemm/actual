@@ -142,6 +142,7 @@ __metadata:
     hyperformula: "npm:^3.3.0"
     jest-diff: "npm:^30.4.1"
     jsverify: "npm:^0.8.4"
+    libsodium-wrappers: "npm:0.8.4"
     lru-cache: "npm:^11.5.2"
     mitt: "npm:^3.0.1"
     mockdate: "npm:^3.0.5"
@@ -180,6 +181,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@actual-app/sync-server@workspace:packages/sync-server"
   dependencies:
+    "@actual-app/api": "workspace:*"
+    "@actual-app/core": "workspace:*"
     "@actual-app/crdt": "workspace:*"
     "@actual-app/web": "workspace:*"
     "@types/bcrypt": "npm:^6.0.0"
@@ -195,6 +198,7 @@ __metadata:
     argon2: "npm:^0.44.0"
     bcrypt: "npm:^6.0.0"
     better-sqlite3: "npm:^12.11.1"
+    better-sqlite3-multiple-ciphers: "npm:12.11.1"
     convict: "npm:^6.2.5"
     cors: "npm:^2.8.6"
     cross-env: "npm:^10.1.0"
@@ -206,6 +210,7 @@ __metadata:
     http-proxy-middleware: "npm:^4.2.0"
     ipaddr.js: "npm:^2.4.0"
     jws: "npm:^4.0.1"
+    libsodium-wrappers: "npm:0.8.4"
     migrate: "npm:^2.1.0"
     nodemon: "npm:^3.1.14"
     openid-client: "npm:^5.7.1"
@@ -9970,6 +9975,8 @@ __metadata:
       built: true
     better-sqlite3:
       built: true
+    better-sqlite3-multiple-ciphers:
+      built: true
     electron:
       built: true
     esbuild:
@@ -10756,6 +10763,17 @@ __metadata:
   version: 4.0.0
   resolution: "before-after-hook@npm:4.0.0"
   checksum: 10/9fd52bc0c3cca0fb115e04dacbeeaacff38fa23e1af725d62392254c31ef433b15da60efcba61552e44d64e26f25ea259f72dba005115924389e88d2fd56e19f
+  languageName: node
+  linkType: hard
+
+"better-sqlite3-multiple-ciphers@npm:12.11.1":
+  version: 12.11.1
+  resolution: "better-sqlite3-multiple-ciphers@npm:12.11.1"
+  dependencies:
+    bindings: "npm:^1.5.0"
+    node-gyp: "npm:latest"
+    prebuild-install: "npm:^7.1.1"
+  checksum: 10/48e87e0966c8d179da6690145e692b46891a67468cfea6b4e6e18340b401b581887745dc5da081fab309d4d86fc9e95c8d5bc1761e411e09b93fef0709bd74dc
   languageName: node
   linkType: hard
 
@@ -18371,6 +18389,22 @@ __metadata:
     prelude-ls: "npm:^1.2.1"
     type-check: "npm:~0.4.0"
   checksum: 10/2e4720ff79f21ae08d42374b0a5c2f664c5be8b6c8f565bb4e1315c96ed3a8acaa9de788ffed82d7f2378cf36958573de07ef92336cb5255ed74d08b8318c9ee
+  languageName: node
+  linkType: hard
+
+"libsodium-wrappers@npm:0.8.4":
+  version: 0.8.4
+  resolution: "libsodium-wrappers@npm:0.8.4"
+  dependencies:
+    libsodium: "npm:^0.8.0"
+  checksum: 10/186e9004482826a086e03017efca80405b7449f085cced48702adb8bb92d66e8c983f761550883cb1c078b01098ca459053d3c7c69ec3cdee7f86ceba25bd888
+  languageName: node
+  linkType: hard
+
+"libsodium@npm:^0.8.0":
+  version: 0.8.4
+  resolution: "libsodium@npm:0.8.4"
+  checksum: 10/14ce69b78350e81d92d60da78608df5d019825013b3140999d820c70fb7151f5b6e71e1d7c05ca88de4b46f8deda710a023a6ecd4a8e0b8544a4d5e129d1a769
   languageName: node
   linkType: hard
 

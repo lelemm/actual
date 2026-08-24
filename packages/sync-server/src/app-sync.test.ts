@@ -692,6 +692,34 @@ describe('/upload-user-file', () => {
     expect(res.text).toEqual('file-access-not-allowed');
   });
 
+  it('returns 403 when a shared user uploads a pending server-access reset', async () => {
+    const fileId = generateFileId();
+    const keyId = 'key-id';
+    getAccountDb().mutate(
+      `INSERT INTO files
+        (id, sync_version, encrypt_keyid, deleted, owner, server_access_pending)
+       VALUES (?, 2, ?, 0, ?, 1)`,
+      [fileId, keyId, OTHER_USER_ID],
+    );
+    getAccountDb().mutate(
+      'INSERT INTO user_access (file_id, user_id) VALUES (?, ?)',
+      [fileId, 'genericUser'],
+    );
+
+    const res = await request(app)
+      .post('/upload-user-file')
+      .set('Content-Type', 'application/encrypted-file')
+      .set('x-actual-token', 'valid-token-user')
+      .set('x-actual-file-id', fileId)
+      .set('x-actual-name', 'shared-reset.zip')
+      .set('x-actual-format', '2')
+      .set('x-actual-encrypt-meta', JSON.stringify({ keyId }))
+      .send(Buffer.from('not-a-budget'));
+
+    expect(res.statusCode).toEqual(403);
+    expect(res.text).toEqual('file-access-not-allowed');
+  });
+
   it("allows an admin to overwrite another user's file", async () => {
     const fileId = generateFileId();
     const groupId = 'admin-upload-group-id';
@@ -1113,6 +1141,9 @@ describe('/get-user-file-info', () => {
         groupId: fileInfo.group_id,
         name: fileInfo.name,
         encryptMeta: { key: 'value' },
+        serverAccessEnabled: false,
+        serverAccessFingerprint: null,
+        automationTimeZone: null,
         usersWithAccess: [],
       },
     });
@@ -1192,6 +1223,9 @@ describe('/get-user-file-info', () => {
         groupId,
         name,
         encryptMeta: { key: 'value' },
+        serverAccessEnabled: false,
+        serverAccessFingerprint: null,
+        automationTimeZone: null,
         usersWithAccess: [],
       },
     });

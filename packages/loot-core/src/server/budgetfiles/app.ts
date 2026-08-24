@@ -615,7 +615,11 @@ async function _loadBudget(id: Budget['id']): Promise<{
     await prefs.savePrefs({ resetClock: false });
   }
 
-  if (!Platform.isBrowser && process.env.NODE_ENV !== 'test') {
+  if (
+    !Platform.isBrowser &&
+    process.env.NODE_ENV !== 'test' &&
+    process.env.ACTUAL_DISABLE_BACKUPS !== 'true'
+  ) {
     startBackupService(id);
   }
 

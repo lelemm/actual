@@ -41,6 +41,7 @@ export async function encode(
     fileId,
     keyId: encryptKeyId ?? '',
     since: since.toString(),
+    capabilities: ['server-automation-v1'],
   });
 
   for (const msg of messages) {
@@ -92,9 +93,11 @@ export async function encode(
   return toBinary(SyncRequestSchema, requestPb);
 }
 
-export async function decode(
-  data: Uint8Array,
-): Promise<{ messages: Message[]; merkle: { hash: number } }> {
+export async function decode(data: Uint8Array): Promise<{
+  messages: Message[];
+  merkle: { hash: number };
+  capabilities: string[];
+}> {
   const { encryptKeyId } = prefs.getPrefs();
 
   const responsePb = fromBinary(SyncResponseSchema, data);
@@ -136,5 +139,5 @@ export async function decode(
     });
   }
 
-  return { messages, merkle };
+  return { messages, merkle, capabilities: responsePb.capabilities };
 }

@@ -65,8 +65,8 @@
 
 - **Q.** _Does Actual Budget have an API? What are the endpoints?_
 
-  **A.** Actual does not have a REST API with endpoints that you can just call. However, we do have an API NPM package that allows programmatic access to the budget. It runs the UI in _headless_ mode and allows performing many of the same operations that you can perform by clicking around the UI.
+  **A.** Actual has an API NPM package that allows programmatic access to a budget. It runs the budget engine in _headless_ mode and supports many of the same operations that you can perform in the UI.
 
-  The reason why Actual doesn't have REST-full endpoints is - Actual is a local-first product with the primary database hosted on your local device rather than in a remote server. There is an optional sync server that can be set-up (i.e. `actual-server`), but it does not have the full database (but rather an archival backup of some point-in-time as well as _messages_ with the updates applied to the backup).
+  A self-hosted server can also expose an opt-in HTTP endpoint for a budget. This requires [Server Access](./getting-started/sync.md#server-access), which explicitly allows that server to decrypt the budget and maintain a queryable mirror. Without Server Access, the sync server has only the budget snapshot and change messages and cannot query the budget.
 
   Read more about the API package in the [API documentation pages](./api/index.md).

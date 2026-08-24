@@ -1,5 +1,6 @@
 // @ts-strict-ignore
 import MockDate from 'mockdate';
+import { v5 as uuidv5 } from 'uuid';
 
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
@@ -845,12 +846,20 @@ describe('schedule app', () => {
         await advanceSchedulesService(true);
 
         const { data: transactions } = await aqlQuery(
-          q('transactions').filter({ schedule: id }).select(['date', 'amount']),
+          q('transactions')
+            .filter({ schedule: id })
+            .select(['id', 'date', 'amount']),
         );
 
         expect(
-          transactions.map(({ date, amount }) => ({ date, amount })),
-        ).toEqual([{ date: '2016-12-31', amount: -10000 }]);
+          transactions.map(({ id, date, amount }) => ({ id, date, amount })),
+        ).toEqual([
+          {
+            id: uuidv5(`${id}:2016-12-31`, uuidv5.URL),
+            date: '2016-12-31',
+            amount: -10000,
+          },
+        ]);
       } finally {
         MockDate.reset();
         await schedulesApp.stopServices();

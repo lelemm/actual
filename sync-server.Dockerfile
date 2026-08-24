@@ -17,6 +17,7 @@ COPY packages/eslint-plugin-actual/package.json packages/eslint-plugin-actual/pa
 COPY packages/loot-core/package.json packages/loot-core/package.json
 COPY packages/sync-server/package.json packages/sync-server/package.json
 COPY packages/plugins-service/package.json packages/plugins-service/package.json
+COPY packages/vite-plugin-peggy/package.json packages/vite-plugin-peggy/package.json
 
 COPY ./bin/package-browser ./bin/package-browser
 
@@ -43,10 +44,14 @@ RUN yarn build:server
 # Focus the workspaces in production mode (including @actual-app/web you just built)
 RUN yarn workspaces focus @actual-app/sync-server --production
 
-# Remove symbolic links for @actual-app/web and @actual-app/sync-server
-RUN rm -rf ./node_modules/@actual-app/web ./node_modules/@actual-app/sync-server
+# Remove workspace symbolic links whose targets are not copied into the runtime
+# image.
+RUN rm -rf ./node_modules/@actual-app/api ./node_modules/@actual-app/web ./node_modules/@actual-app/sync-server
 
-# Copy in the @actual-app/web artifacts manually, so we don't need the entire packages folder
+# Copy in the workspace artifacts needed at runtime, so we don't need the
+# entire packages folder.
+COPY ./packages/api/package.json ./node_modules/@actual-app/api/package.json
+RUN cp -r ./packages/api/dist ./node_modules/@actual-app/api/dist
 COPY ./packages/desktop-client/package.json ./node_modules/@actual-app/web/package.json
 RUN cp -r ./packages/desktop-client/build ./node_modules/@actual-app/web/build
 

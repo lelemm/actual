@@ -10,7 +10,7 @@ import { fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2';
  * Describes the file sync.proto.
  */
 export const file_sync: GenFile /*@__PURE__*/ = fileDesc(
-  'CgpzeW5jLnByb3RvIjoKDUVuY3J5cHRlZERhdGESCgoCaXYYASABKAwSDwoHYXV0aFRhZxgCIAEoDBIMCgRkYXRhGAMgASgMIkYKB01lc3NhZ2USDwoHZGF0YXNldBgBIAEoCRILCgNyb3cYAiABKAkSDgoGY29sdW1uGAMgASgJEg0KBXZhbHVlGAQgASgJIkoKD01lc3NhZ2VFbnZlbG9wZRIRCgl0aW1lc3RhbXAYASABKAkSEwoLaXNFbmNyeXB0ZWQYAiABKAgSDwoHY29udGVudBgDIAEoDCJ2CgtTeW5jUmVxdWVzdBIiCghtZXNzYWdlcxgBIAMoCzIQLk1lc3NhZ2VFbnZlbG9wZRIOCgZmaWxlSWQYAiABKAkSDwoHZ3JvdXBJZBgDIAEoCRINCgVrZXlJZBgFIAEoCRINCgVzaW5jZRgGIAEoCUoECAQQBSJCCgxTeW5jUmVzcG9uc2USIgoIbWVzc2FnZXMYASADKAsyEC5NZXNzYWdlRW52ZWxvcGUSDgoGbWVya2xlGAIgASgJYgZwcm90bzM',
+  'CgpzeW5jLnByb3RvIjoKDUVuY3J5cHRlZERhdGESCgoCaXYYASABKAwSDwoHYXV0aFRhZxgCIAEoDBIMCgRkYXRhGAMgASgMIkYKB01lc3NhZ2USDwoHZGF0YXNldBgBIAEoCRILCgNyb3cYAiABKAkSDgoGY29sdW1uGAMgASgJEg0KBXZhbHVlGAQgASgJIkoKD01lc3NhZ2VFbnZlbG9wZRIRCgl0aW1lc3RhbXAYASABKAkSEwoLaXNFbmNyeXB0ZWQYAiABKAgSDwoHY29udGVudBgDIAEoDCKaAQoLU3luY1JlcXVlc3QSIgoIbWVzc2FnZXMYASADKAsyEC5NZXNzYWdlRW52ZWxvcGUSDgoGZmlsZUlkGAIgASgJEg8KB2dyb3VwSWQYAyABKAkSDQoFa2V5SWQYBSABKAkSDQoFc2luY2UYBiABKAkSIgoMY2FwYWJpbGl0aWVzGAcgAygJUgxjYXBhYmlsaXRpZXNKBAgEEAUiZgoMU3luY1Jlc3BvbnNlEiIKCG1lc3NhZ2VzGAEgAygLMhAuTWVzc2FnZUVudmVsb3BlEg4KBm1lcmtsZRgCIAEoCRIiCgxjYXBhYmlsaXRpZXMYAyADKAlSDGNhcGFiaWxpdGllc2IGcHJvdG8z',
 );
 
 /**
@@ -129,6 +129,11 @@ export type SyncRequest = Message$1<'SyncRequest'> & {
    * @generated from field: string since = 6;
    */
   since: string;
+
+  /**
+   * @generated from field: repeated string capabilities = 7;
+   */
+  capabilities: string[];
 };
 
 /**
@@ -151,6 +156,11 @@ export type SyncResponse = Message$1<'SyncResponse'> & {
    * @generated from field: string merkle = 2;
    */
   merkle: string;
+
+  /**
+   * @generated from field: repeated string capabilities = 3;
+   */
+  capabilities: string[];
 };
 
 /**

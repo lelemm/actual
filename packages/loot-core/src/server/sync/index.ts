@@ -39,6 +39,7 @@ export { repairSync } from './repair';
 
 const FULL_SYNC_DELAY = 1000;
 let SYNCING_MODE = 'enabled';
+let serverAutomationAuthoritative = false;
 type SyncingMode = 'enabled' | 'offline' | 'disabled' | 'import';
 
 export function setSyncingMode(mode: SyncingMode) {
@@ -75,6 +76,10 @@ export function checkSyncingMode(mode: SyncingMode): boolean {
     default:
       throw new Error('checkSyncingMode: invalid mode: ' + mode);
   }
+}
+
+export function isServerAutomationAuthoritative() {
+  return serverAutomationAuthoritative;
 }
 
 function apply(msg: Message, prev?: boolean) {
@@ -733,6 +738,9 @@ async function _fullSync(
   }
 
   const res = await encoder.decode(resBuffer);
+  serverAutomationAuthoritative = res.capabilities.includes(
+    'server-automation-v1',
+  );
 
   logger.info('Got messages from server', res.messages.length);
 

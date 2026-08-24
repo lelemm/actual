@@ -21,10 +21,12 @@ const shebangPlugin = (entryFile: string): Plugin => ({
 export default defineConfig({
   ssr: {
     target: 'node',
+    external: ['@actual-app/api'],
     // Inline workspace deps that ship as TS source. Anything else
     // (express, better-sqlite3, bcrypt, @actual-app/web, etc.) stays
     // external so Node resolves it at runtime.
-    noExternal: ['@actual-app/crdt'],
+    noExternal: ['@actual-app/crdt', '@actual-app/core'],
+    resolve: { conditions: ['api'] },
   },
   build: {
     ssr: true,
@@ -57,6 +59,10 @@ export default defineConfig({
           __dirname,
           'src/scripts/health-check.js',
         ),
+        'server-access/mirror-child': path.resolve(
+          __dirname,
+          'src/server-access/mirror-child.ts',
+        ),
       },
       output: {
         format: 'esm',
@@ -70,4 +76,7 @@ export default defineConfig({
   },
   assetsInclude: ['**/*.sql'],
   plugins: [shebangPlugin('bin/actual-server.js')],
+  resolve: {
+    conditions: ['api'],
+  },
 });

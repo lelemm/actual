@@ -1,6 +1,8 @@
 // @ts-strict-ignore
 import * as nativeFs from 'fs';
 
+import type { v5 as uuidV5 } from 'uuid';
+
 import * as fetchClient from '#platform/client/connection';
 import * as sqlite from '#platform/server/sqlite';
 import * as db from '#server/db';
@@ -58,11 +60,15 @@ global.resetRandomId = () => {
   _id = 1;
 };
 
-vi.mock('uuid', () => ({
-  v4: () => {
-    return 'id' + _id++;
-  },
-}));
+vi.mock('uuid', async () => {
+  const uuid = await vi.importActual<{ v5: typeof uuidV5 }>('uuid');
+  return {
+    ...uuid,
+    v4: () => {
+      return 'id' + _id++;
+    },
+  };
+});
 vi.mock('#server/migrate/migrations', async () => {
   const realMigrations = await vi.importActual<typeof MigrationsType>(
     '#server/migrate/migrations',

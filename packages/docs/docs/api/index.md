@@ -2,15 +2,88 @@
 
 import { Method, MethodBox } from './types';
 
-:::warning
+Actual offers two ways to access a budget programmatically:
 
-Many people mistake the term "API" for a HTTP and/or REST-full API. Actual **does not** expose HTTP endpoints that can be called. We do, however, offer a NPM package - API - that allows interacting with the product programmatically.
+- The `@actual-app/api` package runs an Actual client locally.
+- An opt-in HTTP endpoint uses an always-current database mirror on your Actual
+  server.
 
-:::
+The HTTP endpoint is available only for budgets whose owners enable
+[Server Access](../getting-started/sync.md#server-access). Enabling it allows the
+server to decrypt that budget, so read the security warning before using it.
 
 The API gives you full programmatic access to your data. It allows to run the UI in _headless_ mode thus interacting with it as-if it was a user clicking around in it. If you are a developer, you can use this to import transactions from a custom source, export data to another app like Excel, or write anything you want on top of Actual.
 
-One thing to keep in mind: Actual is not like most other apps. While your data is stored on a server, the server does not have the functionality for analyzing details of or modifying your budget. As a result, the API client contains all the code necessary to query your data and will work on a local copy. Right now, the primary use case is custom importers and exporters.
+One thing to keep in mind: Actual is not like most other apps. By default, the
+server stores an encrypted snapshot and change messages, rather than a database
+it can query. The API package therefore contains the budget engine and works on
+a local copy. Server Access is the explicit exception: it gives the server a
+queryable mirror for that budget.
+
+## Using the Server HTTP API
+
+These authenticated control endpoints manage the opt-in state:
+
+| Endpoint                           | Purpose                                             |
+| ---------------------------------- | --------------------------------------------------- |
+| `GET /sync/server-access-key`      | Report availability and the server public key.      |
+| `POST /sync/enable-server-access`  | Start the enablement or encrypted reset flow.       |
+| `POST /sync/disable-server-access` | Revoke future access and remove the current mirror. |
+
+The Actual settings page normally handles those endpoints. Only a budget owner
+or server administrator can enable or disable access.
+
+The server HTTP API uses an existing Actual session. Send its token in the
+`X-ACTUAL-TOKEN` header. The authenticated user must also have access to the
+requested budget file.
+
+Check whether the mirror is ready:
+
+```http
+GET /api/v1/files/FILE_ID/status
+X-ACTUAL-TOKEN: SESSION_TOKEN
+```
+
+The response reports `disabled`, `starting`, `ready`, or `degraded`. It does
+not expose the encrypted budget key or other server secrets.
+
+Call a budget-scoped API method with its usual positional arguments:
+
+```http
+POST /api/v1/files/FILE_ID/rpc
+X-ACTUAL-TOKEN: SESSION_TOKEN
+Content-Type: application/json
+
+{
+  "method": "getAccounts",
+  "args": []
+}
+```
+
+A successful call returns:
+
+```json
+{
+  "status": "ok",
+  "data": []
+}
+```
+
+The endpoint supports the JSON-safe, budget-scoped methods in the
+[API Reference](./reference.md). It does not expose budget loading, importing,
+exporting, callback batching, bank syncing, explicit syncing, or server version
+methods. For `runQuery` and `aqlQuery`, pass the serialized query state as the
+first item in `args`.
+
+HTTP mutations wait until their generated changes are committed to the
+authoritative sync log. Reads wait for all earlier changes to reach the mirror,
+so the endpoint returns `503` instead of serving known-stale data. Other stable
+responses are `400` for an invalid call, `401` for a missing or expired session,
+`403` for insufficient file access, and `404` for a missing file.
+
+The sync server applies request rate limits and a method timeout. Keep each call
+small; use the local `@actual-app/api` package for long-running import or export
+workflows.
 
 ## Getting Started
 

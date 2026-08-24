@@ -10,6 +10,9 @@
     "declarationMap": true,
     "outDir": "build",
     "tsBuildInfoFile": "build/.tsbuildinfo",
+    "paths": {
+      "@actual-app/api": ["../api/index.ts"]
+    },
     "plugins": [
       {
         "name": "typescript-strict-plugin",
@@ -23,6 +26,9 @@
     },
     {
       "path": "../desktop-client"
+    },
+    {
+      "path": "../api"
     }
   ],
   "include": [

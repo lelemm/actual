@@ -5,6 +5,11 @@ import { logger } from '#platform/server/log';
 import { createApp } from '#server/app';
 import { post } from '#server/post';
 import * as prefs from '#server/prefs';
+import {
+  disableServerAccess,
+  enableServerAccess,
+  getServerAccessStatus,
+} from '#server/server-access';
 import { getServer } from '#server/server-config';
 import { makeTestMessage, resetSync } from '#server/sync';
 import type { Budget } from '#types/budget';
@@ -14,11 +19,17 @@ import * as encryption from '.';
 export type EncryptionHandlers = {
   'key-make': typeof keyMake;
   'key-test': typeof keyTest;
+  'server-access/get': typeof getServerAccessStatus;
+  'server-access/enable': typeof enableServerAccess;
+  'server-access/disable': typeof disableServerAccess;
 };
 
 export const app = createApp<EncryptionHandlers>();
 app.method('key-make', keyMake);
 app.method('key-test', keyTest);
+app.method('server-access/get', getServerAccessStatus);
+app.method('server-access/enable', enableServerAccess);
+app.method('server-access/disable', disableServerAccess);
 
 // A user can only enable/change their key with the file loaded. This
 // will change in the future: during onboarding the user should be

@@ -83,6 +83,42 @@ The server will put all the budget files in this directory as binary blobs. If n
 
 See the `ACTUAL_DATA_DIR` section above to override the data folder location.
 
+## `ACTUAL_SERVER_PRIVATE_KEY` (config.json: `serverPrivateKey`)
+
+This optional setting enables the server API and server-side schedule
+automation for budget files whose owners explicitly allow server access. Set it
+to one base64-encoded, 32-byte X25519 private key. If the value is missing or
+invalid, the server reports this feature as unavailable and normal syncing
+continues unchanged.
+
+Generate a key once on the server from the directory where Actual is installed:
+
+```sh
+node --input-type=module -e "import sodium from 'libsodium-wrappers'; await sodium.ready; console.log(sodium.to_base64(sodium.crypto_box_keypair().privateKey, sodium.base64_variants.ORIGINAL))"
+```
+
+Store the printed value in your secret manager and provide it as the
+`ACTUAL_SERVER_PRIVATE_KEY` environment variable. Do not add it to
+`config.json` unless access to that file is protected as carefully as your
+other server credentials.
+
+:::warning
+Back up this private key separately from the server data. Replacing or losing
+it makes existing server-readable budget mirrors unavailable. Each budget
+owner must disable and enable server access again with the new key. Ordinary
+client syncing is not affected.
+:::
+
+The server derives separate database and spreadsheet-cache keys for each
+budget mirror. Both SQLite databases and their write-ahead logs use
+authenticated ChaCha20-Poly1305 page encryption. The original encrypted sync
+log remains the source of truth.
+
+Read [Server Access](../getting-started/sync.md#server-access) before enabling
+this feature. Disabling access deletes the live mirror and prevents future
+server decryption, but it cannot remove data that already exists in an
+administrator's backups.
+
 ## `webRoot`
 
 (Advanced, most people will not need to configure this.) The server will serve the frontend from this directory. If not specified, the server will use the files in the `@actual-app/web` package that it has installed. (environment variable: `ACTUAL_WEB_ROOT`)

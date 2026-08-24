@@ -9,7 +9,7 @@ import type {
   APITagEntity,
 } from '@actual-app/core/server/api-models';
 import type { ImportableBudgetType } from '@actual-app/core/server/importers/index';
-import type { Query } from '@actual-app/core/shared/query';
+import type { Query, QueryState } from '@actual-app/core/shared/query';
 import type { ImportTransactionsOpts } from '@actual-app/core/types/api-handlers';
 import type {
   ImportTransactionEntity,
@@ -128,12 +128,18 @@ export async function batchBudgetUpdates(func: () => Promise<void>) {
  * @deprecated Please use `aqlQuery` instead.
  * This function will be removed in a future release.
  */
-export function runQuery(query: Query) {
-  return send('api/query', { query: query.serialize() });
+function serializeQuery(query: Query | QueryState) {
+  return query instanceof Object && 'serialize' in query
+    ? query.serialize()
+    : query;
 }
 
-export function aqlQuery(query: Query) {
-  return send('api/query', { query: query.serialize() });
+export function runQuery(query: Query | QueryState) {
+  return send('api/query', { query: serializeQuery(query) });
+}
+
+export function aqlQuery(query: Query | QueryState) {
+  return send('api/query', { query: serializeQuery(query) });
 }
 
 export function getBudgetMonths() {

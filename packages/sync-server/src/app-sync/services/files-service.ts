@@ -14,6 +14,12 @@ class FileBase {
   syncVersion: string | null | undefined;
   deleted: boolean;
   owner: string | null | undefined;
+  serverAccessEnabled: boolean;
+  serverAccessPending: boolean;
+  serverAccessFingerprint: string | null | undefined;
+  serverAccessSealedKey: string | null | undefined;
+  automationTimeZone: string | null | undefined;
+  automationLastRun: string | null | undefined;
 
   constructor(
     name: string | null | undefined,
@@ -25,6 +31,12 @@ class FileBase {
     syncVersion: string | null | undefined,
     deleted: number | boolean | undefined,
     owner: string | null | undefined,
+    serverAccessEnabled: number | boolean | undefined,
+    serverAccessPending: number | boolean | undefined,
+    serverAccessFingerprint: string | null | undefined,
+    serverAccessSealedKey: string | null | undefined,
+    automationTimeZone: string | null | undefined,
+    automationLastRun: string | null | undefined,
   ) {
     this.name = name;
     this.groupId = groupId;
@@ -35,6 +47,12 @@ class FileBase {
     this.syncVersion = syncVersion;
     this.deleted = typeof deleted === 'boolean' ? deleted : Boolean(deleted);
     this.owner = owner;
+    this.serverAccessEnabled = Boolean(serverAccessEnabled);
+    this.serverAccessPending = Boolean(serverAccessPending);
+    this.serverAccessFingerprint = serverAccessFingerprint;
+    this.serverAccessSealedKey = serverAccessSealedKey;
+    this.automationTimeZone = automationTimeZone;
+    this.automationLastRun = automationLastRun;
   }
 }
 
@@ -49,6 +67,12 @@ type FileConstructorArgs = {
   syncVersion: string | null;
   deleted?: number | boolean;
   owner: string | null;
+  serverAccessEnabled?: number | boolean;
+  serverAccessPending?: number | boolean;
+  serverAccessFingerprint?: string | null;
+  serverAccessSealedKey?: string | null;
+  automationTimeZone?: string | null;
+  automationLastRun?: string | null;
 };
 
 class File extends FileBase {
@@ -65,6 +89,12 @@ class File extends FileBase {
     syncVersion = null,
     deleted = false,
     owner = null,
+    serverAccessEnabled = false,
+    serverAccessPending = false,
+    serverAccessFingerprint = null,
+    serverAccessSealedKey = null,
+    automationTimeZone = null,
+    automationLastRun = null,
   }: FileConstructorArgs) {
     super(
       name,
@@ -76,6 +106,12 @@ class File extends FileBase {
       syncVersion,
       deleted,
       owner,
+      serverAccessEnabled,
+      serverAccessPending,
+      serverAccessFingerprint,
+      serverAccessSealedKey,
+      automationTimeZone,
+      automationLastRun,
     );
     this.id = id;
   }
@@ -97,6 +133,12 @@ class FileUpdate extends FileBase {
     syncVersion,
     deleted,
     owner,
+    serverAccessEnabled,
+    serverAccessPending,
+    serverAccessFingerprint,
+    serverAccessSealedKey,
+    automationTimeZone,
+    automationLastRun,
   }: Partial<FileConstructorArgs>) {
     super(
       name,
@@ -108,6 +150,12 @@ class FileUpdate extends FileBase {
       syncVersion,
       deleted,
       owner,
+      serverAccessEnabled,
+      serverAccessPending,
+      serverAccessFingerprint,
+      serverAccessSealedKey,
+      automationTimeZone,
+      automationLastRun,
     );
   }
 }
@@ -116,7 +164,7 @@ const boolToInt = (bool: boolean) => {
   return bool ? 1 : 0;
 };
 
-type RawFile = {
+export type RawFile = {
   id: string;
   group_id: string | null;
   sync_version: string | null;
@@ -127,6 +175,12 @@ type RawFile = {
   encrypt_keyid: string | null;
   deleted: number;
   owner: string | null;
+  server_access_enabled: number;
+  server_access_pending: number;
+  server_access_fingerprint: string | null;
+  server_access_sealed_key: string | null;
+  automation_timezone: string | null;
+  automation_last_run: string | null;
 };
 
 class FilesService {
@@ -245,6 +299,30 @@ class FilesService {
       updates.push('deleted = ?');
       params.push(boolToInt(fileUpdate.deleted));
     }
+    if (fileUpdate.serverAccessEnabled !== undefined) {
+      updates.push('server_access_enabled = ?');
+      params.push(boolToInt(fileUpdate.serverAccessEnabled));
+    }
+    if (fileUpdate.serverAccessPending !== undefined) {
+      updates.push('server_access_pending = ?');
+      params.push(boolToInt(fileUpdate.serverAccessPending));
+    }
+    if (fileUpdate.serverAccessFingerprint !== undefined) {
+      updates.push('server_access_fingerprint = ?');
+      params.push(fileUpdate.serverAccessFingerprint);
+    }
+    if (fileUpdate.serverAccessSealedKey !== undefined) {
+      updates.push('server_access_sealed_key = ?');
+      params.push(fileUpdate.serverAccessSealedKey);
+    }
+    if (fileUpdate.automationTimeZone !== undefined) {
+      updates.push('automation_timezone = ?');
+      params.push(fileUpdate.automationTimeZone);
+    }
+    if (fileUpdate.automationLastRun !== undefined) {
+      updates.push('automation_last_run = ?');
+      params.push(fileUpdate.automationLastRun);
+    }
 
     if (updates.length > 0) {
       query += ' ' + updates.join(', ') + ' WHERE id = ?';
@@ -296,6 +374,12 @@ class FilesService {
       syncVersion: rawFile.sync_version,
       deleted: Boolean(rawFile.deleted),
       owner: rawFile.owner,
+      serverAccessEnabled: rawFile.server_access_enabled,
+      serverAccessPending: rawFile.server_access_pending,
+      serverAccessFingerprint: rawFile.server_access_fingerprint,
+      serverAccessSealedKey: rawFile.server_access_sealed_key,
+      automationTimeZone: rawFile.automation_timezone,
+      automationLastRun: rawFile.automation_last_run,
     });
   }
 }

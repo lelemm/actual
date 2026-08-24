@@ -1,6 +1,6 @@
 // @ts-strict-ignore
 import * as d from 'date-fns';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import { captureBreadcrumb } from '#platform/exceptions';
 import * as connection from '#platform/server/connection';
@@ -13,7 +13,11 @@ import { toDateRepr } from '#server/models';
 import { mutator, runMutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
 import { Rule } from '#server/rules';
-import { addSyncListener, batchMessages } from '#server/sync';
+import {
+  addSyncListener,
+  batchMessages,
+  isServerAutomationAuthoritative,
+} from '#server/sync';
 import {
   getRules,
   insertRule,
@@ -584,6 +588,10 @@ async function postTransactionForSchedule({
   }
 
   const transaction = {
+    id: uuidv5(
+      `${schedule.id}:${today ? currentDay() : schedule.next_date}`,
+      uuidv5.URL,
+    ),
     payee: schedule._payee,
     account: schedule._account,
     amount: getScheduledAmount(schedule._amount),
@@ -838,6 +846,9 @@ app.events.on('sync', ({ type }) => {
     type === 'success' || type === 'error' || type === 'unauthorized';
 
   if (completeEvent && prefs.getPrefs()) {
+    if (isServerAutomationAuthoritative()) {
+      return;
+    }
     if (!db.getDatabase()) {
       logger.info('database is not available, skipping schedule service');
       return;

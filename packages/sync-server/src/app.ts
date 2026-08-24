@@ -10,6 +10,7 @@ import { bootstrap } from './account-db';
 import * as accountApp from './app-account';
 import * as adminApp from './app-admin';
 import * as akahuApp from './app-akahu/app-akahu.js';
+import * as apiApp from './app-api';
 import * as corsApp from './app-cors-proxy';
 import * as enableBankingApp from './app-enablebanking/app-enablebanking';
 import * as goCardlessApp from './app-gocardless/app-gocardless';
@@ -19,6 +20,11 @@ import * as secretApp from './app-secrets';
 import * as simpleFinApp from './app-simplefin/app-simplefin';
 import * as syncApp from './app-sync';
 import { config } from './load-config';
+import {
+  getMirrorMetrics,
+  initializeMirrors,
+} from './server-access/mirror-manager';
+import { startScheduleAutomation } from './server-access/schedule-runner';
 
 const app = express();
 
@@ -57,6 +63,7 @@ app.use(
 );
 
 app.use('/sync', syncApp.handlers);
+app.use('/api/v1', apiApp.handlers);
 app.use('/account', accountApp.handlers);
 app.use('/gocardless', goCardlessApp.handlers);
 app.use('/simplefin', simpleFinApp.handlers);
@@ -125,6 +132,7 @@ app.get('/metrics', (_req, res) => {
   res.status(200).json({
     mem: process.memoryUsage(),
     uptime: process.uptime(),
+    mirrors: getMirrorMetrics(),
   });
 });
 
@@ -195,6 +203,10 @@ function sendServerStartedMessage() {
 }
 
 export async function run() {
+  void initializeMirrors().catch(() => {
+    console.error('Unable to initialize server budget mirrors');
+  });
+  startScheduleAutomation();
   const portVal = config.get('port');
   const port = typeof portVal === 'string' ? parseInt(portVal) : portVal;
   const hostname = config.get('hostname');

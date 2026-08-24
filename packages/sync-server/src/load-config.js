@@ -112,6 +112,13 @@ const configSchema = convict({
         : path.join(defaultDataDir, 'user-files'),
     env: 'ACTUAL_USER_FILES',
   },
+  serverPrivateKey: {
+    doc: 'Base64-encoded 32-byte X25519 private key used for server-readable budgets.',
+    format: String,
+    default: '',
+    env: 'ACTUAL_SERVER_PRIVATE_KEY',
+    sensitive: true,
+  },
   webRoot: {
     doc: 'Web root directory.',
     format: String,

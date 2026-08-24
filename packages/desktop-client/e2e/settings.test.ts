@@ -30,6 +30,12 @@ test.describe('Settings', () => {
     await expect(page).toMatchThemeScreenshots();
   });
 
+  test('checks the server access setting visuals', async () => {
+    const serverAccessSetting = page.getByTestId('server-access-settings');
+    await expect(serverAccessSetting).toBeVisible();
+    await expect(serverAccessSetting).toMatchThemeScreenshots();
+  });
+
   test('downloads the export of the budget', async () => {
     const downloadPromise = page.waitForEvent('download');
 

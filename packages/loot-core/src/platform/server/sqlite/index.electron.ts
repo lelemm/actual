@@ -1,5 +1,5 @@
 // @ts-strict-ignore
-import SQL from 'better-sqlite3';
+import type SQL from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getDataDir, readFile, removeFile } from '#platform/server/fs';
@@ -11,6 +11,9 @@ import { unicodeLike } from './unicodeLike';
 
 export type { SqlParam } from './types';
 
+type DatabaseConstructor = typeof SQL;
+let Database: DatabaseConstructor;
+
 function verifyParamTypes(sql, arr) {
   arr.forEach(val => {
     if (typeof val !== 'string' && typeof val !== 'number' && val !== null) {
@@ -21,7 +24,21 @@ function verifyParamTypes(sql, arr) {
 }
 
 export async function init() {
-  // No need to initialise on electron
+  if (Database) {
+    return;
+  }
+
+  const moduleName = process.env.ACTUAL_SQLITE_MODULE || 'better-sqlite3';
+  if (
+    moduleName !== 'better-sqlite3' &&
+    moduleName !== 'better-sqlite3-multiple-ciphers'
+  ) {
+    throw new Error('Unsupported SQLite module');
+  }
+  const sqliteModule: { default: DatabaseConstructor } = await import(
+    /* @vite-ignore */ moduleName
+  );
+  Database = sqliteModule.default;
 }
 
 // Parity with the browser sqlite backend (which instantiates sql.js from an
@@ -111,7 +128,31 @@ function regexp(regex: string, text: string | null) {
 }
 
 export function openDatabase(pathOrBuffer: string | Buffer): SQL.Database {
-  const db = new SQL(pathOrBuffer);
+  if (!Database) {
+    throw new Error('SQLite has not been initialized');
+  }
+  const db = new Database(pathOrBuffer);
+  const isMirrorCache =
+    typeof pathOrBuffer === 'string' &&
+    /(?:^|[/\\])cache\.sqlite$/.test(pathOrBuffer);
+  const mirrorKey = isMirrorCache
+    ? process.env.ACTUAL_MIRROR_CACHE_KEY
+    : process.env.ACTUAL_MIRROR_DATABASE_KEY;
+  const isMirrorDatabase = Boolean(
+    process.env.ACTUAL_MIRROR_DATABASE_KEY && typeof pathOrBuffer === 'string',
+  );
+  if (isMirrorDatabase) {
+    if (typeof mirrorKey !== 'string' || !/^[a-f0-9]{64}$/i.test(mirrorKey)) {
+      db.close();
+      throw new Error('Invalid mirror database key');
+    }
+    db.pragma("cipher = 'chacha20'");
+    db.pragma('hmac_check = 1');
+    db.pragma(`key = "raw:${mirrorKey}"`);
+    db.prepare('SELECT count(*) FROM sqlite_master').get();
+    db.pragma('temp_store = MEMORY');
+    db.pragma('journal_mode = WAL');
+  }
   // Define Unicode-aware LOWER, UPPER, and LIKE implementation.
   // This is necessary because better-sqlite3 uses SQLite build without ICU support.
   db.function('UNICODE_LOWER', { deterministic: true }, (arg: string | null) =>

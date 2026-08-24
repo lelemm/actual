@@ -27,7 +27,7 @@ import { app } from './main-app';
 import { mutator, runHandler } from './mutators';
 import { app as notesApp } from './notes/app';
 import { app as payeesApp } from './payees/app';
-import { get } from './post';
+import { get, setBinarySyncTransport } from './post';
 import { app as preferencesApp } from './preferences/app';
 import * as prefs from './prefs';
 import { app as reportsApp } from './reports/app';
@@ -237,6 +237,8 @@ type BaseInitConfig = {
    */
   dataDir?: string;
   verbose?: boolean;
+  syncTransport?: (data: Uint8Array) => Promise<Uint8Array>;
+  encryptionKeys?: Array<{ id: string; base64: string }>;
 };
 
 type ServerInitConfig = BaseInitConfig & {
@@ -283,13 +285,19 @@ export async function init(config: InitConfig) {
 
   await sqlite.init();
   asyncStorage.init({ persist: false });
+  setBinarySyncTransport(config?.syncTransport ?? null);
+  for (const key of config?.encryptionKeys ?? []) {
+    await encryption.loadKey(key);
+  }
   await fs.init();
   fs._setDocumentDir(dataDir || process.cwd());
 
-  if (serverURL) {
-    setServer(serverURL);
+  if (serverURL || config?.syncTransport) {
+    setServer(serverURL || 'http://actual-mirror.invalid');
 
-    if ('sessionToken' in config && config.sessionToken) {
+    if (config.syncTransport) {
+      // The mirror process authenticates and binds sync over parent IPC.
+    } else if ('sessionToken' in config && config.sessionToken) {
       // Session token authentication
       await runHandler(handlers['subscribe-set-token'], {
         token: config.sessionToken,

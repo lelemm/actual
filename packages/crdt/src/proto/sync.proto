@@ -27,9 +27,11 @@ message SyncRequest {
         string groupId = 3;
         string keyId = 5;
         string since = 6;
+        repeated string capabilities = 7;
 }
 
 message SyncResponse {
         repeated MessageEnvelope messages = 1;
         string merkle = 2;
+        repeated string capabilities = 3;
 }

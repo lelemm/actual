@@ -36,7 +36,7 @@
     "build": "lage build",
     "start:ios": "yarn build:browser && yarn workspace mobile-client start:ios",
     "start:android": "yarn build:browser && yarn workspace mobile-client start:android",
-    "build:server": "yarn build:browser && yarn workspace @actual-app/sync-server build",
+    "build:server": "yarn build:browser && yarn workspace @actual-app/api build && yarn workspace @actual-app/sync-server build",
     "build:browser": "./bin/package-browser",
     "build:desktop": "./bin/package-electron",
     "build:plugins-service": "yarn workspace plugins-service build",
@@ -99,6 +99,9 @@
       "built": true
     },
     "better-sqlite3": {
+      "built": true
+    },
+    "better-sqlite3-multiple-ciphers": {
       "built": true
     },
     "electron": {

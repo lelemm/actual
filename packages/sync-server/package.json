@@ -20,6 +20,7 @@
   "imports": {
     "#db": "./src/db.js",
     "#account-db": "./src/account-db.js",
+    "#app-sync": "./src/app-sync.ts",
     "#load-config": "./src/load-config.js",
     "#migrations": "./src/migrations.ts",
     "#accounts/*": "./src/accounts/*.js",
@@ -41,6 +42,7 @@
     "#app-sync/*": "./src/app-sync/*.js",
     "#scripts/*": "./src/scripts/*.js",
     "#services/*": "./src/services/*.js",
+    "#sync-simple": "./src/sync-simple.js",
     "#util/title": "./src/util/title/index.js",
     "#util/*": "./src/util/*.ts"
   },
@@ -48,6 +50,7 @@
     "imports": {
       "#db": "./build/src/db.js",
       "#account-db": "./build/src/account-db.js",
+      "#app-sync": "./build/src/app-sync.js",
       "#load-config": "./build/src/load-config.js",
       "#migrations": "./build/src/migrations.js",
       "#accounts/*": "./build/src/accounts/*.js",
@@ -69,6 +72,7 @@
       "#app-sync/*": "./build/src/app-sync/*.js",
       "#scripts/*": "./build/src/scripts/*.js",
       "#services/*": "./build/src/services/*.js",
+      "#sync-simple": "./build/src/sync-simple.js",
       "#util/title": "./build/src/util/title/index.js",
       "#util/*": "./build/src/util/*.js"
     }
@@ -88,12 +92,15 @@
     "health-check": "yarn build && node build/scripts/health-check.js"
   },
   "dependencies": {
+    "@actual-app/api": "workspace:*",
+    "@actual-app/core": "workspace:*",
     "@actual-app/crdt": "workspace:*",
     "@actual-app/web": "workspace:*",
     "akahu": "^2.5.1",
     "argon2": "^0.44.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.11.1",
+    "better-sqlite3-multiple-ciphers": "12.11.1",
     "convict": "^6.2.5",
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",
@@ -103,6 +110,7 @@
     "express-winston": "^4.2.0",
     "ipaddr.js": "^2.4.0",
     "jws": "^4.0.1",
+    "libsodium-wrappers": "0.8.4",
     "migrate": "^2.1.0",
     "openid-client": "^5.7.1",
     "pluggy-sdk": "^0.89.0",

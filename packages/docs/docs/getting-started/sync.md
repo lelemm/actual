@@ -20,7 +20,12 @@ In addition to the requirement to enter your password before the Actual server w
 
 End-to-end encryption offers the ability for you to generate a key based on a password and encrypt it so that hosted services can't read your budget data. Before your data leaves your device, it is encrypted using keys only you have.
 
-This guarantees that only you will ever have access to your budget data. This is optional and using it requires you to enter a password whenever downloading [cloud files](#this-file-is-not-a-cloud-file) (this only needs to be done once per device). The password you enter should be different from the main server password.
+This guarantees that only you will have access to your budget data unless you
+explicitly enable [Server Access](#server-access) for that budget. This is
+optional and using it requires you to enter a password whenever downloading
+[cloud files](#this-file-is-not-a-cloud-file) (this only needs to be done once
+per device). The password you enter should be different from the main server
+password.
 
 :::note
 End-to-end encryption applies only to your budget data. If you use [bank sync](../advanced/bank-sync.md), the bank sync tokens (e.g. SimpleFIN, GoCardless, or Pluggy credentials) are stored separately on the server and are **not** covered by end-to-end encryption. Server administrators or hosting providers with direct access to the server's database can read these tokens. If this is a concern, consider self-hosting your server.
@@ -46,6 +51,48 @@ You can enable end-to-end encryption by opening a budget file, going into settin
 When downloading data on other devices, you will need to enter the same password to generate the key to be able to decrypt your data.
 
 **Do not lose this password**. You will not be able to recover your data if you forget it. If you forget it and you still have a copy of your data locally, you can reset your key which will do a [sync reset](#what-does-resetting-sync-mean) and generate a new key.
+
+## Server Access
+
+Server access is an optional setting for people who trust and control their
+Actual server. It lets the server keep an encrypted, always-current database
+mirror for one budget. The server can use that mirror to expose the budget API
+over HTTP and automatically post scheduled transactions once per day in the
+budget owner's time zone.
+
+:::warning This Is Not End-to-End Encryption
+When server access is enabled, the server can decrypt that budget. The mirror
+database is encrypted on disk, but the server process holds the key while it is
+running. Do not enable this feature on a hosted server whose administrator you
+do not trust.
+:::
+
+The setting is opt-in for each budget. Existing budgets are never enabled
+automatically. To enable it:
+
+1. Ask the server administrator to configure
+   [`ACTUAL_SERVER_PRIVATE_KEY`](../config/index.md#actual_server_private_key-configjson-serverprivatekey).
+2. Open the budget and go to **Settings**.
+3. Find **Server API and schedule automation**.
+4. Read the warning, then select **Allow server access**.
+
+For an end-to-end encrypted budget, Actual encrypts the existing budget key to
+the server's public key and performs a sync reset. The server validates the new
+upload before replacing the stored snapshot or enabling the mirror. Other
+devices must download the reset budget before they can sync again.
+
+The encrypted change log remains authoritative. A normal sync request succeeds
+even when the mirror is starting or unavailable. HTTP API calls wait for the
+mirror to catch up and return an unavailable response instead of stale data.
+
+To revoke future access, select **Disable server access**. Actual stops the
+mirror, removes its encrypted database, clears schedule automation state, and
+stops sharing the budget key with the server. This does not remove copies that
+an administrator already captured in a server backup.
+
+If the administrator restores or replaces the server private key, each budget
+owner must enable server access again. Client syncing continues normally while
+the mirror is unavailable.
 
 ## What Does "Resetting Sync" Mean?
 

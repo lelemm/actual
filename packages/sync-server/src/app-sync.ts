@@ -26,6 +26,22 @@ import {
   validateUploadedFile,
 } from './app-sync/validation';
 import { config } from './load-config';
+import {
+  createMirrorSeed,
+  decryptAndValidateSnapshot,
+  getServerAccessKey,
+  isValidTimeZone,
+  openServerAccessKey,
+  sealServerAccessKey,
+  SERVER_ACCESS_PROTOCOL_VERSION,
+  validateEncryptionTest,
+} from './server-access/crypto';
+import {
+  notifyMirror,
+  removeMirror,
+  startMirror,
+  stopMirror,
+} from './server-access/mirror-manager';
 import * as UserService from './services/user-service';
 import * as simpleSync from './sync-simple';
 import {
@@ -188,16 +204,150 @@ app.post('/sync', async (req, res): Promise<void> => {
     return;
   }
 
+  if (
+    currentFile.serverAccessEnabled &&
+    !requestPb.capabilities.includes('server-automation-v1')
+  ) {
+    res.status(409).send({
+      status: 'error',
+      reason: 'client-server-automation-required',
+    });
+    return;
+  }
+
   const { trie, newMessages } = simpleSync.sync(messages, since, groupId);
 
   const responsePb = create(SyncResponseSchema, {
     merkle: JSON.stringify(trie),
     messages: newMessages,
+    capabilities: currentFile.serverAccessEnabled
+      ? ['server-automation-v1']
+      : [],
   });
 
   res.set('Content-Type', 'application/actual-sync');
   res.set('X-ACTUAL-SYNC-METHOD', 'simple');
   res.send(Buffer.from(toBinary(SyncResponseSchema, responsePb)));
+  if (currentFile.serverAccessEnabled) {
+    queueMicrotask(() => notifyMirror(currentFile.id));
+  }
+});
+
+app.get('/server-access-key', async (_req, res) => {
+  const serverKey = await getServerAccessKey();
+  res.send({
+    status: 'ok',
+    data: serverKey
+      ? {
+          available: true,
+          publicKey: serverKey.publicKeyBase64,
+          fingerprint: serverKey.fingerprint,
+          protocolVersion: SERVER_ACCESS_PROTOCOL_VERSION,
+        }
+      : {
+          available: false,
+          publicKey: null,
+          fingerprint: null,
+          protocolVersion: SERVER_ACCESS_PROTOCOL_VERSION,
+        },
+  });
+});
+
+app.post('/enable-server-access', async (req, res) => {
+  const { fileId, sealedKey: suppliedSealedKey, timeZone } = req.body || {};
+  const filesService = new FilesService(getAccountDb());
+  const file = verifyFileExists(fileId, filesService, res, 'file-not-found');
+  if (!file) return;
+
+  const accessError = requireFileOwner(file, res.locals.user_id);
+  if (accessError) {
+    res.status(403).send({ status: 'error', reason: accessError });
+    return;
+  }
+  const serverKey = await getServerAccessKey();
+  if (!serverKey) {
+    res.status(503).send({
+      status: 'error',
+      reason: 'server-access-unavailable',
+    });
+    return;
+  }
+  if (!isValidTimeZone(timeZone)) {
+    res.status(400).send({ status: 'error', reason: 'invalid-time-zone' });
+    return;
+  }
+
+  let sealedKey = suppliedSealedKey;
+  let seed: Buffer | null = null;
+  try {
+    if (file.encryptKeyId) {
+      if (typeof sealedKey !== 'string') {
+        throw new Error('sealed-key-required');
+      }
+      seed = await openServerAccessKey(sealedKey, file);
+      validateEncryptionTest(file, seed);
+    } else {
+      seed = createMirrorSeed();
+      sealedKey = await sealServerAccessKey({
+        fileId: file.id,
+        encryptKeyId: null,
+        budgetKey: seed,
+      });
+    }
+    const snapshot = await fs.readFile(getPathForUserFile(file.id));
+    decryptAndValidateSnapshot(file, snapshot, seed);
+
+    const requiresUpload = Boolean(file.encryptKeyId);
+    const updatedFile = filesService.update(
+      file.id,
+      new FileUpdate({
+        serverAccessEnabled: !requiresUpload,
+        serverAccessPending: requiresUpload,
+        serverAccessFingerprint: serverKey.fingerprint,
+        serverAccessSealedKey: sealedKey,
+        automationTimeZone: timeZone,
+        automationLastRun: null,
+      }),
+    );
+    await stopMirror(file.id);
+    if (!requiresUpload) {
+      void startMirror(updatedFile, { rebuild: true });
+    }
+    res.send({ status: 'ok', data: { requiresUpload } });
+  } catch (error) {
+    res.status(400).send({
+      status: 'error',
+      reason: error instanceof Error ? error.message : 'invalid-server-key',
+    });
+  } finally {
+    seed?.fill(0);
+  }
+});
+
+app.post('/disable-server-access', async (req, res) => {
+  const { fileId } = req.body || {};
+  const filesService = new FilesService(getAccountDb());
+  const file = verifyFileExists(fileId, filesService, res, 'file-not-found');
+  if (!file) return;
+  const accessError = requireFileOwner(file, res.locals.user_id);
+  if (accessError) {
+    res.status(403).send({ status: 'error', reason: accessError });
+    return;
+  }
+
+  filesService.update(
+    file.id,
+    new FileUpdate({
+      serverAccessEnabled: false,
+      serverAccessPending: false,
+      serverAccessFingerprint: null,
+      serverAccessSealedKey: null,
+      automationTimeZone: null,
+      automationLastRun: null,
+    }),
+  );
+  await removeMirror(file.id);
+  res.send(OK_RESPONSE);
 });
 
 app.post('/user-get-key', (req, res) => {
@@ -229,7 +379,7 @@ app.post('/user-get-key', (req, res) => {
   });
 });
 
-app.post('/user-create-key', (req, res) => {
+app.post('/user-create-key', async (req, res) => {
   const { fileId, keyId, keySalt, testContent } = req.body || {};
 
   const filesService = new FilesService(getAccountDb());
@@ -252,8 +402,15 @@ app.post('/user-create-key', (req, res) => {
       encryptSalt: keySalt,
       encryptKeyId: keyId,
       encryptTest: testContent,
+      serverAccessEnabled: false,
+      serverAccessPending: false,
+      serverAccessFingerprint: null,
+      serverAccessSealedKey: null,
+      automationTimeZone: null,
+      automationLastRun: null,
     }),
   );
+  await removeMirror(file.id);
 
   res.send(OK_RESPONSE);
 });
@@ -282,7 +439,15 @@ app.post('/reset-user-file', async (req, res) => {
 
   const groupId = file.groupId;
 
-  filesService.update(file.id, new FileUpdate({ groupId: null }));
+  filesService.update(
+    file.id,
+    new FileUpdate({
+      groupId: null,
+      serverAccessEnabled: false,
+      serverAccessPending: file.serverAccessEnabled || file.serverAccessPending,
+    }),
+  );
+  await stopMirror(file.id);
 
   if (groupId) {
     try {
@@ -345,7 +510,9 @@ app.post('/upload-user-file', async (req, res) => {
   }
 
   const fileAccessError = currentFile
-    ? requireFileAccess(currentFile, res.locals.user_id)
+    ? currentFile.serverAccessPending
+      ? requireFileOwner(currentFile, res.locals.user_id)
+      : requireFileAccess(currentFile, res.locals.user_id)
     : null;
   if (fileAccessError) {
     res.status(403);
@@ -359,11 +526,36 @@ app.post('/upload-user-file', async (req, res) => {
     return;
   }
 
+  const stagedPath = `${getPathForUserFile(fileId)}.staged-${uuidv4()}`;
   try {
-    await fs.writeFile(getPathForUserFile(fileId), req.body);
-  } catch (err) {
-    console.log('Error writing file', err);
-    res.status(500).send({ status: 'error' });
+    await fs.writeFile(stagedPath, req.body, { mode: 0o600 });
+    if (currentFile?.serverAccessPending || currentFile?.serverAccessEnabled) {
+      if (!currentFile.serverAccessSealedKey) {
+        throw new Error('missing-server-access-key');
+      }
+      const seed = await openServerAccessKey(
+        currentFile.serverAccessSealedKey,
+        currentFile,
+      );
+      try {
+        validateEncryptionTest(currentFile, seed);
+        decryptAndValidateSnapshot(
+          { ...currentFile, encryptMeta },
+          req.body,
+          seed,
+        );
+      } finally {
+        seed.fill(0);
+      }
+    }
+    if (currentFile?.serverAccessEnabled) {
+      await stopMirror(currentFile.id);
+    }
+    await fs.rename(stagedPath, getPathForUserFile(fileId));
+  } catch {
+    await fs.unlink(stagedPath).catch(() => undefined);
+    console.log('Error validating or writing uploaded file');
+    res.status(400).send({ status: 'error', reason: 'invalid-upload' });
     return;
   }
 
@@ -398,7 +590,7 @@ app.post('/upload-user-file', async (req, res) => {
   }
 
   // Regardless, update some properties
-  filesService.update(
+  let updatedFile = filesService.update(
     fileId,
     new FileUpdate({
       syncVersion: syncFormatVersion,
@@ -406,6 +598,19 @@ app.post('/upload-user-file', async (req, res) => {
       name,
     }),
   );
+
+  if (currentFile.serverAccessPending) {
+    updatedFile = filesService.update(
+      fileId,
+      new FileUpdate({
+        serverAccessEnabled: true,
+        serverAccessPending: false,
+      }),
+    );
+  }
+  if (currentFile.serverAccessPending || currentFile.serverAccessEnabled) {
+    void startMirror(updatedFile, { rebuild: true });
+  }
 
   res.send({ status: 'ok', groupId });
 });
@@ -487,6 +692,9 @@ app.get('/list-user-files', (req, res) => {
       name: row.name,
       encryptKeyId: row.encryptKeyId,
       owner: row.owner,
+      serverAccessEnabled: row.serverAccessEnabled,
+      serverAccessFingerprint: row.serverAccessFingerprint,
+      automationTimeZone: row.automationTimeZone,
       usersWithAccess: fileService.findUsersWithAccess(row.id).map(access => ({
         ...access,
         owner: access.userId === row.owner,
@@ -533,6 +741,9 @@ app.get('/get-user-file-info', (req, res) => {
       groupId: file.groupId,
       name: file.name,
       encryptMeta: file.encryptMeta ? JSON.parse(file.encryptMeta) : null,
+      serverAccessEnabled: file.serverAccessEnabled,
+      serverAccessFingerprint: file.serverAccessFingerprint,
+      automationTimeZone: file.automationTimeZone,
       usersWithAccess: fileService.findUsersWithAccess(file.id).map(access => ({
         ...access,
         owner: access.userId === file.owner,
@@ -541,7 +752,7 @@ app.get('/get-user-file-info', (req, res) => {
   });
 });
 
-app.post('/delete-user-file', (req, res) => {
+app.post('/delete-user-file', async (req, res) => {
   const { fileId } = req.body || {};
 
   if (!fileId) {
@@ -567,6 +778,7 @@ app.post('/delete-user-file', (req, res) => {
   }
 
   filesService.update(file.id, new FileUpdate({ deleted: true }));
+  await removeMirror(file.id);
 
   res.send(OK_RESPONSE);
 });

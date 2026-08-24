@@ -30,7 +30,7 @@ import { AuthSettings } from './AuthSettings';
 import { Backups } from './Backups';
 import { BudgetTypeSettings } from './BudgetTypeSettings';
 import { CurrencySettings } from './Currency';
-import { EncryptionSettings } from './Encryption';
+import { EncryptionSettings, ServerAccessSettings } from './Encryption';
 import { ExperimentalFeatures } from './Experimental';
 import { ExportBudget } from './Export';
 import { FormatSettings } from './Format';
@@ -241,6 +241,7 @@ export function Settings() {
         <LanguageSettings />
         <AuthSettings />
         <EncryptionSettings />
+        <ServerAccessSettings />
         <BudgetTypeSettings />
         {isElectron() && <Backups />}
         <ExportBudget />

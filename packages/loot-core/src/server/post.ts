@@ -5,6 +5,13 @@ import * as Platform from '#shared/platform';
 
 import { PostError } from './errors';
 
+type BinarySyncTransport = (data: Uint8Array) => Promise<Uint8Array>;
+let binarySyncTransport: BinarySyncTransport | null = null;
+
+export function setBinarySyncTransport(transport: BinarySyncTransport | null) {
+  binarySyncTransport = transport;
+}
+
 export function getServerErrorReason(error) {
   return error.reason === 'unauthorized' && error.details === 'token-not-found'
     ? 'token-expired'
@@ -217,6 +224,9 @@ export async function patch(url, data, headers = {}, timeout = null) {
 }
 
 export async function postBinary(url, data, headers) {
+  if (binarySyncTransport) {
+    return Buffer.from(await binarySyncTransport(data));
+  }
   let res;
   try {
     res = await fetch(url, {

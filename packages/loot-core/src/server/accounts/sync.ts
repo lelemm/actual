@@ -1,6 +1,6 @@
 // @ts-strict-ignore
 import * as dateFns from 'date-fns';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as asyncStorage from '#platform/server/asyncStorage';
 import { logger } from '#platform/server/log';
@@ -50,6 +50,9 @@ function makeSplitTransaction(trans, subtransactions) {
     subtransactions: subtransactions.map((transaction, idx) =>
       makeChildTransaction(trans, {
         ...transaction,
+        ...(trans.schedule
+          ? { id: uuidv5(`${trans.id}:${idx}`, uuidv5.URL) }
+          : {}),
         sort_order: 0 - idx,
       }),
     ),
