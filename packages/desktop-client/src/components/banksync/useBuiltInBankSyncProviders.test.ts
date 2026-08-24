@@ -1,4 +1,45 @@
-import { getPermissionWarning } from './useBuiltInBankSyncProviders';
+import {
+  getPermissionWarning,
+  normalizePluggyAiBalance,
+} from './useBuiltInBankSyncProviders';
+
+test.each([
+  [
+    {
+      type: 'BANK',
+      balance: 27903.6,
+      bankData: {
+        automaticallyInvestedBalance: 55807.2,
+        closingBalance: 27903.6,
+      },
+    },
+    8371080,
+  ],
+  [
+    {
+      type: 'CREDIT',
+      balance: 1234,
+      bankData: { automaticallyInvestedBalance: 0, closingBalance: 0 },
+    },
+    123400,
+  ],
+  [
+    {
+      type: 'BANK',
+      balance: 83710.79999999999,
+      bankData: {
+        automaticallyInvestedBalance: 0,
+        closingBalance: 83710.79999999999,
+      },
+    },
+    8371080,
+  ],
+] as const)(
+  'normalizes a Pluggy.ai balance to integer cents',
+  (account, expected) => {
+    expect(normalizePluggyAiBalance(account)).toBe(expected);
+  },
+);
 
 test.each([
   ['offline', true, true, null],

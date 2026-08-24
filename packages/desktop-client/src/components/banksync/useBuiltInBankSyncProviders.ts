@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { send } from '@actual-app/core/platform/client/connection';
+import { amountToInteger } from '@actual-app/core/shared/util';
 import type {
   AccountEntity,
   BankSyncCredentialSource,
@@ -50,6 +51,15 @@ type PluggyAiAccount = {
     closingBalance: number;
   };
 };
+
+export function normalizePluggyAiBalance(
+  account: Pick<PluggyAiAccount, 'type' | 'balance' | 'bankData'>,
+) {
+  return account.type === 'BANK'
+    ? amountToInteger(account.bankData.automaticallyInvestedBalance) +
+        amountToInteger(account.bankData.closingBalance)
+    : amountToInteger(account.balance);
+}
 
 export type BuiltInBankSyncProviderState = {
   id: BankSyncProviders;
@@ -513,11 +523,7 @@ export function useBuiltInBankSyncProviders({
           institution: oldAccount.name,
           orgDomain: null,
           orgId: oldAccount.id,
-          balance:
-            oldAccount.type === 'BANK'
-              ? oldAccount.bankData.automaticallyInvestedBalance +
-                oldAccount.bankData.closingBalance
-              : oldAccount.balance,
+          balance: normalizePluggyAiBalance(oldAccount),
         }),
       );
 
