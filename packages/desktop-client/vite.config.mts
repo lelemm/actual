@@ -294,6 +294,8 @@ export default defineConfig(async ({ mode, command }) => {
   const isVitest = process.env.VITEST === 'true';
   const isBrowserMode = mode === 'browser' || mode === 'wasm';
   const isWasmMode = mode === 'wasm';
+  const isPages = process.env.REACT_APP_GITHUB_PAGES === 'true';
+  const base = process.env.PUBLIC_URL || '/';
   const devHeaders = {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -334,7 +336,7 @@ export default defineConfig(async ({ mode, command }) => {
   const browserOpen = env.BROWSER_OPEN ? `//${env.BROWSER_OPEN}` : true;
 
   return {
-    base: '/',
+    base,
     envPrefix: 'REACT_APP_',
     build: {
       minify: 'oxc',
@@ -346,6 +348,12 @@ export default defineConfig(async ({ mode, command }) => {
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 1500,
       rolldownOptions: {
+        ...(isPages && {
+          input: {
+            index: path.resolve(__dirname, 'index.html'),
+            'pages-sw': path.resolve(__dirname, 'src/pages-service-worker.ts'),
+          },
+        }),
         output: {
           // Users debug from raw stack traces, so compress and strip
           // whitespace but never mangle identifiers (overrides the
@@ -366,7 +374,10 @@ export default defineConfig(async ({ mode, command }) => {
             return `static/${extType}/[name].[hash][extname]`;
           },
           chunkFileNames: 'static/js/[name].[hash].chunk.js',
-          entryFileNames: 'static/js/[name].[hash].js',
+          entryFileNames: chunk =>
+            chunk.name === 'pages-sw'
+              ? 'pages-sw.js'
+              : 'static/js/[name].[hash].js',
         },
       },
     },
@@ -394,6 +405,7 @@ export default defineConfig(async ({ mode, command }) => {
       mode === 'desktop'
         ? undefined
         : VitePWA({
+            injectRegister: isPages ? false : 'auto',
             registerType: 'prompt',
             // TODO:  The plugin worker build is currently disabled due to issues with offline support. Fix this
             // strategies: 'injectManifest',
@@ -423,7 +435,7 @@ export default defineConfig(async ({ mode, command }) => {
                 '**/*.{js,css,html,txt,wasm,sql,sqlite,ico,png,woff2,webmanifest}',
               ],
               ignoreURLParametersMatching: [/^v$/],
-              navigateFallback: '/index.html',
+              navigateFallback: `${base}index.html`,
               maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
               navigateFallbackDenylist: [
                 /^\/account\/.*$/,
@@ -437,6 +449,15 @@ export default defineConfig(async ({ mode, command }) => {
               ],
             },
           }),
+      isPages
+        ? {
+            name: 'github-pages-entry',
+            transformIndexHtml: {
+              order: 'pre',
+              handler: html => html.replace('/src/index.tsx', '/src/pages.ts'),
+            },
+          }
+        : undefined,
       injectShims(),
       addWatchers(),
       mode === 'desktop' || isVitest ? undefined : lootCoreBackend(),

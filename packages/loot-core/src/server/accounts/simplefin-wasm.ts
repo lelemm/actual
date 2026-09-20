@@ -8,8 +8,8 @@ const AKAHU_APP_TOKEN_KEY = 'akahu_appToken';
 const PLUGGY_CLIENT_ID_KEY = 'pluggyai_clientId';
 const PLUGGY_CLIENT_SECRET_KEY = 'pluggyai_clientSecret';
 const PLUGGY_ITEM_IDS_KEY = 'pluggyai_itemIds';
-const MODULE_URL = '/bank-sync-wasm/actual_bank_sync.js';
-const BINARY_URL = '/bank-sync-wasm/actual_bank_sync_bg.wasm';
+const MODULE_URL = `${process.env.PUBLIC_URL || '/'}bank-sync-wasm/actual_bank_sync.js`;
+const BINARY_URL = `${process.env.PUBLIC_URL || '/'}bank-sync-wasm/actual_bank_sync_bg.wasm`;
 const BANK_SYNC_SECRET_KEYS = [
   TOKEN_KEY,
   ACCESS_KEY,

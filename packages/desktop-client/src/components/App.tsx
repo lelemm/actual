@@ -202,7 +202,7 @@ export function App() {
   const [theme] = useTheme();
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <ExposeNavigate />
       <HotkeysProvider initiallyActiveScopes={['app']}>
         <SpreadsheetProvider>

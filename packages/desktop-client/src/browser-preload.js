@@ -115,12 +115,13 @@ const isUpdateReadyForDownloadPromise = new Promise(resolve => {
 // In dev there is no SW to install, so applyAppUpdate() can't rely on the
 // SW lifecycle to swap the page — fall back to a plain reload so callers
 // don't hang on the never-resolving promise inside applyAppUpdate.
-const updateSW = IS_DEV
-  ? () => window.location.reload()
-  : registerSW({
-      immediate: true,
-      onNeedRefresh: markUpdateReadyForDownload,
-    });
+const updateSW =
+  IS_DEV || import.meta.env.REACT_APP_GITHUB_PAGES === 'true'
+    ? () => window.location.reload()
+    : registerSW({
+        immediate: true,
+        onNeedRefresh: markUpdateReadyForDownload,
+      });
 
 global.Actual = {
   IS_DEV,
@@ -140,7 +141,7 @@ global.Actual = {
     // Unregister the service worker handling routing and then reload. This should force the reload
     // to query the actual server rather than delegating to the worker
     return window.navigator.serviceWorker
-      .getRegistration('/')
+      .getRegistration(import.meta.env.BASE_URL)
       .then(registration => {
         if (registration == null) return;
         return registration.unregister();
