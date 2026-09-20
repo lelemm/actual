@@ -8,6 +8,7 @@ export function useAkahuStatus(enabled = true) {
   const [configuredAkahu, setConfiguredAkahu] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const status = useSyncServerStatus();
+  const isBankSyncWasm = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
 
   useEffect(() => {
     if (!enabled) return;
@@ -21,10 +22,10 @@ export function useAkahuStatus(enabled = true) {
       setIsLoading(false);
     }
 
-    if (status === 'online') {
+    if (status === 'online' || isBankSyncWasm) {
       void fetch();
     }
-  }, [status, enabled]);
+  }, [status, enabled, isBankSyncWasm]);
 
   return {
     configuredAkahu,

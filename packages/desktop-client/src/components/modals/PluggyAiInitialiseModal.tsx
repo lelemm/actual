@@ -33,12 +33,14 @@ export const PluggyAiInitialiseModal = ({
   credentialSource,
 }: PluggyAiInitialiseProps) => {
   const { t } = useTranslation();
+  const isBankSyncWasm = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const { cloudFileId, isAdmin: canSetGlobalCredentials } = useCurrentAccess();
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [itemIds, setItemIds] = useState('');
   const [perBudgetFile, setPerBudgetFile] = useState(
-    credentialSource === 'per-budget-file' || !canSetGlobalCredentials,
+    !isBankSyncWasm &&
+      (credentialSource === 'per-budget-file' || !canSetGlobalCredentials),
   );
   const [isValid, setIsValid] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,24 +147,26 @@ export const PluggyAiInitialiseModal = ({
               </Trans>
             </Text>
 
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-              }}
-            >
-              <Text>
-                <Trans>For this budget only</Trans>
-              </Text>
-              <Toggle
-                id="pluggyai-per-budget-file"
-                isOn={perBudgetFile}
-                isDisabled={!canSetGlobalCredentials}
-                onToggle={setPerBudgetFile}
-              />
-            </View>
+            {!isBankSyncWasm && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <Text>
+                  <Trans>For this budget only</Trans>
+                </Text>
+                <Toggle
+                  id="pluggyai-per-budget-file"
+                  isOn={perBudgetFile}
+                  isDisabled={!canSetGlobalCredentials}
+                  onToggle={setPerBudgetFile}
+                />
+              </View>
+            )}
 
             <FormField>
               <FormLabel title={t('Client ID:')} htmlFor="client-id-field" />

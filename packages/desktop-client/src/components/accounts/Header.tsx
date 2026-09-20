@@ -50,6 +50,7 @@ import { useLocalPref } from '#hooks/useLocalPref';
 import { useSplitsExpanded } from '#hooks/useSplitsExpanded';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
+import { isWasmBankSyncProvider } from '#util/bankSync';
 
 import type { TableRef } from './Account';
 import { Balances } from './Balance';
@@ -190,9 +191,8 @@ export function AccountHeader({
   const splitsExpanded = useSplitsExpanded();
   const syncServerStatus = useSyncServerStatus();
   const isUsingServer = syncServerStatus !== 'no-server';
-  const isSimpleFinWasm =
-    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
-  const isServerOffline = syncServerStatus === 'offline';
+  const isBankSyncWasm = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
+  const isServerOffline = !isBankSyncWasm && syncServerStatus === 'offline';
   const [_, setExpandSplitsPref] = useLocalPref('expand-splits');
   const [showNetWorthChartPref, _setShowNetWorthChartPref] = useSyncedPref(
     `show-account-${accountId}-net-worth-chart`,
@@ -202,13 +202,17 @@ export function AccountHeader({
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const locale = useLocale();
 
-  let canSync = isSimpleFinWasm
-    ? !!(account?.account_id && account.account_sync_source === 'simpleFin')
+  let canSync = isBankSyncWasm
+    ? !!(
+        account?.account_id &&
+        isWasmBankSyncProvider(account.account_sync_source)
+      )
     : !!(account?.account_id && isUsingServer);
-  if (!account && isSimpleFinWasm) {
+  if (!account && isBankSyncWasm) {
     canSync = accounts.some(
       account =>
-        !!account.account_id && account.account_sync_source === 'simpleFin',
+        !!account.account_id &&
+        isWasmBankSyncProvider(account.account_sync_source),
     );
   } else if (!account) {
     // All accounts - check for any syncable account

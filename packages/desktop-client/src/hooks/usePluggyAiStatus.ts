@@ -11,6 +11,7 @@ export function usePluggyAiStatus() {
   );
   const [isLoading, setIsLoading] = useState(false);
   const status = useSyncServerStatus();
+  const isBankSyncWasm = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
 
   useEffect(() => {
     async function fetch() {
@@ -22,13 +23,13 @@ export function usePluggyAiStatus() {
       setIsLoading(false);
     }
 
-    if (status !== 'online') {
+    if (status !== 'online' && !isBankSyncWasm) {
       setPluggyAiStatus({});
       return;
     }
 
     void fetch();
-  }, [status]);
+  }, [status, isBankSyncWasm]);
 
   return {
     pluggyAiStatus,

@@ -22,6 +22,7 @@ import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
+import { isWasmBankSyncProvider } from '#util/bankSync';
 
 import { BUILT_IN_BANK_SYNC_PROVIDERS } from './bankSyncUtils';
 
@@ -107,13 +108,12 @@ async function ensureSuccessResponse(
 export function useBuiltInBankSyncProviders({
   upgradingAccountId,
 }: UseBuiltInBankSyncProvidersOptions = {}) {
-  const isSimpleFinWasm =
-    import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
+  const isBankSyncWasm = import.meta.env.REACT_APP_BANK_SYNC_RUNTIME === 'wasm';
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const syncServerStatus = useSyncServerStatus();
   const { cloudFileId, isAdmin, isFileOwner } = useCurrentAccess();
-  const canConfigureProviders = isAdmin;
+  const canConfigureProviders = isBankSyncWasm || isAdmin;
 
   const [isGoCardlessSetupComplete, setIsGoCardlessSetupComplete] = useState<
     boolean | null
@@ -648,7 +648,7 @@ export function useBuiltInBankSyncProviders({
   const providers = useMemo<BuiltInBankSyncProviderState[]>(() => {
     const baseProviders: BuiltInBankSyncProviderState[] =
       BUILT_IN_BANK_SYNC_PROVIDERS.filter(
-        providerId => !isSimpleFinWasm || providerId === 'simpleFin',
+        providerId => !isBankSyncWasm || isWasmBankSyncProvider(providerId),
       ).map(providerId => {
         if (providerId === 'goCardless') {
           return {
@@ -677,7 +677,7 @@ export function useBuiltInBankSyncProviders({
             isConfigured: configuredProviders.simpleFin,
             credentialSource: 'global',
             supportsPerBudgetFile: false,
-            canConfigure: isSimpleFinWasm || canConfigureProviders,
+            canConfigure: canConfigureProviders,
             isLoading: loadingSimpleFinAccounts,
             onConfigure: onSimpleFinInit,
             onLink: onConnectSimpleFin,
@@ -693,17 +693,18 @@ export function useBuiltInBankSyncProviders({
           ),
           isConfigured: configuredProviders.pluggyai,
           credentialSource: pluggyAiStatus.source ?? 'global',
-          supportsPerBudgetFile: true,
+          supportsPerBudgetFile: !isBankSyncWasm,
           canConfigure:
-            syncServerStatus === 'online' &&
-            (isAdmin || (isFileOwner && pluggyAiStatus.source !== 'global')),
+            isBankSyncWasm ||
+            (syncServerStatus === 'online' &&
+              (isAdmin || (isFileOwner && pluggyAiStatus.source !== 'global'))),
           onConfigure: onPluggyAiInit,
           onLink: onConnectPluggyAi,
           onReset: onPluggyAiReset,
         };
       });
 
-    if (!isSimpleFinWasm && akahuEnabled) {
+    if (akahuEnabled) {
       baseProviders.push({
         id: 'akahu',
         displayName: 'Akahu',
@@ -721,7 +722,7 @@ export function useBuiltInBankSyncProviders({
       });
     }
 
-    if (!isSimpleFinWasm && enableBankingEnabled) {
+    if (!isBankSyncWasm && enableBankingEnabled) {
       baseProviders.push({
         id: 'enableBanking',
         displayName: 'Enable Banking',
@@ -742,7 +743,7 @@ export function useBuiltInBankSyncProviders({
     return baseProviders;
   }, [
     canConfigureProviders,
-    isSimpleFinWasm,
+    isBankSyncWasm,
     isAdmin,
     isFileOwner,
     configuredProviders.enableBanking,
@@ -783,7 +784,7 @@ export function useBuiltInBankSyncProviders({
 
   return {
     providers,
-    syncServerStatus: isSimpleFinWasm ? 'online' : syncServerStatus,
-    permissionWarning,
+    syncServerStatus: isBankSyncWasm ? 'online' : syncServerStatus,
+    permissionWarning: isBankSyncWasm ? null : permissionWarning,
   };
 }

@@ -23,6 +23,7 @@ import { payeeQueries } from '#payees';
 import { useDispatch, useStore } from '#redux';
 import type { AppDispatch } from '#redux/store';
 import { setNewTransactions } from '#transactions/transactionsSlice';
+import { isWasmBankSyncProvider } from '#util/bankSync';
 
 import {
   markAccountFailed,
@@ -642,7 +643,8 @@ export function useSyncAccountsMutation() {
         accountIdsToSync = accountIdsToSync.filter(id =>
           accounts.some(
             account =>
-              account.id === id && account.account_sync_source === 'simpleFin',
+              account.id === id &&
+              isWasmBankSyncProvider(account.account_sync_source),
           ),
         );
       }
