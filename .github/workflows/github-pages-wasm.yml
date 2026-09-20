@@ -22,10 +22,16 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install WASM toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           rustup target add wasm32-unknown-unknown
           version=$(python3 -c 'import tomllib; print(next(p["version"] for p in tomllib.load(open("packages/bank-sync/Cargo.lock", "rb"))["package"] if p["name"] == "wasm-bindgen"))')
-          cargo install wasm-bindgen-cli --version "$version" --locked
+          archive="wasm-bindgen-$version-x86_64-unknown-linux-musl"
+          gh release download "$version" --repo wasm-bindgen/wasm-bindgen --pattern "$archive.tar.gz*" --dir "$RUNNER_TEMP"
+          sed 's|gh-release/||' "$RUNNER_TEMP/$archive.tar.gz.sha256sum" | (cd "$RUNNER_TEMP" && sha256sum --check)
+          tar -xzf "$RUNNER_TEMP/$archive.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$archive" >> "$GITHUB_PATH"
       - name: Build Pages bundle
         run: |
           yarn build:wasm

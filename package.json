@@ -40,7 +40,7 @@
     "start:android": "yarn workspace mobile-client start:android",
     "build:server": "yarn build:browser && yarn workspace @actual-app/sync-server build",
     "build:browser": "./bin/package-browser",
-    "build:wasm": "yarn build:bank-sync-wasm && yarn workspace @actual-app/web build:wasm",
+    "build:wasm": "yarn build:bank-sync-wasm && yarn build:plugins-service && yarn workspace @actual-app/web build:wasm",
     "build:bank-sync-wasm": "./bin/build-bank-sync-wasm",
     "build:desktop": "./bin/package-electron",
     "build:plugins-service": "yarn workspace plugins-service build",
