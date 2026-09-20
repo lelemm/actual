@@ -98,6 +98,48 @@ export function validateRange(
   return [start, end];
 }
 
+export function boundMonthRange(
+  earliestMonth: string,
+  latestMonth: string,
+  startMonth: string,
+  endMonth: string,
+): [string, string] {
+  let boundedStart = startMonth;
+  let boundedEnd = endMonth;
+
+  if (monthUtils.isBefore(boundedStart, earliestMonth)) {
+    boundedStart = earliestMonth;
+  } else if (monthUtils.isAfter(boundedStart, latestMonth)) {
+    boundedStart = latestMonth;
+  }
+
+  if (monthUtils.isBefore(boundedEnd, earliestMonth)) {
+    boundedEnd = earliestMonth;
+  } else if (monthUtils.isAfter(boundedEnd, latestMonth)) {
+    boundedEnd = latestMonth;
+  }
+
+  if (monthUtils.isBefore(boundedEnd, boundedStart)) {
+    boundedEnd = boundedStart;
+  }
+
+  return [boundedStart, boundedEnd];
+}
+
+export function boundMonthRangeFromDates(
+  earliestDate: string,
+  latestDate: string,
+  start: string,
+  end: string,
+): [string, string] {
+  return boundMonthRange(
+    monthUtils.getMonth(earliestDate),
+    monthUtils.getMonth(latestDate),
+    monthUtils.getMonth(start),
+    monthUtils.getMonth(end),
+  );
+}
+
 function boundedRange(
   earliest: string,
   latest: string,
@@ -280,6 +322,22 @@ export function calculateTimeRange(
       monthUtils.getYearStart(monthUtils.prevYear(monthUtils.currentMonth())),
       monthUtils.prevYear(monthUtils.currentDate(), 'yyyy-MM-dd'),
       'priorYearToDate',
+    ] as const;
+  }
+  if (mode === 'currentQuarter') {
+    const currentMonth = monthUtils.currentMonth();
+    return [
+      monthUtils.getQuarterStart(currentMonth),
+      monthUtils.getQuarterEnd(currentMonth),
+      'currentQuarter',
+    ] as const;
+  }
+  if (mode === 'previousQuarter') {
+    const prevQuarterMonth = monthUtils.prevQuarter(monthUtils.currentMonth());
+    return [
+      monthUtils.getQuarterStart(prevQuarterMonth),
+      monthUtils.getQuarterEnd(prevQuarterMonth),
+      'previousQuarter',
     ] as const;
   }
 

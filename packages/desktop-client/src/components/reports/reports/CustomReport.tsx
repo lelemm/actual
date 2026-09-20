@@ -22,7 +22,6 @@ import type {
 } from '@actual-app/core/types/models';
 import type { SyncedPrefs } from '@actual-app/core/types/prefs';
 import type { TransObjectLiteral } from '@actual-app/core/types/util';
-import * as d from 'date-fns';
 
 import { Warning } from '#components/alerts';
 import { AppliedFilters } from '#components/filters/AppliedFilters';
@@ -43,6 +42,7 @@ import { LoadingIndicator } from '#components/reports/LoadingIndicator';
 import { ReportLegend } from '#components/reports/ReportLegend';
 import {
   defaultReport,
+  getIntervalFormat,
   ReportOptions,
 } from '#components/reports/ReportOptions';
 import type { dateRangeProps } from '#components/reports/ReportOptions';
@@ -57,6 +57,7 @@ import { useReport } from '#components/reports/useReport';
 import { calculateHasWarning, fromDateRepr } from '#components/reports/util';
 import { useAccounts } from '#hooks/useAccounts';
 import { useCategories } from '#hooks/useCategories';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { useLocalPref } from '#hooks/useLocalPref';
@@ -146,6 +147,7 @@ function CustomReportInner({
   const locale = useLocale();
   const { t } = useTranslation();
   const format = useFormat();
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
 
   const { data: categories = { grouped: [], list: [] } } = useCategories();
   const { isNarrowWidth } = useResponsive();
@@ -333,8 +335,8 @@ function CustomReportInner({
 
   const onSetAllIntervals = useEffectEvent(
     async (
-      earliestTransaction: TransactionEntity,
-      latestTransaction: TransactionEntity,
+      earliestTransactionDate: TransactionEntity['date'],
+      latestTransactionDate: TransactionEntity['date'],
       interval: CustomReportEntity['interval'],
     ) => {
       const fromDate =
@@ -346,34 +348,18 @@ function CustomReportInner({
       const earliestInterval =
         interval === 'Weekly'
           ? monthUtils.weekFromDate(
-              d.parseISO(
-                fromDateRepr(
-                  earliestTransaction.date || monthUtils.currentDay(),
-                ),
-              ),
+              fromDateRepr(earliestTransactionDate),
               firstDayOfWeekIdx,
             )
-          : monthUtils[fromDate](
-              d.parseISO(
-                fromDateRepr(
-                  earliestTransaction.date || monthUtils.currentDay(),
-                ),
-              ),
-            );
+          : monthUtils[fromDate](fromDateRepr(earliestTransactionDate));
 
       const latestInterval =
         interval === 'Weekly'
           ? monthUtils.weekFromDate(
-              d.parseISO(
-                fromDateRepr(latestTransaction.date || monthUtils.currentDay()),
-              ),
+              fromDateRepr(latestTransactionDate),
               firstDayOfWeekIdx,
             )
-          : monthUtils[fromDate](
-              d.parseISO(
-                fromDateRepr(latestTransaction.date || monthUtils.currentDay()),
-              ),
-            );
+          : monthUtils[fromDate](fromDateRepr(latestTransactionDate));
 
       const currentInterval =
         interval === 'Weekly'
@@ -403,7 +389,7 @@ function CustomReportInner({
           name: inter,
           pretty: monthUtils.format(
             inter,
-            ReportOptions.intervalFormat.get(interval) || '',
+            getIntervalFormat(interval, dateFormat),
             locale,
           ),
         }))
@@ -415,8 +401,8 @@ function CustomReportInner({
 
   const onSetStartAndEndDates = useEffectEvent(
     (
-      earliestTransaction: TransactionEntity,
-      latestTransaction: TransactionEntity,
+      earliestTransactionDate: TransactionEntity['date'],
+      latestTransactionDate: TransactionEntity['date'],
       dateRange: CustomReportEntity['dateRange'],
       isDateStatic: CustomReportEntity['isDateStatic'],
       includeCurrentInterval: CustomReportEntity['includeCurrentInterval'],
@@ -424,10 +410,8 @@ function CustomReportInner({
       if (!isDateStatic) {
         const [dateStart, dateEnd] = getLiveRange(
           dateRange,
-          earliestTransaction
-            ? earliestTransaction.date
-            : monthUtils.currentDay(),
-          latestTransaction ? latestTransaction.date : monthUtils.currentDay(),
+          earliestTransactionDate,
+          latestTransactionDate,
           includeCurrentInterval,
           firstDayOfWeekIdx,
         );
@@ -442,21 +426,22 @@ function CustomReportInner({
       onApplyFilterConditions(report.conditions, report.conditionsOp);
 
       const earliestTransaction = await send('get-earliest-transaction');
-      setEarliestTransactionDate(
-        earliestTransaction
-          ? earliestTransaction.date
-          : monthUtils.currentDay(),
-      );
-
       const latestTransaction = await send('get-latest-transaction');
-      setLatestTransactionDate(
-        latestTransaction ? latestTransaction.date : monthUtils.currentDay(),
-      );
+      const currentDay = monthUtils.currentDay();
+      const earliestTransactionDate = earliestTransaction?.date ?? currentDay;
+      const latestTransactionDate = latestTransaction?.date ?? currentDay;
 
-      void onSetAllIntervals(earliestTransaction, latestTransaction, interval);
+      setEarliestTransactionDate(earliestTransactionDate);
+      setLatestTransactionDate(latestTransactionDate);
+
+      void onSetAllIntervals(
+        earliestTransactionDate,
+        latestTransactionDate,
+        interval,
+      );
       onSetStartAndEndDates(
-        earliestTransaction,
-        latestTransaction,
+        earliestTransactionDate,
+        latestTransactionDate,
         dateRange,
         isDateStatic,
         includeCurrentInterval,
@@ -473,6 +458,10 @@ function CustomReportInner({
     report.conditionsOp,
     includeCurrentInterval,
     savedStatus,
+    // onSetAllIntervals formats the interval labels with the date preference,
+    // and being an effect event it reads it without re-triggering -- so the
+    // labels would stay stale until another dependency happened to change.
+    dateFormat,
   ]);
 
   useEffect(() => {
@@ -579,6 +568,7 @@ function CustomReportInner({
       accounts,
       graphType,
       firstDayOfWeekIdx,
+      dateFormat,
     });
   }, [
     startDate,
@@ -600,6 +590,7 @@ function CustomReportInner({
     sortByOp,
     graphType,
     firstDayOfWeekIdx,
+    dateFormat,
   ]);
   const graphData = useReport('default', getGraphData);
   const groupedData = useReport('grouped', getGroupData);
