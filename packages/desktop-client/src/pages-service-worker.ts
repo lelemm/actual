@@ -3,7 +3,14 @@
 declare const self: ServiceWorkerGlobalScope;
 
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  // First load needs isolation immediately. Updates wait for "Update now".
+  if (!self.registration.active) event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
 });
 
 self.addEventListener('activate', event => {
@@ -17,11 +24,12 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     (async () => {
       // Pages has no SPA rewrites; serve the entry point for app navigation.
-      const response = await fetch(
+      const response =
         event.request.mode === 'navigate'
-          ? new URL('index.html', self.registration.scope)
-          : event.request,
-      );
+          ? await fetch(new URL('index.html', self.registration.scope), {
+              cache: 'no-cache',
+            })
+          : await fetch(event.request);
       const headers = new Headers(response.headers);
       headers.set('Cross-Origin-Opener-Policy', 'same-origin');
       headers.set('Cross-Origin-Embedder-Policy', 'require-corp');

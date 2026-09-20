@@ -3,7 +3,7 @@
 async function start() {
   await navigator.serviceWorker.register(
     `${import.meta.env.BASE_URL}pages-sw.js`,
-    { scope: import.meta.env.BASE_URL },
+    { scope: import.meta.env.BASE_URL, updateViaCache: 'none' },
   );
 
   if (!crossOriginIsolated) {

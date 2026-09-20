@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
   cp,
   mkdir,
-  readFile,
   readdir,
+  readFile,
   rename,
   rm,
   writeFile,
@@ -455,6 +456,26 @@ export default defineConfig(async ({ mode, command }) => {
             transformIndexHtml: {
               order: 'pre',
               handler: html => html.replace('/src/index.tsx', '/src/pages.ts'),
+            },
+            generateBundle: {
+              order: 'post',
+              handler(_, bundle) {
+                const worker = bundle['pages-sw.js'];
+                if (worker?.type !== 'chunk') return;
+
+                // Browsers only detect updates when the worker bytes change.
+                // Include app and WASM changes even if this worker is unchanged.
+                const revision = createHash('sha256');
+                for (const name of Object.keys(bundle).sort()) {
+                  if (name === 'pages-sw.js' || name.endsWith('.map')) continue;
+                  const asset = bundle[name];
+                  revision.update(name);
+                  revision.update(
+                    asset.type === 'chunk' ? asset.code : asset.source,
+                  );
+                }
+                worker.code += `\n// Build: ${revision.digest('hex')}\n`;
+              },
             },
           }
         : undefined,

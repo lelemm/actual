@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 // oxlint-disable-next-line typescript-paths/absolute-parent-import
 import packageJson from '../package.json';
 
+import { registerPagesUpdates } from './pages-updates';
 import SharedBrowserServerWorker from './shared-browser-server.ts?sharedworker';
 
 const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
@@ -115,9 +116,10 @@ const isUpdateReadyForDownloadPromise = new Promise(resolve => {
 // In dev there is no SW to install, so applyAppUpdate() can't rely on the
 // SW lifecycle to swap the page — fall back to a plain reload so callers
 // don't hang on the never-resolving promise inside applyAppUpdate.
-const updateSW =
-  IS_DEV || import.meta.env.REACT_APP_GITHUB_PAGES === 'true'
-    ? () => window.location.reload()
+const updateSW = IS_DEV
+  ? () => window.location.reload()
+  : import.meta.env.REACT_APP_GITHUB_PAGES === 'true'
+    ? registerPagesUpdates(markUpdateReadyForDownload)
     : registerSW({
         immediate: true,
         onNeedRefresh: markUpdateReadyForDownload,

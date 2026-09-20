@@ -39,6 +39,7 @@ it('isolates local assets and app navigation without intercepting bank requests'
   await respondWith.mock.calls[1][0];
   expect(fetch).toHaveBeenLastCalledWith(
     new URL('https://example.test/actual/index.html'),
+    { cache: 'no-cache' },
   );
 
   onFetch({
